@@ -2,5 +2,41 @@
       <section id="what-rl-changes">
         <h2>The layer beneath the loss: what RL actually changes</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Sharpening vs expansion: pass@1 rises while pass@large-k often falls.</aside>
+        <p>The axis sections ask how to compute a better update. This section and the next ask what the updates can achieve at all. Two observations frame the answer. Across many papers, RL with verifiable rewards raises the score a model gets with one sample while often <em>lowering</em> what it can reach with many samples. And the same recipe that transforms one base model barely moves another. The first says RL mostly reshapes a distribution the model already has. The second says the base model decides how much there is to reshape.</p>
+
+        <h3 id="rl-two-ceilings">Two ceilings, two answers</h3>
+
+        <p>The measurement section separated two meanings of "ceiling" (<a href="#tension-ceiling">the ceiling is the hardest claim</a>). They behave differently under RL.</p>
+
+        <table>
+          <thead>
+            <tr><th>Ceiling</th><th>What it measures</th><th>What RL does to it</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Pass@1 asymptote</td><td>Accuracy of one sample after training converges</td><td>Raises it, often by a lot</td></tr>
+            <tr><td>Pass@k coverage at large k</td><td>The set of problems the model can solve at all, given many tries</td><td>Usually leaves it unchanged or shrinks it; expands it only in specific conditions</td></tr>
+          </tbody>
+        </table>
+
+        <p><strong>The case for "RL sharpens".</strong> Yue et al. trained with GRPO on Omni-MATH and compared against the base model at every k (<a href="https://arxiv.org/abs/2504.13837">2504.13837</a>). Pass@1 rose from 9.9 to 42.5, while pass@256 fell from 67.2 to 64.3. On AIME 2024 at k = 1,024, 13.3% of problems were solved only by the base model and none only by the RL model; the RL model's solved set was a strict subset of the base model's. The paper reports the base model overtaking the RL model at large k on every benchmark it tested, while a distilled model, in the one comparison shown, beat its base at every k. "The Invisible Leash" counted, completion by completion, where an RL-trained model's support grew and where it shrank: for ProRL's 1.5B model, 163 completions left the support against 36 that entered it (<a href="https://arxiv.org/abs/2507.14843">2507.14843</a>).</p>
+
+        <p><strong>The case for "RL can expand".</strong> ProRL trained a 1.5B model for over 2,000 steps with periodic resets and lifted its Reasoning Gym average from 4.24 to 59.06, including tasks the base model essentially could not do; on some math tasks its pass@128 still fell (<a href="https://arxiv.org/abs/2505.24864">2505.24864</a>). Expansion shows up where the base model is weak and training runs long; sharpening shows up where the base model is already strong. The two findings are compatible. A 2026 study finds coverage at large sampling budgets growing on some tasks and shrinking on others, in both cases by reweighting strategies the base model already had (<a href="https://arxiv.org/abs/2610.04158">2610.04158</a>).</p>
+
+        <h3 id="rl-why-sharpen">Why the objective sharpens</h3>
+
+        <p>The default objective explains the default behaviour. Maximizing the expected pass rate Σ<sub>x</sub> p<sub>x</sub> has maximizers that are deterministic on every prompt the model can solve: one reliable correct path is as good as ten. Nothing in the objective rewards keeping a second path alive. And its gradient on a prompt is proportional to how often correct answers are sampled there, so hard prompts, with rare correct samples, get little signal and no protection from the sharpening that shared parameters spread across prompts. Coverage at large k is preserved, under this objective, only incidentally.</p>
+
+        <p>Changing the objective changes this. The weighting rules of <a href="#normalization">axis ②</a> that up-weight low-p prompts — maximum-likelihood weighting, pass@k training — are exactly the ones designed to stop the policy from abandoning hard prompts. Pass@k training, for example, raised Llama-3.1-8B-Instruct's pass@8 on AIME 2024 to 40.0, against 32.1 under ordinary pass@1 training and 17.9 for the starting model, with small changes to pass@1 (<a href="https://arxiv.org/abs/2508.10751">2508.10751</a>). Whether such objectives preserve coverage at the much larger k where sharpening shows up has not been reported.</p>
+
+        <h3 id="rl-reading">What this means for reading results</h3>
+
+        <ul>
+          <li><strong>Report pass@k curves, not one number.</strong> A method that raises pass@1 by concentrating mass is doing something different from a method that raises coverage, and only curves over k tell them apart.</li>
+          <li><strong>Sharpening explains label-free gains.</strong> Updates that only concentrate mass can raise pass@1 up to the base model's majority-vote accuracy (<a href="#pattern-sharpening">pattern 3</a>). That is the most economical explanation for random, wrong or absent rewards helping some models, and it predicts where they will fail.</li>
+          <li><strong>Coverage is mostly bought elsewhere.</strong> Distillation and mid-training expand what the model can solve far more reliably than RL does. The next section is about that layer.</li>
+        </ul>
+
+        <h3 id="rl-interesting">What's mathematically interesting</h3>
+
+        <p>A useful idealization is to treat RL with an outcome reward as an operator that reweights the base model's distribution over responses, multiplying the probability of each response by a factor that grows with its reward. Such an operator cannot put mass where the base model has none; it can only move mass toward high-reward regions that already have some. Expansion then requires something the idealization leaves out: generalization across prompts through shared parameters, which can create new reachable responses on one prompt by learning on another. The open question is quantitative — how much coverage that cross-prompt generalization creates, and under what training length and objective — and it is where the "sharpening" and "expansion" camps actually disagree (<a href="#open">open questions</a>).</p>
       </section>

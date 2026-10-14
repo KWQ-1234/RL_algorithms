@@ -2,5 +2,46 @@
       <section id="base-model">
         <h2>Base models, mid-training, and the ceiling outside RL</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Templates, contamination, and why Qwen and Llama/OLMo diverge under the same RL recipe.</aside>
+        <p>If RL mostly reshapes what the base model already does, then the base model sets the ceiling, and comparisons across base models will be larger than comparisons across algorithms. Both are true in the 2025–2026 literature. This section collects the evidence and draws the practical conclusion: an RL result is a statement about a pair, the algorithm and the base model, and much of what is credited to the first belongs to the second.</p>
+
+        <h3 id="base-qwen">The Qwen2.5-Math effect</h3>
+
+        <p>Qwen2.5-Math is the most common base model in 2025 RL papers and the most responsive to almost anything (<a href="#tension-base">measurement section</a>). The same model scores 0.0 to 38.2 depending only on the prompt template. Random rewards improve it by 21.4 points on MATH-500, close to the 29.1 from true rewards. It reproduces the rest of a MATH-500 problem from a 60% prefix 54.6% of the time, against 3.8% for Llama-3.1-8B. On a freshly generated arithmetic benchmark it could not have memorized, random and incorrect rewards stop helping while correct rewards still do (<a href="https://arxiv.org/abs/2507.10532">2507.10532</a>).</p>
+
+        <p>The mechanism behind the random-reward gain is contested. The original paper attributes it to clipping, which biases updates toward behaviour the model already prefers, here writing Python to reason, and reports that disabling clipping removes the gain (<a href="https://arxiv.org/abs/2506.10947">2506.10947</a>). A 2025 follow-up bounds the clipping term, in one Qwen-Math setting, at less than a seventeenth of the raw learning signal, finds that disabling clipping often helps, and attributes the gain to an entropy-minimizing effect instead (<a href="https://arxiv.org/abs/2512.16912">2512.16912</a>). Both accounts are forms of sharpening, which is why they predict the same thing: gains appear where the model's preferred behaviour is already good, and vanish on clean benchmarks and other model families. <a href="#case-spurious">The case study</a> follows this in detail.</p>
+
+        <h3 id="base-transfer">What does not transfer</h3>
+
+        <p>Several 2025 results that look like algorithmic discoveries on Qwen fail on other families.</p>
+        <ul>
+          <li>Random and spurious rewards: large gains on Qwen2.5-Math, little or none on Llama3 and OLMo2.</li>
+          <li>One-shot RLVR: large gains on Qwen2.5-Math from a single training example; on Llama-3.2-3B the six-benchmark average moves from 17.5 to 19.0 (<a href="https://arxiv.org/abs/2504.20571">2504.20571</a>).</li>
+          <li>Entropy minimization with no labels: competitive with supervised RL on Qwen2.5-7B, nearly flat on Llama-3.1-8B (<a href="https://arxiv.org/abs/2505.15134">2505.15134</a>).</li>
+          <li>Recipe components: in one controlled study on Qwen3, the better aggregation mode and the usefulness of clip-higher flipped between the base and the instruction-tuned model (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>).</li>
+        </ul>
+
+        <h3 id="base-midtraining">Where the gap closes</h3>
+
+        <p>The gap between families is not fixed. It closes before RL, not during it.</p>
+        <ul>
+          <li><strong>Behaviour priming.</strong> Qwen-2.5-3B already shows verification and backtracking before RL; Llama-3.2-3B does not, and RL improves it far less on Countdown. Priming Llama with a small set of examples that display these behaviours lets RL match Qwen's improvement — even when the priming examples reach incorrect answers (<a href="https://arxiv.org/abs/2503.01307">2503.01307</a>). What transfers is the behaviour, not the correctness.</li>
+          <li><strong>Mid-training.</strong> OctoThinker continues Llama-3.2-3B's pre-training for about 220B tokens, mostly mathematical web data, before RL. Its long-chain-of-thought variant then reaches RL performance on par with Qwen2.5-3B; the other variants fall slightly short (<a href="https://arxiv.org/abs/2506.20512">2506.20512</a>; figures only).</li>
+        </ul>
+        <p>Both are interventions on the base distribution. Neither changes the RL algorithm. That is the clearest evidence on any axis that the ceiling RL reaches is set upstream of RL.</p>
+
+        <h3 id="base-implications">Implications</h3>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Claim</th><th>Evidence</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Results on Qwen2.5-Math overstate what a method does elsewhere</td><td>Spurious rewards, one-shot RLVR, entropy minimization, contamination probes, OLMo 3's random-reward control</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td>Recipe choices can flip sign between base and aligned starting points</td><td>One controlled study on Qwen3</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Behaviour priming or mid-training closes the gap between families</td><td>Two independent papers, small models, Countdown and math</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>The random-reward mechanism is clipping</td><td>Original paper vs a direct rebuttal</td><td><span class="grade grade-d">D</span></td></tr>
+          </tbody>
+        </table>
+
+        <p>For a reader of RL papers, one rule follows: treat a single-family result as a hypothesis about that family until it is reproduced on another. For a practitioner, a second rule: if the base model lacks a behaviour, adding it before RL — by priming, mid-training or distillation — is likely to pay more than any change to the RL algorithm.</p>
       </section>

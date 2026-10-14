@@ -2,5 +2,56 @@
       <section id="preference">
         <h2>Family case study — DPO and preference optimization</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Data on-policyness dominates loss shape; tuned-β losses tie.</aside>
+        <p>Direct preference optimization replaced PPO in many 2023–2024 pipelines and spawned a long list of variants: IPO, KTO, ORPO, SimPO, CPO, RSO, WPO and more. The family has its own version of this survey's question — which of these changes matter — and its answer is unusually clean. Once the temperature β and learning rate are tuned, the loss variants mostly tie. What separates good results from bad ones is where the preference pairs come from.</p>
+
+        <h3 id="pref-knobs">Four knobs</h3>
+
+        <p>DPO's loss is −log σ(β · h), where h = ρ<sub>θ</sub>(y<sub>w</sub>) − ρ<sub>θ</sub>(y<sub>l</sub>) and ρ<sub>θ</sub> = log π<sub>θ</sub> − log π<sub>ref</sub> is the implicit reward. Its gradient is weighted by σ(−β h), so pairs the model already ranks correctly contribute little (<a href="https://arxiv.org/abs/2305.18290">2305.18290</a>). Nearly every offline variant changes one of four things:</p>
+        <ul>
+          <li><strong>The link function</strong> applied to h: logistic (DPO), squared (IPO), hinge (SLiC).</li>
+          <li><strong>The implicit reward's normalization</strong>: divide by length (SimPO, length-normalized DPO), use odds ratios (ORPO), or drop the reference model.</li>
+          <li><strong>An absolute likelihood anchor</strong>: add a negative log-likelihood term on the chosen response, or a constraint that its likelihood should not fall.</li>
+          <li><strong>The data distribution</strong>: offline pairs from other models, rejection-sampled pairs, or pairs sampled from the current policy, refreshed periodically (iterative, semi-online, online).</li>
+        </ul>
+        <p>The first three are loss-shape choices. The fourth is the same on-policyness question as <a href="#off-policy">axis ⑥</a>, in a different family.</p>
+
+        <h3 id="pref-evidence">Evidence</h3>
+
+        <p><strong>Loss shapes tie once tuned.</strong> GPO compared six convex losses, including DPO's, IPO's and SLiC's, on small T5 policies, and found similar peak performance at similar KL after tuning β; only the best β differed (<a href="https://arxiv.org/abs/2402.05749">2402.05749</a>). A 2025 study tuned each method over a grid of β and learning rates on Llama-3.1-8B and found DPO, IPO, SimPO and ORPO within about 1.5 AlpacaEval LC points of each other; the one significant split was between pairwise and pointwise methods (<a href="https://arxiv.org/abs/2502.01237">2502.01237</a>). <span class="grade grade-a">A</span></p>
+
+        <p><strong>Data on-policyness dominates.</strong> In WPO's own table, rebuilding DPO's pairs mostly from the SFT model's samples adds 16–17 LC points, while switching the loss adds 1.6–5.6 (<a href="https://arxiv.org/abs/2406.11827">2406.11827</a>). Semi-online and online DPO match GRPO on Math500 and beat it on AlpacaEval LC, with offline DPO well behind (<a href="https://arxiv.org/abs/2506.21495">2506.21495</a>). Ivison et al. rank the factors on Tulu 2 13B: data quality matters most, then PPO over DPO on the same data by a small average margin (0.7 points; 2.9 on code). Better reward models help reward-model benchmarks far more than the policy: going from a 13B to a 70B reward model raised RewardBench from 61.0 to 73.6 but PPO's downstream average only from 62.2 to 62.8 (<a href="https://arxiv.org/abs/2406.09279">2406.09279</a>). <span class="grade grade-a">A</span></p>
+
+        <p><strong>A tuned PPO is at least as good as offline DPO, at a cost.</strong> Xu et al. show PPO on CodeLlama-34B for competitive programming improving severalfold once advantage normalization, large batches and a moving reference are added, while DPO fails on the hardest benchmark (<a href="https://arxiv.org/abs/2404.10719">2404.10719</a>). Llama 3 chose iterative DPO over PPO. The two are not in conflict: one compares offline DPO with heavily tuned PPO, the other an iterated, nearly on-policy DPO with PPO at scale (<a href="https://arxiv.org/abs/2407.21783">2407.21783</a>). The deciding variable is again the data regime.</p>
+
+        <p><strong>Three shape changes do matter.</strong></p>
+        <ul>
+          <li><strong>Length normalization.</strong> Tulu 3 found length-normalized DPO the best of its variants, with plain DPO slightly below the SFT starting point and SimPO further below; length-normalized DPO is sensitive to β (<a href="https://arxiv.org/abs/2411.15124">2411.15124</a>). <span class="grade grade-b">B</span></li>
+          <li><strong>A likelihood anchor, for off-policy data.</strong> DPO tends to lower the likelihood of both chosen and rejected responses, moving probability mass to responses neither one represents (<a href="https://arxiv.org/abs/2410.08847">likelihood displacement, 2410.08847</a>). An NLL term on the chosen response counters this; Llama 3 used one. In on-policy training on verifiable math, adding it gave no gain (<a href="https://arxiv.org/abs/2506.21495">2506.21495</a>). <span class="grade grade-b">B</span></li>
+          <li><strong>Contrast in the pairs.</strong> OLMo 3 found that preferring a large model's answer over a small model's answer works better than supervised training on the large model's answers alone (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>; single run). <span class="grade grade-c">C</span></li>
+        </ul>
+
+        <p><strong>DPO over-optimizes too.</strong> Rafailov et al. find the win rate of direct alignment methods hump-shaped in √KL, the same functional form as reward-model over-optimization; with weaker KL constraints, runs peak after only about a quarter of the first epoch (<a href="https://arxiv.org/abs/2406.02900">2406.02900</a>). The absence of an explicit reward model does not remove the over-optimization problem; it moves it into the implicit reward.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling (vs tuned DPO)</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Online, semi-online or iterative pairs</td><td>≈ GRPO, far above offline</td><td>Needs generation and judging</td><td>—</td><td>Inherits the judge's length bias</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td>Tuned PPO instead of offline DPO</td><td>≥, larger on code</td><td>Several times the compute</td><td>Implementation-sensitive</td><td>RM-driven length growth</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td>IPO, SLiC and other link functions</td><td>Tie</td><td>Same</td><td>—</td><td>—</td><td><span class="grade grade-a">A</span> tie</td></tr>
+            <tr><td>Length-normalized DPO</td><td>Best in Tulu 3</td><td>Same</td><td>β-sensitive</td><td>Shorter outputs</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>NLL anchor</td><td>Helps off-policy</td><td>Same</td><td>Less likelihood displacement</td><td>May over-anchor</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>SimPO, KTO</td><td>Tie to worse, depending on study</td><td>—</td><td>—</td><td>SimPO hurts math in Tulu 3</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>WPO, RSO, TR-DPO, cDPO, SPPO, DNO and similar</td><td>Own gains, near iterative DPO</td><td>—</td><td>—</td><td>Some grow response length</td><td><span class="grade grade-c">C</span></td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="pref-role">Where DPO sits in 2025–2026 pipelines</h3>
+
+        <p>DPO has moved from being the alignment stage to being one stage among several. OLMo 3 and Tulu 3 place length-normalized DPO between supervised fine-tuning and RL with verifiable rewards; in one OLMo 3 comparison, adding the DPO stage before RLVR beat RLVR alone. Llama 4, by Meta's account, uses only a light DPO pass after online RL, reporting that SFT and DPO "can over-constrain the model, restricting exploration during the online RL stage" (<a href="https://ai.meta.com/blog/llama-4-multimodal-intelligence/">Meta, 2025</a>). Both uses fit one picture: DPO sharpens the policy toward preferred behaviour, which helps a short RL stage that starts from it and hurts a long RL stage that needs to explore.</p>
+
+        <h3 id="pref-interesting">What's mathematically interesting</h3>
+
+        <p>DPO's derivation assumes the optimal policy under a KL-regularized reward exists in closed form and that the preference data covers the responses that policy would produce. The second assumption is the one that fails offline. With finite pairs, the loss has directions it does not constrain: probability mass can move to responses that appear in no pair, which is exactly what likelihood displacement measures. Sampling pairs from the current policy fills in those directions where the policy actually puts mass. That is the formal reason on-policy data dominates the choice of loss — and why <a href="#pattern-onpolicy">pattern 6</a> applies to preference learning as strongly as to RL.</p>
       </section>

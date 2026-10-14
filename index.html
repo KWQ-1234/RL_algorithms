@@ -1772,31 +1772,252 @@
       <section id="what-rl-changes">
         <h2>The layer beneath the loss: what RL actually changes</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Sharpening vs expansion: pass@1 rises while pass@large-k often falls.</aside>
+        <p>The axis sections ask how to compute a better update. This section and the next ask what the updates can achieve at all. Two observations frame the answer. Across many papers, RL with verifiable rewards raises the score a model gets with one sample while often <em>lowering</em> what it can reach with many samples. And the same recipe that transforms one base model barely moves another. The first says RL mostly reshapes a distribution the model already has. The second says the base model decides how much there is to reshape.</p>
+
+        <h3 id="rl-two-ceilings">Two ceilings, two answers</h3>
+
+        <p>The measurement section separated two meanings of "ceiling" (<a href="#tension-ceiling">the ceiling is the hardest claim</a>). They behave differently under RL.</p>
+
+        <table>
+          <thead>
+            <tr><th>Ceiling</th><th>What it measures</th><th>What RL does to it</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Pass@1 asymptote</td><td>Accuracy of one sample after training converges</td><td>Raises it, often by a lot</td></tr>
+            <tr><td>Pass@k coverage at large k</td><td>The set of problems the model can solve at all, given many tries</td><td>Usually leaves it unchanged or shrinks it; expands it only in specific conditions</td></tr>
+          </tbody>
+        </table>
+
+        <p><strong>The case for "RL sharpens".</strong> Yue et al. trained with GRPO on Omni-MATH and compared against the base model at every k (<a href="https://arxiv.org/abs/2504.13837">2504.13837</a>). Pass@1 rose from 9.9 to 42.5, while pass@256 fell from 67.2 to 64.3. On AIME 2024 at k = 1,024, 13.3% of problems were solved only by the base model and none only by the RL model; the RL model's solved set was a strict subset of the base model's. The paper reports the base model overtaking the RL model at large k on every benchmark it tested, while a distilled model, in the one comparison shown, beat its base at every k. "The Invisible Leash" counted, completion by completion, where an RL-trained model's support grew and where it shrank: for ProRL's 1.5B model, 163 completions left the support against 36 that entered it (<a href="https://arxiv.org/abs/2507.14843">2507.14843</a>).</p>
+
+        <p><strong>The case for "RL can expand".</strong> ProRL trained a 1.5B model for over 2,000 steps with periodic resets and lifted its Reasoning Gym average from 4.24 to 59.06, including tasks the base model essentially could not do; on some math tasks its pass@128 still fell (<a href="https://arxiv.org/abs/2505.24864">2505.24864</a>). Expansion shows up where the base model is weak and training runs long; sharpening shows up where the base model is already strong. The two findings are compatible. A 2026 study finds coverage at large sampling budgets growing on some tasks and shrinking on others, in both cases by reweighting strategies the base model already had (<a href="https://arxiv.org/abs/2610.04158">2610.04158</a>).</p>
+
+        <h3 id="rl-why-sharpen">Why the objective sharpens</h3>
+
+        <p>The default objective explains the default behaviour. Maximizing the expected pass rate Σ<sub>x</sub> p<sub>x</sub> has maximizers that are deterministic on every prompt the model can solve: one reliable correct path is as good as ten. Nothing in the objective rewards keeping a second path alive. And its gradient on a prompt is proportional to how often correct answers are sampled there, so hard prompts, with rare correct samples, get little signal and no protection from the sharpening that shared parameters spread across prompts. Coverage at large k is preserved, under this objective, only incidentally.</p>
+
+        <p>Changing the objective changes this. The weighting rules of <a href="#normalization">axis ②</a> that up-weight low-p prompts — maximum-likelihood weighting, pass@k training — are exactly the ones designed to stop the policy from abandoning hard prompts. Pass@k training, for example, raised Llama-3.1-8B-Instruct's pass@8 on AIME 2024 to 40.0, against 32.1 under ordinary pass@1 training and 17.9 for the starting model, with small changes to pass@1 (<a href="https://arxiv.org/abs/2508.10751">2508.10751</a>). Whether such objectives preserve coverage at the much larger k where sharpening shows up has not been reported.</p>
+
+        <h3 id="rl-reading">What this means for reading results</h3>
+
+        <ul>
+          <li><strong>Report pass@k curves, not one number.</strong> A method that raises pass@1 by concentrating mass is doing something different from a method that raises coverage, and only curves over k tell them apart.</li>
+          <li><strong>Sharpening explains label-free gains.</strong> Updates that only concentrate mass can raise pass@1 up to the base model's majority-vote accuracy (<a href="#pattern-sharpening">pattern 3</a>). That is the most economical explanation for random, wrong or absent rewards helping some models, and it predicts where they will fail.</li>
+          <li><strong>Coverage is mostly bought elsewhere.</strong> Distillation and mid-training expand what the model can solve far more reliably than RL does. The next section is about that layer.</li>
+        </ul>
+
+        <h3 id="rl-interesting">What's mathematically interesting</h3>
+
+        <p>A useful idealization is to treat RL with an outcome reward as an operator that reweights the base model's distribution over responses, multiplying the probability of each response by a factor that grows with its reward. Such an operator cannot put mass where the base model has none; it can only move mass toward high-reward regions that already have some. Expansion then requires something the idealization leaves out: generalization across prompts through shared parameters, which can create new reachable responses on one prompt by learning on another. The open question is quantitative — how much coverage that cross-prompt generalization creates, and under what training length and objective — and it is where the "sharpening" and "expansion" camps actually disagree (<a href="#open">open questions</a>).</p>
       </section>
 
       <section id="base-model">
         <h2>Base models, mid-training, and the ceiling outside RL</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Templates, contamination, and why Qwen and Llama/OLMo diverge under the same RL recipe.</aside>
+        <p>If RL mostly reshapes what the base model already does, then the base model sets the ceiling, and comparisons across base models will be larger than comparisons across algorithms. Both are true in the 2025–2026 literature. This section collects the evidence and draws the practical conclusion: an RL result is a statement about a pair, the algorithm and the base model, and much of what is credited to the first belongs to the second.</p>
+
+        <h3 id="base-qwen">The Qwen2.5-Math effect</h3>
+
+        <p>Qwen2.5-Math is the most common base model in 2025 RL papers and the most responsive to almost anything (<a href="#tension-base">measurement section</a>). The same model scores 0.0 to 38.2 depending only on the prompt template. Random rewards improve it by 21.4 points on MATH-500, close to the 29.1 from true rewards. It reproduces the rest of a MATH-500 problem from a 60% prefix 54.6% of the time, against 3.8% for Llama-3.1-8B. On a freshly generated arithmetic benchmark it could not have memorized, random and incorrect rewards stop helping while correct rewards still do (<a href="https://arxiv.org/abs/2507.10532">2507.10532</a>).</p>
+
+        <p>The mechanism behind the random-reward gain is contested. The original paper attributes it to clipping, which biases updates toward behaviour the model already prefers, here writing Python to reason, and reports that disabling clipping removes the gain (<a href="https://arxiv.org/abs/2506.10947">2506.10947</a>). A 2025 follow-up bounds the clipping term, in one Qwen-Math setting, at less than a seventeenth of the raw learning signal, finds that disabling clipping often helps, and attributes the gain to an entropy-minimizing effect instead (<a href="https://arxiv.org/abs/2512.16912">2512.16912</a>). Both accounts are forms of sharpening, which is why they predict the same thing: gains appear where the model's preferred behaviour is already good, and vanish on clean benchmarks and other model families. <a href="#case-spurious">The case study</a> follows this in detail.</p>
+
+        <h3 id="base-transfer">What does not transfer</h3>
+
+        <p>Several 2025 results that look like algorithmic discoveries on Qwen fail on other families.</p>
+        <ul>
+          <li>Random and spurious rewards: large gains on Qwen2.5-Math, little or none on Llama3 and OLMo2.</li>
+          <li>One-shot RLVR: large gains on Qwen2.5-Math from a single training example; on Llama-3.2-3B the six-benchmark average moves from 17.5 to 19.0 (<a href="https://arxiv.org/abs/2504.20571">2504.20571</a>).</li>
+          <li>Entropy minimization with no labels: competitive with supervised RL on Qwen2.5-7B, nearly flat on Llama-3.1-8B (<a href="https://arxiv.org/abs/2505.15134">2505.15134</a>).</li>
+          <li>Recipe components: in one controlled study on Qwen3, the better aggregation mode and the usefulness of clip-higher flipped between the base and the instruction-tuned model (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>).</li>
+        </ul>
+
+        <h3 id="base-midtraining">Where the gap closes</h3>
+
+        <p>The gap between families is not fixed. It closes before RL, not during it.</p>
+        <ul>
+          <li><strong>Behaviour priming.</strong> Qwen-2.5-3B already shows verification and backtracking before RL; Llama-3.2-3B does not, and RL improves it far less on Countdown. Priming Llama with a small set of examples that display these behaviours lets RL match Qwen's improvement — even when the priming examples reach incorrect answers (<a href="https://arxiv.org/abs/2503.01307">2503.01307</a>). What transfers is the behaviour, not the correctness.</li>
+          <li><strong>Mid-training.</strong> OctoThinker continues Llama-3.2-3B's pre-training for about 220B tokens, mostly mathematical web data, before RL. Its long-chain-of-thought variant then reaches RL performance on par with Qwen2.5-3B; the other variants fall slightly short (<a href="https://arxiv.org/abs/2506.20512">2506.20512</a>; figures only).</li>
+        </ul>
+        <p>Both are interventions on the base distribution. Neither changes the RL algorithm. That is the clearest evidence on any axis that the ceiling RL reaches is set upstream of RL.</p>
+
+        <h3 id="base-implications">Implications</h3>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Claim</th><th>Evidence</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Results on Qwen2.5-Math overstate what a method does elsewhere</td><td>Spurious rewards, one-shot RLVR, entropy minimization, contamination probes, OLMo 3's random-reward control</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td>Recipe choices can flip sign between base and aligned starting points</td><td>One controlled study on Qwen3</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Behaviour priming or mid-training closes the gap between families</td><td>Two independent papers, small models, Countdown and math</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>The random-reward mechanism is clipping</td><td>Original paper vs a direct rebuttal</td><td><span class="grade grade-d">D</span></td></tr>
+          </tbody>
+        </table>
+
+        <p>For a reader of RL papers, one rule follows: treat a single-family result as a hypothesis about that family until it is reproduced on another. For a practitioner, a second rule: if the base model lacks a behaviour, adding it before RL — by priming, mid-training or distillation — is likely to pay more than any change to the RL algorithm.</p>
       </section>
 
       <section id="preference">
         <h2>Family case study — DPO and preference optimization</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Data on-policyness dominates loss shape; tuned-β losses tie.</aside>
+        <p>Direct preference optimization replaced PPO in many 2023–2024 pipelines and spawned a long list of variants: IPO, KTO, ORPO, SimPO, CPO, RSO, WPO and more. The family has its own version of this survey's question — which of these changes matter — and its answer is unusually clean. Once the temperature β and learning rate are tuned, the loss variants mostly tie. What separates good results from bad ones is where the preference pairs come from.</p>
+
+        <h3 id="pref-knobs">Four knobs</h3>
+
+        <p>DPO's loss is −log σ(β · h), where h = ρ<sub>θ</sub>(y<sub>w</sub>) − ρ<sub>θ</sub>(y<sub>l</sub>) and ρ<sub>θ</sub> = log π<sub>θ</sub> − log π<sub>ref</sub> is the implicit reward. Its gradient is weighted by σ(−β h), so pairs the model already ranks correctly contribute little (<a href="https://arxiv.org/abs/2305.18290">2305.18290</a>). Nearly every offline variant changes one of four things:</p>
+        <ul>
+          <li><strong>The link function</strong> applied to h: logistic (DPO), squared (IPO), hinge (SLiC).</li>
+          <li><strong>The implicit reward's normalization</strong>: divide by length (SimPO, length-normalized DPO), use odds ratios (ORPO), or drop the reference model.</li>
+          <li><strong>An absolute likelihood anchor</strong>: add a negative log-likelihood term on the chosen response, or a constraint that its likelihood should not fall.</li>
+          <li><strong>The data distribution</strong>: offline pairs from other models, rejection-sampled pairs, or pairs sampled from the current policy, refreshed periodically (iterative, semi-online, online).</li>
+        </ul>
+        <p>The first three are loss-shape choices. The fourth is the same on-policyness question as <a href="#off-policy">axis ⑥</a>, in a different family.</p>
+
+        <h3 id="pref-evidence">Evidence</h3>
+
+        <p><strong>Loss shapes tie once tuned.</strong> GPO compared six convex losses, including DPO's, IPO's and SLiC's, on small T5 policies, and found similar peak performance at similar KL after tuning β; only the best β differed (<a href="https://arxiv.org/abs/2402.05749">2402.05749</a>). A 2025 study tuned each method over a grid of β and learning rates on Llama-3.1-8B and found DPO, IPO, SimPO and ORPO within about 1.5 AlpacaEval LC points of each other; the one significant split was between pairwise and pointwise methods (<a href="https://arxiv.org/abs/2502.01237">2502.01237</a>). <span class="grade grade-a">A</span></p>
+
+        <p><strong>Data on-policyness dominates.</strong> In WPO's own table, rebuilding DPO's pairs mostly from the SFT model's samples adds 16–17 LC points, while switching the loss adds 1.6–5.6 (<a href="https://arxiv.org/abs/2406.11827">2406.11827</a>). Semi-online and online DPO match GRPO on Math500 and beat it on AlpacaEval LC, with offline DPO well behind (<a href="https://arxiv.org/abs/2506.21495">2506.21495</a>). Ivison et al. rank the factors on Tulu 2 13B: data quality matters most, then PPO over DPO on the same data by a small average margin (0.7 points; 2.9 on code). Better reward models help reward-model benchmarks far more than the policy: going from a 13B to a 70B reward model raised RewardBench from 61.0 to 73.6 but PPO's downstream average only from 62.2 to 62.8 (<a href="https://arxiv.org/abs/2406.09279">2406.09279</a>). <span class="grade grade-a">A</span></p>
+
+        <p><strong>A tuned PPO is at least as good as offline DPO, at a cost.</strong> Xu et al. show PPO on CodeLlama-34B for competitive programming improving severalfold once advantage normalization, large batches and a moving reference are added, while DPO fails on the hardest benchmark (<a href="https://arxiv.org/abs/2404.10719">2404.10719</a>). Llama 3 chose iterative DPO over PPO. The two are not in conflict: one compares offline DPO with heavily tuned PPO, the other an iterated, nearly on-policy DPO with PPO at scale (<a href="https://arxiv.org/abs/2407.21783">2407.21783</a>). The deciding variable is again the data regime.</p>
+
+        <p><strong>Three shape changes do matter.</strong></p>
+        <ul>
+          <li><strong>Length normalization.</strong> Tulu 3 found length-normalized DPO the best of its variants, with plain DPO slightly below the SFT starting point and SimPO further below; length-normalized DPO is sensitive to β (<a href="https://arxiv.org/abs/2411.15124">2411.15124</a>). <span class="grade grade-b">B</span></li>
+          <li><strong>A likelihood anchor, for off-policy data.</strong> DPO tends to lower the likelihood of both chosen and rejected responses, moving probability mass to responses neither one represents (<a href="https://arxiv.org/abs/2410.08847">likelihood displacement, 2410.08847</a>). An NLL term on the chosen response counters this; Llama 3 used one. In on-policy training on verifiable math, adding it gave no gain (<a href="https://arxiv.org/abs/2506.21495">2506.21495</a>). <span class="grade grade-b">B</span></li>
+          <li><strong>Contrast in the pairs.</strong> OLMo 3 found that preferring a large model's answer over a small model's answer works better than supervised training on the large model's answers alone (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>; single run). <span class="grade grade-c">C</span></li>
+        </ul>
+
+        <p><strong>DPO over-optimizes too.</strong> Rafailov et al. find the win rate of direct alignment methods hump-shaped in √KL, the same functional form as reward-model over-optimization; with weaker KL constraints, runs peak after only about a quarter of the first epoch (<a href="https://arxiv.org/abs/2406.02900">2406.02900</a>). The absence of an explicit reward model does not remove the over-optimization problem; it moves it into the implicit reward.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling (vs tuned DPO)</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Online, semi-online or iterative pairs</td><td>≈ GRPO, far above offline</td><td>Needs generation and judging</td><td>—</td><td>Inherits the judge's length bias</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td>Tuned PPO instead of offline DPO</td><td>≥, larger on code</td><td>Several times the compute</td><td>Implementation-sensitive</td><td>RM-driven length growth</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td>IPO, SLiC and other link functions</td><td>Tie</td><td>Same</td><td>—</td><td>—</td><td><span class="grade grade-a">A</span> tie</td></tr>
+            <tr><td>Length-normalized DPO</td><td>Best in Tulu 3</td><td>Same</td><td>β-sensitive</td><td>Shorter outputs</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>NLL anchor</td><td>Helps off-policy</td><td>Same</td><td>Less likelihood displacement</td><td>May over-anchor</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>SimPO, KTO</td><td>Tie to worse, depending on study</td><td>—</td><td>—</td><td>SimPO hurts math in Tulu 3</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>WPO, RSO, TR-DPO, cDPO, SPPO, DNO and similar</td><td>Own gains, near iterative DPO</td><td>—</td><td>—</td><td>Some grow response length</td><td><span class="grade grade-c">C</span></td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="pref-role">Where DPO sits in 2025–2026 pipelines</h3>
+
+        <p>DPO has moved from being the alignment stage to being one stage among several. OLMo 3 and Tulu 3 place length-normalized DPO between supervised fine-tuning and RL with verifiable rewards; in one OLMo 3 comparison, adding the DPO stage before RLVR beat RLVR alone. Llama 4, by Meta's account, uses only a light DPO pass after online RL, reporting that SFT and DPO "can over-constrain the model, restricting exploration during the online RL stage" (<a href="https://ai.meta.com/blog/llama-4-multimodal-intelligence/">Meta, 2025</a>). Both uses fit one picture: DPO sharpens the policy toward preferred behaviour, which helps a short RL stage that starts from it and hurts a long RL stage that needs to explore.</p>
+
+        <h3 id="pref-interesting">What's mathematically interesting</h3>
+
+        <p>DPO's derivation assumes the optimal policy under a KL-regularized reward exists in closed form and that the preference data covers the responses that policy would produce. The second assumption is the one that fails offline. With finite pairs, the loss has directions it does not constrain: probability mass can move to responses that appear in no pair, which is exactly what likelihood displacement measures. Sampling pairs from the current policy fills in those directions where the policy actually puts mass. That is the formal reason on-policy data dominates the choice of loss — and why <a href="#pattern-onpolicy">pattern 6</a> applies to preference learning as strongly as to RL.</p>
       </section>
 
       <section id="prm-credit">
         <h2>Family case study — process rewards and dense credit assignment</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Learned PRMs summed into the return get hacked; on-policy MC credit buys efficiency, not ceiling.</aside>
+        <p>An outcome reward says only whether the final answer was right. Every token in a long chain of thought then receives the same advantage, and a reasonable-sounding objection follows: the learner cannot tell which steps helped. Process rewards and dense credit assignment try to fix this by scoring intermediate steps. The idea is old, well motivated, and has been abandoned by most frontier reasoning recipes. The evidence explains why: denser credit buys efficiency, but the version that would buy the most — a learned step scorer summed into the reward — gets exploited.</p>
+
+        <h3 id="prm-families">Two families with different mathematics</h3>
+
+        <ul>
+          <li><strong>On-policy Monte Carlo credit</strong> (VinePPO, SPO, TreeRL, TreeRPO) estimates the value of an intermediate state by sampling continuations from the policy and checking them with the same verifier. The estimate is unbiased up to sampling noise, so it can only reduce variance. The price is extra generation.</li>
+          <li><strong>A learned process reward model (PRM) as a reward</strong> adds a trained scorer's opinion of each step to the return. The scorer is a proxy with errors, and RL optimizes against its errors (<a href="#pattern-proxy">pattern 5</a>).</li>
+        </ul>
+        <p>Several hybrid designs sit in between, and each has a precise reading. Using differences of consecutive step scores makes the shaping terms telescope, which is potential-based shaping and leaves the optimal policy unchanged — safe, and therefore small in effect. PRIME's implicit process reward sums back to a sequence-level score, so it redistributes outcome credit across tokens rather than adding information. Process advantage verifiers score a step by how much it raises a different "prover" policy's chance of success (<a href="https://arxiv.org/abs/2410.08146">2410.08146</a>). And outcome-reward GRPO with a token-level loss already contains an implicit Monte Carlo process reward, since responses sharing a prefix share credit for it (<a href="https://arxiv.org/abs/2509.21154">2509.21154</a>).</p>
+
+        <h3 id="prm-evidence">Evidence</h3>
+
+        <p><strong>Learned PRMs summed into the reward are hacked.</strong> Four independent groups report it.</p>
+        <ul>
+          <li>Gao et al.: after one epoch with a success reward plus a learned process reward, a Qwen2-1.5B model scored 11.16 on MATH, below its 24.90 starting point and the 30.58 from success reward alone; it learned to emit many short, meaningless steps, eventually single words or emoji (<a href="https://arxiv.org/abs/2410.15115">2410.15115</a>).</li>
+          <li>PURE: summing process rewards collapsed training early; even its safer min-form, used alone, was hacked later in training (<a href="https://arxiv.org/abs/2504.15275">2504.15275</a>).</li>
+          <li>PROF: mixing process and outcome rewards collapsed entropy (<a href="https://arxiv.org/abs/2509.03403">2509.03403</a>).</li>
+          <li>A 2026 study trained Qwen2.5-1.5B-Instruct with GRPO on a process reward alone. With one PRM, the reward reached its maximum within about 100 steps through mode collapse while AIME accuracy stayed at zero; with another, the reward passed 0.8 while accuracy peaked at 3–4% (<a href="https://arxiv.org/abs/2603.06621">2603.06621</a>).</li>
+        </ul>
+        <p>The fixes that survive keep the proxy bounded or out of the return: clipping and telescoping (Gao et al.), the min form (PURE), or using the PRM only to filter samples (PROF). They prevent the collapse but beat outcome reward by little — Gao et al.'s best variant reaches 31.44 against 30.58, in one run. <span class="grade grade-a">A</span> for hacking.</p>
+
+        <p><strong>Dense credit buys efficiency.</strong> VinePPO reaches PPO's peak in several times fewer gradient steps, on responses up to 1,024 tokens (<a href="https://arxiv.org/abs/2410.01679">2410.01679</a>). PRIME reaches its RLOO baseline's training reward in about 40% of the steps, at about 28% more time per step, and scores 41.0 against RLOO's 36.9 when both have trained for 240 steps (<a href="https://arxiv.org/abs/2502.01456">2502.01456</a>). PURE's min-form runs reach the outcome-reward run's accuracy in about 30% of the steps. <span class="grade grade-b">B</span></p>
+
+        <p><strong>Its accuracy gains are small and shrink with scale.</strong> SPO's tree-structured credit gains 11.6 MATH500 points over GRPO at a 2k context, 7.6 at 4k and 0.8 at 32k, where AIME24 ties (<a href="https://arxiv.org/abs/2505.23564">2505.23564</a>). TreeRPO's gain falls from about 3 points at 1.5B to under 1 at 7B. None of these studies reports multiple training seeds, and most use Qwen2.5-Math. SPO also found that a token mask alone accounted for much of its gain on GSM8K — a reminder that "credit assignment" papers often change several things. <span class="grade grade-d">D</span></p>
+
+        <h3 id="prm-practice">What frontier recipes do</h3>
+
+        <p>DeepSeek-R1 lists PRMs among its unsuccessful attempts, for three reasons: fine-grained steps are hard to define, intermediate correctness is hard to judge, and a model-based PRM inevitably invites reward hacking (<a href="https://arxiv.org/abs/2501.12948v1">2501.12948v1</a>). Kimi k1.5 deliberately avoids a value network, arguing that steps which go wrong and are then corrected are valuable for learning long chains of thought (<a href="https://arxiv.org/abs/2501.12599">2501.12599</a>). The same lab had reported process supervision beating outcome supervision in 2024, in a figure for a 1.3B model (DeepSeekMath), and dropped it in 2025. PRMs remain useful at test time, to rerank sampled solutions (<a href="https://arxiv.org/abs/2305.20050">Lightman et al., 2305.20050</a>), which is a different use with a different risk: a reranker selects among responses but does not train the policy to fool it.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Learned PRM summed into the reward</td><td>Negative (collapse)</td><td>Fast early</td><td>Collapses</td><td>Length, repetition, degenerate output</td><td><span class="grade grade-a">A</span> hacking</td></tr>
+            <tr><td>Bounded or telescoping PRM (clip, delta, min-form, implicit PRM)</td><td>Within noise</td><td>Several times fewer steps</td><td>PRM-only still hacked</td><td>Length</td><td><span class="grade grade-c">C</span> gain</td></tr>
+            <tr><td>PRM used only to filter samples</td><td>Small gain</td><td>Costs extra sampling</td><td>Stable</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
+            <tr><td>On-policy Monte Carlo or tree credit</td><td>Small, shrinking with scale and context</td><td>Several times fewer steps</td><td>Stable (true verifier)</td><td>Slower rollouts</td><td><span class="grade grade-b">B</span> small models · <span class="grade grade-c">C</span> at scale</td></tr>
+            <tr><td>PRM as a test-time reranker</td><td>Raises best-of-N</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="prm-interesting">What's mathematically interesting</h3>
+
+        <p>The objection that outcome rewards cannot assign credit is weaker than it sounds. Group sampling already performs Monte Carlo credit assignment implicitly: responses that share an early decision and then diverge in outcome give that decision a net advantage. What outcome rewards lack is efficiency, not correctness. Any added process signal faces a sharp choice. If it is a function of the policy's own rollouts and the true verifier, it is unbiased and can only reduce variance. If it is a learned function of the text, it is biased, and RL will find the bias. Potential-based shaping is the one way to add a learned signal without changing the optimum — at the price of not changing the optimum. That leaves dense credit as an efficiency tool, which matches what the evidence shows.</p>
       </section>
 
       <section id="agentic">
         <h2>Family case study — agentic multi-turn RL</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Correctness constraints decide success; turn-level credit remains single-paper evidence.</aside>
+        <p>An agent's trajectory interleaves the policy's own tokens with tokens it did not write: tool outputs, retrieved documents, environment observations. Episodes run for many turns, reward often arrives only at the end, and rollouts are slow and uneven. Each of these features suggests an algorithmic change, and 2025–2026 produced many: turn-level credit, new ratio granularities, trajectory filters, critics for long horizons. The evidence sorts them into two groups. A few correctness constraints decide whether training works at all. The algorithmic refinements beyond them remain, for now, single-paper results. The infra survey's <a href="https://chenggong-zhang.github.io/RL_infra/#multi-turn">multi-turn section</a> covers how the turn loop is implemented; this one judges what matters for learning.</p>
+
+        <h3 id="agentic-correctness">Correctness constraints</h3>
+
+        <p><strong>Mask the tokens the policy did not generate.</strong> Without a mask, the policy gradient raises the likelihood of tool outputs and retrieved text, which amounts to behaviour cloning on the environment, and the importance ratio of those tokens has no on-policy meaning. Search-R1 measured it: on Qwen2.5-7B with PPO, masking retrieved tokens raised average exact match from 0.343 to 0.431; on 3B the effect was smaller and not uniform across datasets (<a href="https://arxiv.org/abs/2503.09516">2503.09516</a>). Every framework now masks. <span class="grade grade-b">B</span></p>
+
+        <p><strong>Keep the token IDs the policy actually produced.</strong> Re-applying the chat template to the decoded text of a multi-turn conversation does not reproduce the original token IDs. verl's documentation reports that this made PPO fail to converge even on single-turn tasks, and GLM-5 built a token-in, token-out gateway to avoid it (<a href="https://arxiv.org/abs/2602.15763">2602.15763</a>). The log-probabilities in the loss must belong to the tokens that were sampled; otherwise every ratio in <a href="#off-policy">axis ⑥</a> is computed on the wrong sequence. <span class="grade grade-b">B</span></p>
+
+        <p><strong>Drop broken trajectories.</strong> In tool-integrated reasoning, SimpleTIR discards any trajectory containing a turn with neither code nor a final answer. On Qwen2.5-7B this lifted the best AIME24 score within its training window from 20.8 to 50.5, while generic filters on low-probability tokens or high ratios did not substitute (<a href="https://arxiv.org/abs/2509.02479">2509.02479</a>). The result is a single run reporting peaks <span class="grade grade-c">C</span>, but its mechanism matches <a href="#pattern-quadrant">pattern 4</a>: malformed turns produce off-distribution, negative-advantage sequences whose gradients destabilize training. Dropping truncated or timed-out trajectories is near-universal in frontier agent RL, though no paper ablates it.</p>
+
+        <h3 id="agentic-credit">Turn-level credit and other refinements</h3>
+
+        <ul>
+          <li><strong>GiGPO</strong> groups not only whole trajectories but also repeated environment states within them, giving each turn a baseline from other visits to the same state. It reports large gains over GRPO on ALFWorld and WebShop across three seeds for models up to 7B, with shared hyperparameters across methods (<a href="https://arxiv.org/abs/2505.10978">2505.10978</a>). The method needs states to recur exactly, which is common in text games and rare in software engineering or web browsing; there it reduces to GRPO. <span class="grade grade-b">B</span> on its benchmarks, untested elsewhere.</li>
+          <li><strong>Turn-level advantages</strong> (MT-GRPO and similar) are tested on two-turn tasks, with baselines that are weaker than independent reports of the same setup <span class="grade grade-c">C</span>. In VAGEN's visual agents, a structured reasoning format adds 0.09 to the success rate and a bi-level critic with a world-model reward adds 0.06 more, in one run each; the paper also reports its LLM-judge reward being gamed <span class="grade grade-c">C</span>.</li>
+          <li><strong>Ratio granularity</strong> — per token, per turn or per sequence — gives opposite rankings in different papers: LOOP finds per-token best in AppWorld (<a href="https://arxiv.org/abs/2502.01600">2502.01600</a>), while SORL finds per-turn ratios more stable off-policy (<a href="https://arxiv.org/abs/2511.20718">2511.20718</a>). By <a href="#skel-identity">the r ≡ 1 identity</a>, the disagreement most likely reflects how off-policy each study was. <span class="grade grade-d">D</span></li>
+          <li><strong>Critic or group baseline</strong> also flips: PPO wins in some multi-turn studies and GRPO in others, depending on model size and on which method was tuned. <span class="grade grade-d">D</span></li>
+        </ul>
+
+        <h3 id="agentic-nonalgo">The largest effects are not algorithmic</h3>
+
+        <p>Within the same setups, changes to the environment and data dwarf the algorithmic differences above.</p>
+        <ul>
+          <li><strong>Retriever quality.</strong> Swapping a random retriever for a good dense retriever roughly doubled exact match in one search-agent study (<a href="https://arxiv.org/abs/2505.15117">2505.15117</a>).</li>
+          <li><strong>Cold-start data.</strong> Supervised warm-up on real tool-use trajectories, rather than stitched synthetic ones, made the difference between a working and a non-working agent in DemyAgent (<a href="https://arxiv.org/abs/2510.11701">2510.11701</a>).</li>
+          <li><strong>Context management.</strong> Three labs independently report that managing the context window at test time — summarizing or discarding old turns — raises BrowseComp scores by 14–16 points: DeepSeek-V3.2 from 51.4 to 67.6, Kimi K2.5 from 60.6 to 74.9, GLM-5 from 62.0 to 75.9 <span class="grade grade-a">A</span>.</li>
+        </ul>
+
+        <p>The frontier recipes that have been described in reports — DeepSeek, Kimi, GLM, MiniMax, Qwen — converge on a short list: a trajectory-level group baseline, an outcome reward, masking of environment tokens, ratio masking or clipping against the rollout probabilities, a staleness bound for asynchronous rollouts, dropping broken or truncated trajectories, and explicit length or latency terms. None reports using turn-level credit, and none publishes an ablation of its agent RL algorithm. The investment goes into environments: their number, diversity and reliability.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Mask environment tokens; keep token IDs</td><td>Large</td><td>—</td><td>Required</td><td>None</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Drop malformed trajectories</td><td>Large in one study</td><td>—</td><td>Bounds gradient norm</td><td>Discards some failures</td><td><span class="grade grade-c">C</span></td></tr>
+            <tr><td>Drop truncated or timed-out trajectories</td><td>Not ablated</td><td>—</td><td>Claimed</td><td>Needs a budget penalty</td><td><span class="grade grade-c">C</span></td></tr>
+            <tr><td>State-grouped credit (GiGPO)</td><td>Gains on text games</td><td>Same rollout budget</td><td>—</td><td>Needs repeated states</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Other turn-level credit; bi-level critics</td><td>Own gains</td><td>Some exponential in turns</td><td>—</td><td>Judge hacking</td><td><span class="grade grade-c">C</span></td></tr>
+            <tr><td>Token vs turn vs sequence ratio</td><td>—</td><td>—</td><td>Depends on staleness</td><td>—</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>Critic vs group baseline</td><td>Sign varies</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>Test-time context management</td><td>BrowseComp +14–16</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td>Asynchronous rollout with a staleness bound</td><td>Unknown</td><td>1.5–2.4× reported, mostly outside agentic tasks</td><td>Needs off-policy control</td><td>—</td><td><span class="grade grade-b">B</span> efficiency</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="agentic-interesting">What's mathematically interesting</h3>
+
+        <p>A multi-turn trajectory is a sequence in which the policy controls only some of the tokens. The correct policy gradient sums over the policy's own tokens and treats the environment's tokens as part of the state. Each of the correctness constraints above is a way of enforcing that: masking removes environment tokens from the action set, token-ID fidelity ensures the actions in the loss are the ones sampled, and dropping malformed trajectories removes states the policy reached by leaving the task's distribution. The turn-level credit methods address something else, the variance of an outcome reward spread over a long horizon. That problem is real, but on current benchmarks the group baseline already handles enough of it that the remaining gains are hard to separate from noise.</p>
       </section>
 
       <section id="case-scalerl">

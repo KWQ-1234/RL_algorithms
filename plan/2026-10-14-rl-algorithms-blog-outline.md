@@ -502,3 +502,14 @@
 - **LOOP：** 9 点是 best checkpoint（71.3→61.9）；按 3 次运行均值算是 6.8 点。
 - **1-shot RLVR：** Llama-3.2-3B 的 17.5→19.0 是 6 个 benchmark 平均；MATH500 上是 40.8→45.8。
 - **RaR：** 不给参考答案时仍有 31.1–34.2（Likert 基线 23.9），所以参考答案只解释部分增益，不是大部分。
+- **Pass@k Training（2508.10751）：** 没有 pass@256，pass@k 由 8 个样本算；AIME24 数字只在附录 Table 5（LLaMA、R1-Distill）。报告里"Qwen2.5-7B AIME24 pass@256 56.7 vs 66.7"无出处，已删。
+- **Invisible Leash：** 主模型是 ProRL-1.5B-v1（36 扩张 / 163 收缩）；v2 是 48/175。
+- **Yue et al.：** 原文说 base 在所有 benchmark 的大 k 上都超过 RL 模型；distill 高于 base 只在 Minerva 一张图里展示。
+- **Rafailov DAA 过优化：** 早早在 ~25% epoch 达峰的是 KL 约束更宽（β 小）的配置，不是窄约束。
+- **Ivison：** 61.0→79.8 / 62.2→61.6 是同为 13B、训练数据不同的两个 RM；规模对比是 13B→70B：RewardBench 61.0→73.6，PPO 62.2→62.8。"最多 8 点"是分类别的，不是总平均。
+- **DNO：** 长度先翻倍再回落（162→671→361 词），MT-Bench 不是单调下降；不要写"长度增长、MT-Bench 下降"。
+- **GPO：** 训练的策略是 110M 的 T5X-Large，11B 只是评判模型。
+- **VAGEN：** 0.55→0.76 是 RL 算法差距，不是推理格式；格式本身 +0.09（0.67→0.76），bi-level critic +0.06（0.76→0.82）。
+- **BrowseComp 上下文管理：** GLM-5 表中是 62.0→75.9（55.3 是完全不做上下文处理）；三家增益为 14–16 点，不是 7–16。
+- **GiGPO 开销：** 论文写 <0.002%，按其自己的数字是约 0.15%。
+- **异步加速数字：** verl 1.6/2.35× 是数学 RL；SkyRL 1.55× 相对朴素异步；Kimi ≥1.5× 来自 turn-level partial rollout；MiniMax 40× 是训练端加速。
