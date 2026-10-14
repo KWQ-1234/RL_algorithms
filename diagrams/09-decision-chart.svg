@@ -3,63 +3,63 @@
   <title>Decision chart for configuring an LLM RL run</title>
   <desc>A list of defaults that always apply, followed by five questions — rule-checkable reward, mixture of experts, off-policy updates, multi-turn tools, aligned starting point — each with the settings that follow from a yes or a no answer.</desc>
   <rect width="760" height="640" fill="#ffffff"/>
-  <text x="380" y="30" text-anchor="middle" font-size="20" font-weight="600" fill="#27262b">What to set, in what order</text>
-  <rect x="20" y="48" width="720" height="92" rx="8" fill="#ecfdf5" stroke="#86efac"/>
-  <text x="36" y="72" font-size="14.5" font-weight="700" fill="#14532d">Always</text>
-  <text x="36" y="98" font-size="13.5" fill="#14532d">• One optimizer step per batch where affordable</text>
-  <text x="388" y="98" font-size="13.5" fill="#14532d">• Group-mean baseline; no group std; no 1/|y|</text>
-  <text x="36" y="122" font-size="13.5" fill="#14532d">• No fixed entropy bonus; temperature near 1</text>
-  <text x="388" y="122" font-size="13.5" fill="#14532d">• Monitor truncation rate and train–inference KL</text>
-  <text x="298" y="172" font-size="13" font-weight="700" fill="#026e57">If yes</text>
-  <text x="533" y="172" font-size="13" font-weight="700" fill="#b85c00">If no</text>
-  <rect x="20" y="184" width="255" height="82" rx="8" fill="#f5f2ff" stroke="#7253ed"/>
-  <text x="34" y="230.0" font-size="14" font-weight="600" fill="#27262b">Is the reward checkable by rule?</text>
-  <rect x="290" y="184" width="222" height="82" rx="8" fill="#ffffff" stroke="#86efac"/>
-  <rect x="525" y="184" width="215" height="82" rx="8" fill="#ffffff" stroke="#fcd34d"/>
-  <text x="302" y="208" font-size="13" fill="#27262b">No KL anchor to the SFT model</text>
-  <text x="302" y="228" font-size="13" fill="#27262b">High-precision verifier</text>
-  <text x="302" y="248" font-size="13" fill="#27262b">Random-reward control run</text>
-  <text x="537" y="208" font-size="13" fill="#27262b">Keep a KL anchor; tune it</text>
-  <text x="537" y="228" font-size="13" fill="#27262b">On-policy preference data</text>
-  <text x="537" y="248" font-size="13" fill="#27262b">PPO or online DPO</text>
-  <line x1="275" y1="225.0" x2="290" y2="225.0" stroke="#959396"/>
-  <rect x="20" y="274" width="255" height="82" rx="8" fill="#f5f2ff" stroke="#7253ed"/>
-  <text x="34" y="320.0" font-size="14" font-weight="600" fill="#27262b">Is the model a mixture of experts?</text>
-  <rect x="290" y="274" width="222" height="82" rx="8" fill="#ffffff" stroke="#86efac"/>
-  <rect x="525" y="274" width="215" height="82" rx="8" fill="#ffffff" stroke="#fcd34d"/>
-  <text x="302" y="298" font-size="13" fill="#27262b">Routing replay once a batch</text>
-  <text x="302" y="318" font-size="13" fill="#27262b">gets more than one step</text>
-  <text x="302" y="338" font-size="13" fill="#27262b">Watch routing drift</text>
-  <text x="537" y="298" font-size="13" fill="#27262b">Dense: mismatch is usually</text>
-  <text x="537" y="318" font-size="13" fill="#27262b">second-order; check it once</text>
-  <line x1="275" y1="315.0" x2="290" y2="315.0" stroke="#959396"/>
-  <rect x="20" y="364" width="255" height="82" rx="8" fill="#f5f2ff" stroke="#7253ed"/>
-  <text x="34" y="400.5" font-size="14" font-weight="600" fill="#27262b">More than one step per batch,</text>
-  <text x="34" y="419.5" font-size="14" font-weight="600" fill="#27262b">or asynchronous rollouts?</text>
-  <rect x="290" y="364" width="222" height="82" rx="8" fill="#ffffff" stroke="#86efac"/>
-  <rect x="525" y="364" width="215" height="82" rx="8" fill="#ffffff" stroke="#fcd34d"/>
-  <text x="302" y="388" font-size="13" fill="#27262b">Clip, and budget staleness × LR</text>
-  <text x="302" y="408" font-size="13" fill="#27262b">Correct with sampler log-probs</text>
-  <text x="302" y="428" font-size="13" fill="#27262b">Mask far-off-policy negatives</text>
-  <text x="537" y="388" font-size="13" fill="#27262b">Surrogate choice is moot (r ≡ 1)</text>
-  <text x="537" y="408" font-size="13" fill="#27262b">Recompute π_old on the trainer</text>
-  <line x1="275" y1="405.0" x2="290" y2="405.0" stroke="#959396"/>
-  <rect x="20" y="454" width="255" height="82" rx="8" fill="#f5f2ff" stroke="#7253ed"/>
-  <text x="34" y="500.0" font-size="14" font-weight="600" fill="#27262b">Multi-turn or tool use?</text>
-  <rect x="290" y="454" width="222" height="82" rx="8" fill="#ffffff" stroke="#86efac"/>
-  <rect x="525" y="454" width="215" height="82" rx="8" fill="#ffffff" stroke="#fcd34d"/>
-  <text x="302" y="478" font-size="13" fill="#27262b">Mask environment tokens</text>
-  <text x="302" y="498" font-size="13" fill="#27262b">Keep sampled token IDs</text>
-  <text x="302" y="518" font-size="13" fill="#27262b">Drop malformed trajectories</text>
-  <text x="537" y="478" font-size="13" fill="#27262b">—</text>
-  <line x1="275" y1="495.0" x2="290" y2="495.0" stroke="#959396"/>
-  <rect x="20" y="544" width="255" height="82" rx="8" fill="#f5f2ff" stroke="#7253ed"/>
-  <text x="34" y="590.0" font-size="14" font-weight="600" fill="#27262b">Starting from an aligned model?</text>
-  <rect x="290" y="544" width="222" height="82" rx="8" fill="#ffffff" stroke="#86efac"/>
-  <rect x="525" y="544" width="215" height="82" rx="8" fill="#ffffff" stroke="#fcd34d"/>
-  <text x="302" y="568" font-size="13" fill="#27262b">Tune clip-higher on this model</text>
-  <text x="302" y="588" font-size="13" fill="#27262b">Re-check loss aggregation</text>
-  <text x="537" y="568" font-size="13" fill="#27262b">Base model: prime behaviours</text>
-  <text x="537" y="588" font-size="13" fill="#27262b">or mid-train before RL</text>
-  <line x1="275" y1="585.0" x2="290" y2="585.0" stroke="#959396"/>
+  <text x="380" y="30" text-anchor="middle" font-size="20" font-weight="600" fill="#18202e">What to set, in what order</text>
+  <rect x="20" y="48" width="720" height="92" rx="8" fill="#e9f3ee" stroke="#b9d6c6"/>
+  <text x="36" y="72" font-size="14.5" font-weight="700" fill="#1f4d38">Always</text>
+  <text x="36" y="98" font-size="13.5" fill="#1f4d38">• One optimizer step per batch where affordable</text>
+  <text x="388" y="98" font-size="13.5" fill="#1f4d38">• Group-mean baseline; no group std; no 1/|y|</text>
+  <text x="36" y="122" font-size="13.5" fill="#1f4d38">• No fixed entropy bonus; temperature near 1</text>
+  <text x="388" y="122" font-size="13.5" fill="#1f4d38">• Monitor truncation rate and train–inference KL</text>
+  <text x="298" y="172" font-size="13" font-weight="700" fill="#2f6b4f">If yes</text>
+  <text x="533" y="172" font-size="13" font-weight="700" fill="#a35a12">If no</text>
+  <rect x="20" y="184" width="255" height="82" rx="8" fill="#f1f0f8" stroke="#4f4a9c"/>
+  <text x="34" y="230.0" font-size="14" font-weight="600" fill="#18202e">Is the reward checkable by rule?</text>
+  <rect x="290" y="184" width="222" height="82" rx="8" fill="#ffffff" stroke="#b9d6c6"/>
+  <rect x="525" y="184" width="215" height="82" rx="8" fill="#ffffff" stroke="#e3cf9f"/>
+  <text x="302" y="208" font-size="13" fill="#18202e">No KL anchor to the SFT model</text>
+  <text x="302" y="228" font-size="13" fill="#18202e">High-precision verifier</text>
+  <text x="302" y="248" font-size="13" fill="#18202e">Random-reward control run</text>
+  <text x="537" y="208" font-size="13" fill="#18202e">Keep a KL anchor; tune it</text>
+  <text x="537" y="228" font-size="13" fill="#18202e">On-policy preference data</text>
+  <text x="537" y="248" font-size="13" fill="#18202e">PPO or online DPO</text>
+  <line x1="275" y1="225.0" x2="290" y2="225.0" stroke="#8a8f9c"/>
+  <rect x="20" y="274" width="255" height="82" rx="8" fill="#f1f0f8" stroke="#4f4a9c"/>
+  <text x="34" y="320.0" font-size="14" font-weight="600" fill="#18202e">Is the model a mixture of experts?</text>
+  <rect x="290" y="274" width="222" height="82" rx="8" fill="#ffffff" stroke="#b9d6c6"/>
+  <rect x="525" y="274" width="215" height="82" rx="8" fill="#ffffff" stroke="#e3cf9f"/>
+  <text x="302" y="298" font-size="13" fill="#18202e">Routing replay once a batch</text>
+  <text x="302" y="318" font-size="13" fill="#18202e">gets more than one step</text>
+  <text x="302" y="338" font-size="13" fill="#18202e">Watch routing drift</text>
+  <text x="537" y="298" font-size="13" fill="#18202e">Dense: mismatch is usually</text>
+  <text x="537" y="318" font-size="13" fill="#18202e">second-order; check it once</text>
+  <line x1="275" y1="315.0" x2="290" y2="315.0" stroke="#8a8f9c"/>
+  <rect x="20" y="364" width="255" height="82" rx="8" fill="#f1f0f8" stroke="#4f4a9c"/>
+  <text x="34" y="400.5" font-size="14" font-weight="600" fill="#18202e">More than one step per batch,</text>
+  <text x="34" y="419.5" font-size="14" font-weight="600" fill="#18202e">or asynchronous rollouts?</text>
+  <rect x="290" y="364" width="222" height="82" rx="8" fill="#ffffff" stroke="#b9d6c6"/>
+  <rect x="525" y="364" width="215" height="82" rx="8" fill="#ffffff" stroke="#e3cf9f"/>
+  <text x="302" y="388" font-size="13" fill="#18202e">Clip, and budget staleness × LR</text>
+  <text x="302" y="408" font-size="13" fill="#18202e">Correct with sampler log-probs</text>
+  <text x="302" y="428" font-size="13" fill="#18202e">Mask far-off-policy negatives</text>
+  <text x="537" y="388" font-size="13" fill="#18202e">Surrogate choice is moot (r ≡ 1)</text>
+  <text x="537" y="408" font-size="13" fill="#18202e">Recompute π_old on the trainer</text>
+  <line x1="275" y1="405.0" x2="290" y2="405.0" stroke="#8a8f9c"/>
+  <rect x="20" y="454" width="255" height="82" rx="8" fill="#f1f0f8" stroke="#4f4a9c"/>
+  <text x="34" y="500.0" font-size="14" font-weight="600" fill="#18202e">Multi-turn or tool use?</text>
+  <rect x="290" y="454" width="222" height="82" rx="8" fill="#ffffff" stroke="#b9d6c6"/>
+  <rect x="525" y="454" width="215" height="82" rx="8" fill="#ffffff" stroke="#e3cf9f"/>
+  <text x="302" y="478" font-size="13" fill="#18202e">Mask environment tokens</text>
+  <text x="302" y="498" font-size="13" fill="#18202e">Keep sampled token IDs</text>
+  <text x="302" y="518" font-size="13" fill="#18202e">Drop malformed trajectories</text>
+  <text x="537" y="478" font-size="13" fill="#18202e">—</text>
+  <line x1="275" y1="495.0" x2="290" y2="495.0" stroke="#8a8f9c"/>
+  <rect x="20" y="544" width="255" height="82" rx="8" fill="#f1f0f8" stroke="#4f4a9c"/>
+  <text x="34" y="590.0" font-size="14" font-weight="600" fill="#18202e">Starting from an aligned model?</text>
+  <rect x="290" y="544" width="222" height="82" rx="8" fill="#ffffff" stroke="#b9d6c6"/>
+  <rect x="525" y="544" width="215" height="82" rx="8" fill="#ffffff" stroke="#e3cf9f"/>
+  <text x="302" y="568" font-size="13" fill="#18202e">Tune clip-higher on this model</text>
+  <text x="302" y="588" font-size="13" fill="#18202e">Re-check loss aggregation</text>
+  <text x="537" y="568" font-size="13" fill="#18202e">Base model: prime behaviours</text>
+  <text x="537" y="588" font-size="13" fill="#18202e">or mid-train before RL</text>
+  <line x1="275" y1="585.0" x2="290" y2="585.0" stroke="#8a8f9c"/>
 </svg>

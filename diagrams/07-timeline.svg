@@ -3,78 +3,78 @@
   <title>Two bands of LLM RL algorithm development, 2017 to 2026</title>
   <desc>Timeline in two bands. The advantage-estimator band simplifies from a learned critic to group baselines to mean-only baselines. The trust-region, importance-sampling and numerics band grows more crowded from 2025 onward, with clip-higher, CISPO, GSPO, truncated importance sampling, routing replay, FP16, IcePop, SAPO, sequence masking and zero-mismatch engines. Hollow markers are 2026 measurement studies.</desc>
   <rect width="760" height="600" fill="#ffffff"/>
-  <text x="380" y="30" text-anchor="middle" font-size="20" font-weight="600" fill="#27262b">Estimators got simpler; the trust region got crowded</text>
-  <text x="380" y="52" text-anchor="middle" font-size="13.5" fill="#5c5962">Time axis compressed before 2024. Hollow markers: 2026 measurement studies.</text>
-  <line x1="60" y1="250" x2="730" y2="250" stroke="#2869e6" stroke-width="2.4"/>
-  <text x="60" y="276" font-size="14" font-weight="600" fill="#2869e6">Advantage estimator</text>
-  <line x1="81.8" y1="250" x2="81.8" y2="230" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="81.8" cy="250" r="5.5" fill="#2869e6" stroke="#2869e6" stroke-width="2"/>
-  <text x="84.8" y="226" font-size="13" fill="#27262b" transform="rotate(-62 84.8 226)">PPO + GAE critic</text>
-  <line x1="215.7" y1="250" x2="215.7" y2="230" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="215.7" cy="250" r="5.5" fill="#2869e6" stroke="#2869e6" stroke-width="2"/>
-  <text x="218.7" y="226" font-size="13" fill="#27262b" transform="rotate(-62 218.7 226)">ReMax: greedy baseline</text>
-  <line x1="237.2" y1="250" x2="246.7" y2="230" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="237.2" cy="250" r="5.5" fill="#2869e6" stroke="#2869e6" stroke-width="2"/>
-  <text x="249.7" y="226" font-size="13" fill="#27262b" transform="rotate(-62 249.7 226)">GRPO, RLOO: group baselines</text>
-  <line x1="397.6" y1="250" x2="397.6" y2="230" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="397.6" cy="250" r="5.5" fill="#2869e6" stroke="#2869e6" stroke-width="2"/>
-  <text x="400.6" y="226" font-size="13" fill="#27262b" transform="rotate(-62 400.6 226)">REINFORCE++: batch norm</text>
-  <line x1="430.3" y1="250" x2="430.3" y2="230" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="430.3" cy="250" r="5.5" fill="#2869e6" stroke="#2869e6" stroke-width="2"/>
-  <text x="433.3" y="226" font-size="13" fill="#27262b" transform="rotate(-62 433.3 226)">Dr. GRPO: mean only</text>
-  <line x1="444.1" y1="250" x2="461.3" y2="230" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="444.1" cy="250" r="5.5" fill="#2869e6" stroke="#2869e6" stroke-width="2"/>
-  <text x="464.3" y="226" font-size="13" fill="#27262b" transform="rotate(-62 464.3 226)">VAPO: critic returns</text>
-  <line x1="556.2" y1="250" x2="556.2" y2="230" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="556.2" cy="250" r="5.5" fill="#2869e6" stroke="#2869e6" stroke-width="2"/>
-  <text x="559.2" y="226" font-size="13" fill="#27262b" transform="rotate(-62 559.2 226)">OLMo 3, V3.2: no std</text>
-  <line x1="613.1" y1="250" x2="613.1" y2="230" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="613.1" cy="250" r="5.5" fill="#ffffff" stroke="#2869e6" stroke-width="2"/>
-  <text x="616.1" y="226" font-size="13" fill="#27262b" transform="rotate(-62 616.1 226)">GenAC: estimators tie</text>
-  <line x1="60" y1="520" x2="730" y2="520" stroke="#7253ed" stroke-width="2.4"/>
-  <text x="60" y="546" font-size="14" font-weight="600" fill="#7253ed">Trust region · importance sampling · numerics</text>
-  <line x1="81.8" y1="520" x2="81.8" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="81.8" cy="520" r="5.5" fill="#7253ed" stroke="#7253ed" stroke-width="2"/>
-  <text x="84.8" y="496" font-size="13" fill="#27262b" transform="rotate(-62 84.8 496)">PPO ratio clip</text>
-  <line x1="426.9" y1="520" x2="421.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="426.9" cy="520" r="5.5" fill="#7253ed" stroke="#7253ed" stroke-width="2"/>
-  <text x="424.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 424.0 496)">DAPO clip-higher; TOPR</text>
-  <line x1="470.0" y1="520" x2="452.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="470.0" cy="520" r="5.5" fill="#7253ed" stroke="#7253ed" stroke-width="2"/>
-  <text x="455.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 455.0 496)">CISPO; FP32 LM head</text>
-  <line x1="487.2" y1="520" x2="483.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="487.2" cy="520" r="5.5" fill="#7253ed" stroke="#7253ed" stroke-width="2"/>
-  <text x="486.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 486.0 496)">GSPO sequence ratio</text>
-  <line x1="499.3" y1="520" x2="514.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="499.3" cy="520" r="5.5" fill="#7253ed" stroke="#7253ed" stroke-width="2"/>
-  <text x="517.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 517.0 496)">TIS (sampler ratio)</text>
-  <line x1="526.9" y1="520" x2="545.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="526.9" cy="520" r="5.5" fill="#7253ed" stroke="#7253ed" stroke-width="2"/>
-  <text x="548.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 548.0 496)">R3 routing replay; FP16</text>
-  <line x1="530.3" y1="520" x2="576.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="530.3" cy="520" r="5.5" fill="#7253ed" stroke="#7253ed" stroke-width="2"/>
-  <text x="579.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 579.0 496)">IcePop mask</text>
-  <line x1="544.1" y1="520" x2="607.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="544.1" cy="520" r="5.5" fill="#7253ed" stroke="#7253ed" stroke-width="2"/>
-  <text x="610.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 610.0 496)">SAPO soft gate</text>
-  <line x1="552.8" y1="520" x2="638.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="552.8" cy="520" r="5.5" fill="#7253ed" stroke="#7253ed" stroke-width="2"/>
-  <text x="641.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 641.0 496)">V3.2 sequence masking</text>
-  <line x1="628.6" y1="520" x2="669.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="628.6" cy="520" r="5.5" fill="#ffffff" stroke="#7253ed" stroke-width="2"/>
-  <text x="672.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 672.0 496)">VeXact zero mismatch</text>
-  <line x1="685.5" y1="520" x2="700.0" y2="500" stroke="#c9c5cf" stroke-width="1"/>
-  <circle cx="685.5" cy="520" r="5.5" fill="#ffffff" stroke="#7253ed" stroke-width="2"/>
-  <text x="703.0" y="496" font-size="13" fill="#27262b" transform="rotate(-62 703.0 496)">CIS multi-seed test</text>
-  <line x1="70.0" y1="560" x2="70.0" y2="567" stroke="#959396"/>
-  <text x="70.0" y="585" text-anchor="middle" font-size="13" fill="#5c5962">2017</text>
-  <line x1="134.3" y1="560" x2="134.3" y2="567" stroke="#959396"/>
-  <text x="134.3" y="585" text-anchor="middle" font-size="13" fill="#5c5962">2020</text>
-  <line x1="220.0" y1="560" x2="220.0" y2="567" stroke="#959396"/>
-  <text x="220.0" y="585" text-anchor="middle" font-size="13" fill="#5c5962">2024</text>
-  <line x1="392.4" y1="560" x2="392.4" y2="567" stroke="#959396"/>
-  <text x="392.4" y="585" text-anchor="middle" font-size="13" fill="#5c5962">2025</text>
-  <line x1="564.8" y1="560" x2="564.8" y2="567" stroke="#959396"/>
-  <text x="564.8" y="585" text-anchor="middle" font-size="13" fill="#5c5962">2026</text>
-  <line x1="60" y1="560" x2="730" y2="560" stroke="#959396"/>
+  <text x="380" y="30" text-anchor="middle" font-size="20" font-weight="600" fill="#18202e">Estimators got simpler; the trust region got crowded</text>
+  <text x="380" y="52" text-anchor="middle" font-size="13.5" fill="#5a6070">Time axis compressed before 2024. Hollow markers: 2026 measurement studies.</text>
+  <line x1="60" y1="250" x2="730" y2="250" stroke="#2a5da8" stroke-width="2.4"/>
+  <text x="60" y="276" font-size="14" font-weight="600" fill="#2a5da8">Advantage estimator</text>
+  <line x1="81.8" y1="250" x2="81.8" y2="230" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="81.8" cy="250" r="5.5" fill="#2a5da8" stroke="#2a5da8" stroke-width="2"/>
+  <text x="84.8" y="226" font-size="13" fill="#18202e" transform="rotate(-62 84.8 226)">PPO + GAE critic</text>
+  <line x1="215.7" y1="250" x2="215.7" y2="230" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="215.7" cy="250" r="5.5" fill="#2a5da8" stroke="#2a5da8" stroke-width="2"/>
+  <text x="218.7" y="226" font-size="13" fill="#18202e" transform="rotate(-62 218.7 226)">ReMax: greedy baseline</text>
+  <line x1="237.2" y1="250" x2="246.7" y2="230" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="237.2" cy="250" r="5.5" fill="#2a5da8" stroke="#2a5da8" stroke-width="2"/>
+  <text x="249.7" y="226" font-size="13" fill="#18202e" transform="rotate(-62 249.7 226)">GRPO, RLOO: group baselines</text>
+  <line x1="397.6" y1="250" x2="397.6" y2="230" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="397.6" cy="250" r="5.5" fill="#2a5da8" stroke="#2a5da8" stroke-width="2"/>
+  <text x="400.6" y="226" font-size="13" fill="#18202e" transform="rotate(-62 400.6 226)">REINFORCE++: batch norm</text>
+  <line x1="430.3" y1="250" x2="430.3" y2="230" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="430.3" cy="250" r="5.5" fill="#2a5da8" stroke="#2a5da8" stroke-width="2"/>
+  <text x="433.3" y="226" font-size="13" fill="#18202e" transform="rotate(-62 433.3 226)">Dr. GRPO: mean only</text>
+  <line x1="444.1" y1="250" x2="461.3" y2="230" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="444.1" cy="250" r="5.5" fill="#2a5da8" stroke="#2a5da8" stroke-width="2"/>
+  <text x="464.3" y="226" font-size="13" fill="#18202e" transform="rotate(-62 464.3 226)">VAPO: critic returns</text>
+  <line x1="556.2" y1="250" x2="556.2" y2="230" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="556.2" cy="250" r="5.5" fill="#2a5da8" stroke="#2a5da8" stroke-width="2"/>
+  <text x="559.2" y="226" font-size="13" fill="#18202e" transform="rotate(-62 559.2 226)">OLMo 3, V3.2: no std</text>
+  <line x1="613.1" y1="250" x2="613.1" y2="230" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="613.1" cy="250" r="5.5" fill="#ffffff" stroke="#2a5da8" stroke-width="2"/>
+  <text x="616.1" y="226" font-size="13" fill="#18202e" transform="rotate(-62 616.1 226)">GenAC: estimators tie</text>
+  <line x1="60" y1="520" x2="730" y2="520" stroke="#4f4a9c" stroke-width="2.4"/>
+  <text x="60" y="546" font-size="14" font-weight="600" fill="#4f4a9c">Trust region · importance sampling · numerics</text>
+  <line x1="81.8" y1="520" x2="81.8" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="81.8" cy="520" r="5.5" fill="#4f4a9c" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="84.8" y="496" font-size="13" fill="#18202e" transform="rotate(-62 84.8 496)">PPO ratio clip</text>
+  <line x1="426.9" y1="520" x2="421.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="426.9" cy="520" r="5.5" fill="#4f4a9c" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="424.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 424.0 496)">DAPO clip-higher; TOPR</text>
+  <line x1="470.0" y1="520" x2="452.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="470.0" cy="520" r="5.5" fill="#4f4a9c" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="455.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 455.0 496)">CISPO; FP32 LM head</text>
+  <line x1="487.2" y1="520" x2="483.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="487.2" cy="520" r="5.5" fill="#4f4a9c" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="486.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 486.0 496)">GSPO sequence ratio</text>
+  <line x1="499.3" y1="520" x2="514.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="499.3" cy="520" r="5.5" fill="#4f4a9c" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="517.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 517.0 496)">TIS (sampler ratio)</text>
+  <line x1="526.9" y1="520" x2="545.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="526.9" cy="520" r="5.5" fill="#4f4a9c" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="548.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 548.0 496)">R3 routing replay; FP16</text>
+  <line x1="530.3" y1="520" x2="576.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="530.3" cy="520" r="5.5" fill="#4f4a9c" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="579.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 579.0 496)">IcePop mask</text>
+  <line x1="544.1" y1="520" x2="607.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="544.1" cy="520" r="5.5" fill="#4f4a9c" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="610.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 610.0 496)">SAPO soft gate</text>
+  <line x1="552.8" y1="520" x2="638.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="552.8" cy="520" r="5.5" fill="#4f4a9c" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="641.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 641.0 496)">V3.2 sequence masking</text>
+  <line x1="628.6" y1="520" x2="669.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="628.6" cy="520" r="5.5" fill="#ffffff" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="672.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 672.0 496)">VeXact zero mismatch</text>
+  <line x1="685.5" y1="520" x2="700.0" y2="500" stroke="#c9ccd4" stroke-width="1"/>
+  <circle cx="685.5" cy="520" r="5.5" fill="#ffffff" stroke="#4f4a9c" stroke-width="2"/>
+  <text x="703.0" y="496" font-size="13" fill="#18202e" transform="rotate(-62 703.0 496)">CIS multi-seed test</text>
+  <line x1="70.0" y1="560" x2="70.0" y2="567" stroke="#8a8f9c"/>
+  <text x="70.0" y="585" text-anchor="middle" font-size="13" fill="#5a6070">2017</text>
+  <line x1="134.3" y1="560" x2="134.3" y2="567" stroke="#8a8f9c"/>
+  <text x="134.3" y="585" text-anchor="middle" font-size="13" fill="#5a6070">2020</text>
+  <line x1="220.0" y1="560" x2="220.0" y2="567" stroke="#8a8f9c"/>
+  <text x="220.0" y="585" text-anchor="middle" font-size="13" fill="#5a6070">2024</text>
+  <line x1="392.4" y1="560" x2="392.4" y2="567" stroke="#8a8f9c"/>
+  <text x="392.4" y="585" text-anchor="middle" font-size="13" fill="#5a6070">2025</text>
+  <line x1="564.8" y1="560" x2="564.8" y2="567" stroke="#8a8f9c"/>
+  <text x="564.8" y="585" text-anchor="middle" font-size="13" fill="#5a6070">2026</text>
+  <line x1="60" y1="560" x2="730" y2="560" stroke="#8a8f9c"/>
 </svg>
