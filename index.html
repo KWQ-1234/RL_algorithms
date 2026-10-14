@@ -1015,24 +1015,81 @@
         <h1>RL Algorithms for the Mathematically Inclined</h1>
         <p class="subtitle">Which changes to LLM post-training actually matter — and how to tell. Eight design axes of the policy-gradient estimator, three algorithm families (preference optimization · process rewards · agentic multi-turn), five evidence case studies, six recurring patterns, a researcher's checklist, a decision guide, and twelve small experiments. Every verdict is stated on four dimensions — ceiling, efficiency, stability, side effects — and graded by the strength of its controlled evidence. A companion to <a href="https://chenggong-zhang.github.io/RL_infra/">RL Infrastructure for the Mathematically Inclined</a>.</p>
         <div class="byline">
-          <span>Draft · evidence as of October 2026</span>
+          <span>~130 min read</span>
           <span>·</span>
-          <span>8 design axes · 3 algorithm families · 5 evidence case studies</span>
+          <span>~105 papers cited · 9 figures · evidence as of October 2026</span>
           <span>·</span>
-          <span>A–D evidence grades · 12-question checklist · 12 experiments</span>
+          <span>8 design axes · 3 algorithm families · 5 case studies · 6 patterns · 12-question checklist · 12 experiments</span>
         </div>
       </header>
 
       <section id="why">
         <h2>Preface: what this survey is for</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Name vs estimator: a named algorithm is the surface; the choices on eight design axes plus the experimental conditions are what is optimized.</aside>
+        <p>This survey is for theorists, mathematicians and algorithm researchers who read RL post-training papers and want to know which of the changes they propose actually matter. Since 2024 the field has produced a long list of named algorithms — GRPO, DAPO, Dr. GRPO, GSPO, CISPO, SAPO, VAPO and many more — each reporting gains. Most of those gains were measured once, on one model family, against a baseline configured by the same authors. The goal here is to sort the changes by what they do to training and by how strong the evidence is that they do it.</p>
+
+        <p>The organizing idea is to separate the <em>name</em> from the <em>estimator</em>. A name is what a paper's abstract reports: "we use GRPO", "we propose a new clipping objective". The estimator is what the training run actually computes: a gradient estimate whose form depends on a handful of choices — how the advantage is baselined and scaled, how token gradients are weighted and masked, how they are summed, what is regularized, and how far the data has drifted from the policy being trained. Add the experimental conditions — base model, data, evaluation — and you have what a result actually depends on. Two papers using "the same algorithm" can differ on most of these; two papers with different algorithm names can differ on one.</p>
+
+        <p>The boundary of this survey follows from that. If a choice can change the reward curve, the comparison between two methods, or whether a result reproduces, it is examined here, with its mechanism written as a formula and its evidence graded. Engineering detail that does not change the estimator is left to the companion <a href="https://chenggong-zhang.github.io/RL_infra/">RL infrastructure survey</a>, which asks the mirror question: which systems choices silently change the statistical object being optimized.</p>
+
+        <blockquote class="pull">
+          Implementation details can matter more than the choice of algorithm itself.
+          <cite>— paraphrasing Engstrom et al., <a href="https://arxiv.org/abs/2005.12729">Implementation Matters in Deep Policy Gradients</a> (2020), whose conclusion this survey finds again for LLMs</cite>
+        </blockquote>
+
+        <p>The short answer, defended in the rest of the survey:</p>
+        <ol>
+          <li><strong>Most named changes buy efficiency or stability, not a higher ceiling.</strong> In the one study that separates the two, removing any single component of a strong recipe leaves the fitted asymptote within noise (<a href="#case-scalerl">ScaleRL</a>).</li>
+          <li><strong>The ceiling is mostly set outside the loss</strong>: by the base model and its mid-training, the generation budget, the batch size, and whether the reward can be fooled (<a href="#base-model">base models</a>, <a href="#data-sampling">axis ⑦</a>, <a href="#reward">axis ⑧</a>).</li>
+          <li><strong>What decides whether training works is correctness</strong>: keeping the estimator what it claims to be — limited reuse of each batch, consistent numerics between sampler and trainer, routing replay for mixture-of-experts models, masking tokens the policy did not write (<a href="#axes">verdict map</a>, <a href="#agentic">agentic RL</a>).</li>
+        </ol>
+
+        <p>After reading, you should be able to take any new RL paper and ask five questions before its results: which slot of the estimator did it change; was the run on-policy, and if not, how far off; on which base models; against how carefully tuned a baseline; and with how much noise in the evaluation. Those questions are the bridge from an abstract's claim to the evidence behind it.</p>
       </section>
 
       <section id="how-to-read">
         <h2>How to read this survey</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Three user stories (interpretation, decision, research), the four verdict dimensions, the A–D evidence grades, and the two meanings of “ceiling”.</aside>
+        <p>The survey is a map, not a catalogue. It starts from one gradient estimator (<a href="#skeleton">the skeleton</a>) and one account of why measuring its improvements is hard (<a href="#tension">the measurement problem</a>), then judges each slot of the estimator in turn. The short path is the skeleton, the measurement problem, the <a href="#axes">verdict map</a>, the <a href="#patterns">six patterns</a> and the <a href="#decision-guide">decision guide</a>. The long path adds the axis sections, the three algorithm families, the five case studies, and the closing chapters on code, pitfalls and open questions.</p>
+
+        <p>Three kinds of reader should expect different things from it.</p>
+
+        <div class="question-box">
+          <p><strong>User story: interpretation.</strong> As a researcher reading a new RL paper, I want to know whether its gain could come from the change it proposes, so that I can tell a result about an algorithm from a result about a base model, a baseline or an evaluation setup. The <a href="#checklist">checklist</a> and the <a href="#case-scalerl">case studies</a> are written for this reader.</p>
+        </div>
+        <div class="question-box">
+          <p><strong>User story: decision.</strong> As a practitioner configuring a run, I want to know which settings must be right, which are safe defaults, and which need tuning on my own model, so that I spend effort where it changes the outcome. The <a href="#decision-guide">decision guide</a>, <a href="#code">code walk-through</a> and <a href="#pitfalls">pitfalls</a> are written for this reader.</p>
+        </div>
+        <div class="question-box">
+          <p><strong>User story: research.</strong> As a theorist, I want to find where the evidence is thinnest and a precise statement would settle a debate, so that my work changes what the field believes. The <a href="#patterns">patterns</a>, <a href="#experiments">experiments</a> and <a href="#open">open questions</a> are written for this reader.</p>
+        </div>
+
+        <h3 id="read-verdicts">How verdicts are stated</h3>
+
+        <p>Every change is judged on four dimensions, because a change can matter in one and not another:</p>
+        <ul>
+          <li><strong>Ceiling</strong> — does it change where training ends up with enough compute?</li>
+          <li><strong>Efficiency</strong> — does it get there with less compute?</li>
+          <li><strong>Stability</strong> — does it change the chance that a long or large run collapses?</li>
+          <li><strong>Side effects</strong> — does it change response length, entropy, format, or what the model forgets?</li>
+        </ul>
+
+        <p>Each verdict carries an evidence grade:</p>
+        <ul>
+          <li><span class="grade grade-a">A</span> several independent controlled studies agree.</li>
+          <li><span class="grade grade-b">B</span> one controlled study, or a clear mathematical mechanism.</li>
+          <li><span class="grade grade-c">C</span> only the paper that proposed it.</li>
+          <li><span class="grade grade-d">D</span> the evidence contradicts itself.</li>
+        </ul>
+        <p>A single change can carry two grades for two different claims — for example, "does not move the ceiling" (A) and "helps efficiency in this direction" (D).</p>
+
+        <h3 id="read-ceilings">Two meanings of "ceiling"</h3>
+
+        <p>The word is used in two senses that behave differently under RL, and the survey keeps them apart. The <strong>pass@1 asymptote</strong> is how accurate one sample becomes after training converges; RL usually raises it. <strong>Coverage at large k</strong> is the set of problems the model can solve at all given many attempts; RL often leaves it unchanged or shrinks it (<a href="#what-rl-changes">what RL changes</a>).</p>
+
+        <h3 id="read-sources">About the sources</h3>
+
+        <p>Every number quoted in the survey was checked against the primary source — the paper's full text, the official blog or report, or the framework's code at a stated commit — and where a number exists only in a figure, or a claim only in an abstract, the text says so. Evidence is current as of October 2026. Several 2026 results are recent enough that no one has yet tried to reproduce them; they are graded accordingly.</p>
       </section>
 
       <section id="skeleton">
@@ -1193,7 +1250,7 @@
           </tbody>
         </table>
 
-        <p>Real models have many problems with p<sub>j</sub> near 0 or 1, so the true noise is below this bound. The order of magnitude still holds. A single-sample AIME score cannot separate two methods that differ by less than about 25 points. At k = 32, the threshold falls to about 5.</p>
+        <p>Real models have many problems with p<sub>j</sub> near 0 or 1, so the true noise is below this bound. The order of magnitude still holds. A single-sample AIME score cannot separate two methods that differ by less than about 26 points. At k = 32, the threshold falls to about 5.</p>
 
         <p><strong>Training-seed variance</strong> is the part almost nobody measures. Two training runs with different seeds produce two different models, and no number of evaluation samples removes that difference. The few direct measurements are scattered: ScaleRL's three repeated runs put the fitted asymptote within ±0.015 of each other on its pass-rate scale (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>); LOOP reports 66.4 ± 4.8 on AppWorld across three runs (<a href="https://arxiv.org/abs/2502.01600">2502.01600</a>); WPO reports its DPO baseline at 20.6 ± 0.7 AlpacaEval LC over five seeds (<a href="https://arxiv.org/abs/2406.11827">2406.11827</a>). Most ablation tables in this literature come from one run per row, so this layer is simply unknown for them.</p>
 
@@ -1211,7 +1268,7 @@
         <p>The second confounder is often the largest, and it concentrates in one model family. Qwen2.5-Math is the most common base model in 2025 RL papers, and it responds to almost any training signal.</p>
         <ul>
           <li><strong>Template.</strong> Before any RL, the same Qwen2.5-Math-7B averages 0.0 over five math benchmarks with the R1 prompt template, 26.5 with the Qwen template and 38.2 with no template (<a href="https://arxiv.org/abs/2503.20783">Dr. GRPO, 2503.20783</a>, Table 1).</li>
-          <li><strong>Reward content.</strong> On MATH-500, RL with the true reward improves Qwen2.5-Math-7B by 29.1 points, with deliberately wrong labels by 24.1, and with random rewards by 21.4. These gains generally do not transfer to Llama3 or OLMo2 (<a href="https://arxiv.org/abs/2506.10947">Spurious Rewards, 2506.10947</a>).</li>
+          <li><strong>Reward content.</strong> On MATH-500, RL with the true reward improves Qwen2.5-Math-7B by 29.1 points, with deliberately wrong labels by 24.1, and with random rewards by 21.4. The same random rewards make Llama3.1-8B-Instruct (−11.5) and OLMo2-7B (−8.3) worse (<a href="https://arxiv.org/abs/2506.10947">Spurious Rewards, 2506.10947</a>).</li>
           <li><strong>Contamination.</strong> Given the first 60% of a MATH-500 problem, Qwen2.5-Math-7B reproduces the rest exactly 54.6% of the time; Llama3.1-8B does so 3.8% of the time (<a href="https://arxiv.org/abs/2507.10532">2507.10532</a>). OLMo 3, whose pre-training data is decontaminated and public, ran random rewards as a negative control and saw no gain (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>).</li>
         </ul>
 
@@ -1276,14 +1333,14 @@
             <tr><td class="nowrap"><a href="#advantage">①</a></td><td>λ = 1 in PPO for long chains of thought</td><td>required</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span></td></tr>
             <tr><td class="nowrap"><a href="#advantage">①</a></td><td>Tuned critic vs group baseline</td><td>same ceiling; critic costs more</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td class="nowrap"><a href="#normalization">②</a></td><td>Group std normalization</td><td>changes the objective, not the ceiling</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-a">A</span> <span class="grade grade-d">D</span></td></tr>
-            <tr><td class="nowrap"><a href="#aggregation">③</a></td><td>Remove the 1/|y| length factor</td><td>removes a length bias</td><td class="sym sym-na">—</td><td class="sym sym-mixed">◐</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td class="nowrap"><a href="#aggregation">③</a></td><td>Remove the 1/|y| length factor</td><td>removes a length bias</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span> <span class="grade grade-d">D</span></td></tr>
             <tr><td class="nowrap"><a href="#trust-region">④</a></td><td>Ratio clipping when reusing samples</td><td>required once N &gt; 1</td><td class="sym sym-na">—</td><td class="sym sym-up">↑</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td class="nowrap"><a href="#trust-region">④</a></td><td>Clip-higher</td><td>raises entropy; score gain varies</td><td class="sym sym-mixed">◐</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-b">B</span> <span class="grade grade-d">D</span></td></tr>
-            <tr><td class="nowrap"><a href="#trust-region">④</a></td><td>CISPO or GSPO instead of PPO-clip</td><td>rankings conflict</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td class="nowrap"><a href="#trust-region">④</a></td><td>CISPO or GSPO instead of PPO-clip</td><td>rankings conflict</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-b">B</span> <span class="grade grade-d">D</span></td></tr>
             <tr><td class="nowrap"><a href="#kl-entropy">⑤</a></td><td>Drop the KL to the starting model</td><td>safe with verifiable rewards</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td class="nowrap"><a href="#kl-entropy">⑤</a></td><td>Fixed entropy bonus</td><td>inert or explosive</td><td class="sym sym-none">○</td><td class="sym sym-none">○</td><td class="sym sym-down">↓</td><td><span class="grade grade-a">A</span></td></tr>
-            <tr><td class="nowrap"><a href="#kl-entropy">⑤⑥</a></td><td>Several optimizer steps per batch</td><td>collapses entropy</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td><span class="grade grade-a">A</span></td></tr>
-            <tr><td class="nowrap"><a href="#off-policy">⑥</a></td><td>Remove train–inference mismatch at source</td><td>beats every correction tested</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td class="nowrap"><a href="#kl-entropy">⑤⑥</a></td><td>Several optimizer steps per batch</td><td>collapses entropy</td><td class="sym sym-mixed">◐</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td class="nowrap"><a href="#off-policy">⑥</a></td><td>Remove train–inference mismatch at source</td><td>fixes the cause; ties corrections on short dense runs</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td class="nowrap"><a href="#off-policy">⑥</a></td><td>Routing replay for MoE</td><td>prevents off-policy collapse</td><td class="sym sym-up">↑</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span></td></tr>
             <tr><td class="nowrap"><a href="#off-policy">⑥</a></td><td>Token-level TIS alone</td><td>delays collapse at best</td><td class="sym sym-none">○</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td class="nowrap"><a href="#data-sampling">⑦</a></td><td>Larger batch; longer generation budget</td><td>raise the asymptote</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
@@ -1298,9 +1355,9 @@
 
         <p>Three things stand out on the map.</p>
         <ul>
-          <li><strong>Few changes move the ceiling, and none of them is a new loss.</strong> The up-arrows in the ceiling column are batch size, generation length, removing train–inference mismatch, routing replay on MoE, and a verifier that cannot be fooled. Most are about the quality of the estimate or the data, not the form of the objective.</li>
+          <li><strong>Few changes move the ceiling, and none of them is a new loss.</strong> The up-arrows in the ceiling column are λ = 1 for PPO, batch size, generation length, removing train–inference mismatch, routing replay on MoE, and a verifier that cannot be fooled. Most are about the quality of the estimate or the data, not the form of the objective.</li>
           <li><strong>The A grades are mostly about not breaking training.</strong> λ = 1, one step per batch, no fixed entropy bonus, routing replay: each says "do not make the estimator something other than what it claims to be."</li>
-          <li><strong>The surrogate axis is where the D grades cluster.</strong> That is what <a href="#skel-identity">the r ≡ 1 identity</a> predicts: those methods only differ off-policy, and papers rarely report how off-policy they were.</li>
+          <li><strong>On the surrogate axis, no general gain survives.</strong> Its named losses earn B only for narrow settings and D as general claims. That is what <a href="#skel-identity">the r ≡ 1 identity</a> predicts: those methods only differ off-policy, and papers rarely report how off-policy they were.</li>
         </ul>
       </section>
 
@@ -1340,7 +1397,7 @@
             <tr><td>PPO with λ = 1 instead of 0.95</td><td>Decisive against the broken setting</td><td>—</td><td>λ &lt; 1 collapses response length</td><td>Length</td><td><span class="grade grade-a">A</span></td></tr>
             <tr><td>Critic not initialized from the reward model; value pre-training</td><td>Decisive within PPO</td><td>—</td><td>Prevents early collapse</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td>Tuned PPO vs GRPO or RLOO (single-turn RLVR)</td><td>Interchangeable</td><td>Critic faster early</td><td>—</td><td>Critic adds memory and compute</td><td><span class="grade grade-d">D</span> original claims · interchangeable in independent tests</td></tr>
-            <tr><td>RLOO vs Dr. GRPO</td><td>Identical up to a constant</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-a">A</span> algebra</td></tr>
+            <tr><td>RLOO vs Dr. GRPO</td><td>Identical up to a constant</td><td>—</td><td>—</td><td>—</td><td>Exact (algebra)</td></tr>
             <tr><td>ReMax greedy baseline</td><td>≈ others</td><td>Saves memory vs PPO</td><td>—</td><td>Wastes signal with binary rewards</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>2025–26 estimators (optimal, quantile, Kalman, max-likelihood)</td><td>Own gains</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
           </tbody>
@@ -1385,7 +1442,7 @@
 
         <p><strong>On efficiency and stability, the direction depends on the data.</strong> Dr. GRPO's three-run comparison removes the standard deviation and the length normalization together; its single-factor ablations separate them but without repeats, and no statistical test is reported (<a href="https://arxiv.org/abs/2503.20783">2503.20783</a>). Tricks or Traps finds removing the group standard deviation helps on easy data and is neutral on hard data, and recommends group-mean centering with a batch-level standard deviation (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>). In agentic training, LOOP found that dividing by the standard deviation cost several points on AppWorld (<a href="https://arxiv.org/abs/2502.01600">2502.01600</a>). <span class="grade grade-d">D</span> for direction. All of these are what the decomposition predicts: easy-heavy data is where up-weighting easy prompts hurts.</p>
 
-        <p><strong>Practice has moved.</strong> OLMo 3 states it uses no standard-deviation normalization (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>). Magistral, Kimi and GLM-4.5's agentic stage subtract a mean only. DeepSeek-V3.2's advantage formula has no standard deviation, although its text says "normalizing" (<a href="https://arxiv.org/abs/2512.02556">2512.02556</a>). ScaleRL, AReaL and REINFORCE++ use a batch-level standard deviation instead.</p>
+        <p><strong>Practice has moved.</strong> OLMo 3 states it uses no standard-deviation normalization (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>). Kimi and GLM-4.5's agentic stage subtract a mean only. DeepSeek-V3.2's advantage formula has no standard deviation, although its text says "normalizing" (<a href="https://arxiv.org/abs/2512.02556">2512.02556</a>). ScaleRL, AReaL, REINFORCE++ and Magistral (per minibatch) use a batch-level standard deviation instead.</p>
 
         <table class="verdict">
           <thead>
@@ -1400,7 +1457,7 @@
 
         <h4>What's mathematically interesting</h4>
 
-        <p>Every normalization rule is a choice of concave transform F of per-prompt pass rates, and the literature has been arguing about estimators when it should have been arguing about F. Σp maximizes the expected score. Σ log p is the maximum-likelihood objective, which refuses to give up on any prompt. Σ 1 − (1−p)<sup>k</sup> optimizes coverage at k samples. GRPO's Σ 2·arcsin√p has no such interpretation; it is a variance-stabilizing transform of a Bernoulli rate, inherited from dividing by a standard deviation. Which F best serves pass@1 after training, given that RL also changes which prompts are solvable, is an open question with a clean formulation (<a href="#open">open questions</a>).</p>
+        <p>Every normalization rule is a choice of transform F of per-prompt pass rates, with F′ = 1/s. Maximum-likelihood and pass@k weighting give concave F; GRPO's 2·arcsin√p is concave below p = ½ and convex above it, which is exactly the easy-prompt up-weighting. The literature has been arguing about estimators when it should have been arguing about F. Σp maximizes the expected score. Σ log p is the maximum-likelihood objective, which refuses to give up on any prompt. Σ 1 − (1−p)<sup>k</sup> optimizes coverage at k samples. GRPO's Σ 2·arcsin√p has no such interpretation; it is a variance-stabilizing transform of a Bernoulli rate, inherited from dividing by a standard deviation. Which F best serves pass@1 after training, given that RL also changes which prompts are solvable, is an open question with a clean formulation (<a href="#open">open questions</a>).</p>
       </section>
 
       <section id="aggregation">
@@ -1418,7 +1475,7 @@
             <tr><td>Sequence mean of token means (original GRPO; forced by GSPO and SAPO)</td><td>1/(G·|y<sub>i</sub>|)</td><td>Every response counts equally, whatever its length</td></tr>
             <tr><td>Token mean over a group or batch (DAPO, verl's <code>token-mean</code>)</td><td>1/Σ<sub>j</sub>|y<sub>j</sub>|</td><td>Every token counts equally; long responses carry more total weight</td></tr>
             <tr><td>Sequence mean of token sums</td><td>1/G</td><td>No length division; gradient variance grows with length</td></tr>
-            <tr><td>Constant normalizer (Dr. GRPO)</td><td>1/(G·L<sub>max</sub>)</td><td>No length dependence; the constant folds into the learning rate</td></tr>
+            <tr><td>Constant normalizer (Dr. GRPO)</td><td>1/G in the paper's formula; 1/(G·L<sub>max</sub>) in released code</td><td>No length dependence; the constant folds into the learning rate</td></tr>
           </tbody>
         </table>
 
@@ -1448,7 +1505,7 @@
 
         <h4>What's mathematically interesting</h4>
 
-        <p>Aggregation is the one axis where the right answer follows from the objective rather than from experiments. If the goal is the expected sequence reward, the policy gradient is Σ<sub>t</sub> R · ∇log π(y<sub>t</sub>), a sum over tokens with no length factor. Any 1/|y| weight is a departure from that objective, and its sign of bias is predictable. The constant normalizer of Dr. GRPO is the only mode that is exactly the policy gradient up to a learning-rate constant. The empirical flips between base and aligned models then look less like evidence for one mode and more like interactions with other parts of the recipe, such as length budgets and truncation (<a href="#data-sampling">axis ⑦</a>).</p>
+        <p>Aggregation is the one axis where the right answer follows from the objective rather than from experiments. If the goal is the expected sequence reward, the policy gradient is Σ<sub>t</sub> R · ∇log π(y<sub>t</sub>), a sum over tokens with no length factor. Any 1/|y| weight is a departure from that objective, and its sign of bias is predictable. The two length-free modes — summing tokens within each response (1/G) and Dr. GRPO's constant normalizer — are exactly the policy gradient up to a learning-rate constant. The empirical flips between base and aligned models then look less like evidence for one mode and more like interactions with other parts of the recipe, such as length budgets and truncation (<a href="#data-sampling">axis ⑦</a>).</p>
       </section>
 
       <section id="trust-region">
@@ -1491,9 +1548,9 @@
 
         <p><strong>CISPO.</strong> The rankings disagree. In ScaleRL's leave-one-out runs, swapping CISPO for the DAPO loss leaves the asymptote within noise and lowers the efficiency exponent B from 2.01 to 1.77; CISPO is also insensitive to its cap. On R1-Distill-Qwen-1.5B, CE-GPPO reports a five-benchmark average of 47.6 for CISPO against 54.3 for GSPO (<a href="https://arxiv.org/abs/2509.20712">2509.20712</a>). In ARLArena's agentic tasks, CISPO averages 34.0 against GRPO's 46.2 and collapses around step 130; adding sequence-level masking restores it (ALFWorld 54.4 → 78.9; <a href="https://arxiv.org/abs/2602.21534">2602.21534</a>). The paper's diagnosis, run on SAPO, which collapses the same way, traces the failure to negative-advantage sequences with low ratios — the quadrant both methods reopen. Implementations also disagree with the paper: verl's <code>cispo</code> clips the weight to [0.8, 1.2] by default, whereas MiniMax-M1 effectively disables the lower bound. A "CISPO" result therefore needs its configuration checked before it is compared.</p>
 
-        <p><strong>GSPO.</strong> The original experiments are on one MoE model, Qwen3-30B-A3B, where about 10% of activated experts change after a single update; there GSPO clips about 15% of tokens against GRPO's 0.13% and still trains more efficiently. A later controlled study from the same team, on the same model, neither tested GSPO nor needed it. On-policy, the most stable recipe was token-level policy gradient without length normalization plus a train–inference importance correction; off-policy, token-level clipping plus routing replay sufficed (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>). Elsewhere GSPO ranks first in ARLArena, diverges repeatedly in ScaleRL, and falls below the base model on Qwen1.5-MoE in a three-seed comparison (<a href="#off-policy">axis ⑥</a>). Its benefit is plausibly specific to high staleness on MoE without routing replay — the setting it was designed for.</p>
+        <p><strong>GSPO.</strong> The original experiments are on one MoE model, Qwen3-30B-A3B, where about 10% of activated experts change after a single update; there GSPO clips about 15% of tokens against GRPO's 0.13% and still trains more efficiently. A later controlled study from the same team, on the same model, neither tested GSPO nor needed it. On-policy, the most stable recipe was token-level policy gradient without length normalization plus a train–inference importance correction; off-policy, token-level clipping plus routing replay sufficed (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>). Elsewhere GSPO ranks first in ARLArena, diverges repeatedly in ScaleRL, and ties the untrained base model on Qwen1.5-MoE in a three-seed comparison (28.90 ± 1.25 against 28.93; <a href="https://arxiv.org/abs/2609.32444">2609.32444</a>). Its benefit is plausibly specific to high staleness on MoE without routing replay — the setting it was designed for.</p>
 
-        <p><strong>Clipping itself.</strong> Off-policy, removing clipping makes training collapse early (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>). On-policy it has nothing to clip. DeepSeek-R1's first RL stage set ε = 10, which effectively disables it; the paper's stated reason is that a lower value truncated the gradients of too many tokens (<a href="https://arxiv.org/abs/2501.12948">2501.12948</a>).</p>
+        <p><strong>Clipping itself.</strong> Off-policy, removing clipping makes training collapse early (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>). On-policy it has nothing to clip. DeepSeek-R1's first RL stage set ε = 10, which effectively disables it; the paper's stated reason is that a lower value truncated the gradients of too many tokens (<a href="https://arxiv.org/abs/2501.12948v2">2501.12948v2</a>).</p>
 
         <table class="verdict">
           <thead>
@@ -1573,7 +1630,7 @@
 
         <h4>What's mathematically interesting</h4>
 
-        <p>Two things. The KL estimator story is a clean example of a general trap: an unbiased estimator of a quantity is not, in general, a loss whose gradient is an unbiased estimator of the quantity's gradient. The fix is either to put the estimate into the reward, where the score-function term is supplied automatically, or to choose an estimator whose pathwise gradient happens to be right. And the entropy covariance formula explains why the two strongest results on this axis are the same result. Reusing a batch for several steps, and running at a low temperature, both raise the covariance between a token's current probability and its advantage. The first does it by letting the policy chase the same advantages repeatedly, the second by sampling mostly the tokens that are already likely.</p>
+        <p>Two things. The KL estimator story is a clean example of a general trap: an unbiased estimator of a quantity is not, in general, a loss whose gradient is an unbiased estimator of the quantity's gradient. The fix is either to put the estimate into the reward, where the score-function term is supplied automatically, or to choose an estimator whose pathwise gradient happens to be right. And the entropy covariance formula explains why two of the findings on this axis are the same result. Reusing a batch for several steps, and running at a low temperature, both raise the covariance between a token's current probability and its advantage. The first does it by letting the policy chase the same advantages repeatedly, the second by sampling mostly the tokens that are already likely.</p>
       </section>
 
       <section id="off-policy">
@@ -1607,7 +1664,7 @@
 
         <p>Two further design choices cut across all of these:</p>
         <ul>
-          <li><strong>Truncate or mask.</strong> Truncation (TIS, CISPO) keeps a bounded gradient from every token. Masking (IcePop, masked IS, M2PO) zeroes out-of-band tokens. The masked tokens are disproportionately rare and high-entropy, so masking has an exploration cost. One three-seed study found the lower side matters most: masking tokens whose ratio is small is harmless, but lifting their small weights upward collapsed held-out accuracy on Qwen1.5-MoE from a 28.9 base to 6.0 (<a href="https://arxiv.org/abs/2609.32444">CIS, 2609.32444</a>).</li>
+          <li><strong>Truncate or mask.</strong> Truncation (TIS, CISPO) keeps a bounded gradient from every token. Masking (IcePop, masked IS, M2PO) zeroes out-of-band tokens. The masked tokens are disproportionately rare and high-entropy, so masking has an exploration cost. One three-seed study found the lower side matters most: masking tokens whose ratio is small is harmless, but lifting their small weights upward cut the five-benchmark average on Qwen1.5-MoE from 34.8 to 6.0, below the 28.9 of the untrained base (<a href="https://arxiv.org/abs/2609.32444">CIS, 2609.32444</a>).</li>
           <li><strong>Which tokens are dangerous.</strong> Several independent designs converge on the same asymmetry: negative-advantage tokens that are far off-policy. TOPR truncates importance weights only for negative samples (<a href="https://arxiv.org/abs/2503.14286">2503.14286</a>); DeepSeek-V3.2 masks only negative-advantage sequences that fail its test; M2PO constrains only tokens that clipping would act on (<a href="https://arxiv.org/abs/2510.01161">2510.01161</a>). The same quadrant is where CISPO collapsed in agentic training (<a href="#trust-region">axis ④</a>).</li>
         </ul>
 
@@ -1633,7 +1690,7 @@
           <li><strong>A budget, not a count.</strong> A 2026 study on Llama-3.2-1B and 3B and Qwen3-8B finds that the largest stable learning rate scales inversely with the staleness S, so Sη is roughly constant at the stability boundary; its O(Sη) bias is an upper bound under regularity assumptions, and most of its sweeps use one seed per configuration (<a href="https://arxiv.org/abs/2607.01083">2607.01083</a>). If that holds, tolerances quoted without a learning rate are not comparable. By that law, a run at η = 10<sup>−6</sup> tolerates about three times the lag of one at 3·10<sup>−6</sup>.</li>
         </ul>
 
-        <p>Staleness also hides inside "synchronous" training: verl's stock configuration takes four optimizer steps per batch (<a href="#skel-identity">the skeleton</a>), so the last minibatch is three updates stale. Every framework surveyed ships the gap-1 corrections, but as of their May 2026 releases all of them leave them off by default.</p>
+        <p>Staleness also hides inside "synchronous" training: verl's stock configuration takes four optimizer steps per batch (<a href="#skel-identity">the skeleton</a>), so the last minibatch is three updates stale. Every framework surveyed ships the gap-1 corrections, but as of their May 2026 releases all of them leave them off in their stock configurations (verl's YAML and code defaults disagree; see <a href="#pit-config">pitfalls</a>).</p>
 
         <table class="verdict">
           <thead>
@@ -1641,13 +1698,13 @@
           </thead>
           <tbody>
             <tr><td>Fewer optimizer steps per batch</td><td>Similar peaks once stable</td><td>Lower per sample</td><td>Higher; avoids entropy collapse</td><td>—</td><td><span class="grade grade-a">A</span></td></tr>
-            <tr><td>Remove mismatch at source (batch-invariant kernels, FP16)</td><td>≥ every IS variant where compared</td><td>Slower inference with batch-invariant kernels</td><td>Mismatch zero or near zero</td><td>Engineering cost</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Remove mismatch at source (batch-invariant kernels, FP16)</td><td>≥ IS variants in long or MoE runs; within noise of them in the multi-seed short-run test</td><td>Slower inference with batch-invariant kernels</td><td>Mismatch zero or near zero</td><td>Engineering cost</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td>Routing replay (R2/R3) for MoE</td><td>Large gains where runs otherwise crash</td><td>Under 3% overhead</td><td>Prevents MoE collapse off-policy</td><td>Trains a frozen-routing surrogate; no on-policy gain</td><td><span class="grade grade-a">A</span> MoE, multi-step</td></tr>
             <tr><td>Token-level TIS</td><td>0 to small</td><td>Neutral</td><td>Delays collapse; fails alone in long multi-turn runs</td><td>Prefix-distribution bias growing with T</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td>Sequence or geometric masks</td><td>No gain on short tasks</td><td>Neutral</td><td>Highest peak among estimator fixes in long multi-turn runs, but unstable late</td><td>Discards long or rare samples</td><td><span class="grade grade-c">C</span> stability · <span class="grade grade-d">D</span> ceiling</td></tr>
             <tr><td>IcePop</td><td>Among the best in the three-seed comparison</td><td>Neutral</td><td>Stable; too narrow a band destabilizes</td><td>Masks rare, high-entropy tokens</td><td><span class="grade grade-b">B</span></td></tr>
-            <tr><td>FP32 LM head</td><td>Large in one forward ablation, none in a full-recipe one</td><td>Cheap</td><td>Did not prevent collapse in two independent reports</td><td>Fixes only the head</td><td><span class="grade grade-d">D</span></td></tr>
-            <tr><td>Decoupled PPO with a staleness bound</td><td>On-policy level up to ~8 versions</td><td>Up to 2.8× wall-clock (1.5B)</td><td>Yes</td><td>One extra forward pass</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>FP32 LM head</td><td>Large in one forward ablation; little difference in the full recipe on the dense 8B; helps on the Scout MoE</td><td>Cheap</td><td>Did not prevent collapse in two independent reports</td><td>Fixes only the head</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>Decoupled PPO with a staleness bound</td><td>On-policy level up to ~8 versions</td><td>2.77× wall-clock (1.5B)</td><td>Yes</td><td>One extra forward pass</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td>In-flight weight updates (PipelineRL)</td><td>Unresolved; ScaleRL contradicts itself</td><td>About 2×</td><td>Fine up to lag 8</td><td>Mixed-policy sequences</td><td><span class="grade grade-b">B</span> efficiency</td></tr>
           </tbody>
         </table>
@@ -1669,7 +1726,7 @@
           <li><strong>Batch size.</strong> Batches of 512, 768 and 2,048 prompts give A ≈ 0.605, 0.610 and 0.645 (read from a figure). Small batches look better early and are overtaken later, with nearly identical per-step entropy.</li>
           <li><strong>Generation length.</strong> Raising the budget from 14k to 32k tokens lifts A from 0.610 to 0.645, while the compute needed to reach the curve's midpoint grows 4.4-fold (C<sub>mid</sub> 2,542 → 11,272). This is the clearest case of trading efficiency for ceiling in the literature.</li>
         </ul>
-        <p>Group size is second-order: at fixed total batch, groups of 8, 16, 24 and 32 responses per prompt give A = 0.585, 0.610, 0.590 and 0.595, a spread just beyond the noise band with no trend. <span class="grade grade-b">B</span> for all three.</p>
+        <p>Group size is second-order: at fixed total batch, groups of 8, 16, 24 and 32 responses per prompt give A = 0.585, 0.610, 0.590 and 0.595, a 0.025 spread at the edge of the noise band, with no trend. <span class="grade grade-b">B</span> for all three.</p>
 
         <h4>Filtering: worth it for stability and efficiency</h4>
 
@@ -1711,7 +1768,7 @@
             <tr><td>Difficulty filtering</td><td>Weak or unknown</td><td>Fewer steps</td><td>—</td><td>Forgetting of easy skills untested</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td>Overlong masking or penalty</td><td>No gain</td><td>Helps at short caps</td><td>Interacts with length budget</td><td>Masking can invite length hacking</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td>Length curriculum</td><td>Depends on base</td><td>Saves compute</td><td>Irreversible drops in some reports</td><td>—</td><td><span class="grade grade-d">D</span></td></tr>
-            <tr><td>Small curated datasets</td><td>Unchanged on Qwen-Math</td><td>—</td><td>Unstable on Llama</td><td>—</td><td><span class="grade grade-b">B</span> Qwen-Math · <span class="grade grade-d">D</span> general</td></tr>
+            <tr><td>Small curated datasets</td><td>Large gains on Qwen-Math; small on Llama</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-b">B</span> Qwen-Math · <span class="grade grade-d">D</span> general</td></tr>
           </tbody>
         </table>
 
@@ -1803,8 +1860,8 @@
 
         <ul>
           <li><strong>Report pass@k curves, not one number.</strong> A method that raises pass@1 by concentrating mass is doing something different from a method that raises coverage, and only curves over k tell them apart.</li>
-          <li><strong>Sharpening explains label-free gains.</strong> Updates that only concentrate mass can raise pass@1 up to the base model's majority-vote accuracy (<a href="#pattern-sharpening">pattern 3</a>). That is the most economical explanation for random, wrong or absent rewards helping some models, and it predicts where they will fail.</li>
-          <li><strong>Coverage is mostly bought elsewhere.</strong> Distillation and mid-training expand what the model can solve far more reliably than RL does. The next section is about that layer.</li>
+          <li><strong>Sharpening explains label-free gains.</strong> Updates that only concentrate mass can raise pass@1 up to the base model's majority-vote accuracy (<a href="#pattern-sharpening">pattern 3</a>). That is our preferred reading of why random, wrong or absent rewards help some models — compatible with both published mechanisms (<a href="#case-spurious">case study</a>) — and it predicts where they will fail.</li>
+          <li><strong>Coverage is mostly bought elsewhere.</strong> Distillation and mid-training appear to expand coverage where RL does not: Yue et al.'s distilled model beats its base at every k, and Qwen3's on-policy distillation raised pass@64 where RL did not. The next section is about that layer.</li>
         </ul>
 
         <h3 id="rl-interesting">What's mathematically interesting</h3>
@@ -1933,7 +1990,7 @@
 
         <p><strong>Learned PRMs summed into the reward are hacked.</strong> Four independent groups report it.</p>
         <ul>
-          <li>Gao et al.: after one epoch with a success reward plus a learned process reward, a Qwen2-1.5B model scored 11.16 on MATH, below its 24.90 starting point and the 30.58 from success reward alone; it learned to emit many short, meaningless steps, eventually single words or emoji (<a href="https://arxiv.org/abs/2410.15115">2410.15115</a>).</li>
+          <li>Gao et al.: after one epoch with a success reward plus a learned process reward, a Qwen2-1.5B model scored 11.16 on MATH, below its 24.90 starting point (success reward alone reached 30.58 after five epochs); it learned to emit many short, meaningless steps, eventually single words or emoji (<a href="https://arxiv.org/abs/2410.15115">2410.15115</a>).</li>
           <li>PURE: summing process rewards collapsed training early; even its safer min-form, used alone, was hacked later in training (<a href="https://arxiv.org/abs/2504.15275">2504.15275</a>).</li>
           <li>PROF: mixing process and outcome rewards collapsed entropy (<a href="https://arxiv.org/abs/2509.03403">2509.03403</a>).</li>
           <li>A 2026 study trained Qwen2.5-1.5B-Instruct with GRPO on a process reward alone. With one PRM, the reward reached its maximum within about 100 steps through mode collapse while AIME accuracy stayed at zero; with another, the reward passed 0.8 while accuracy peaked at 3–4% (<a href="https://arxiv.org/abs/2603.06621">2603.06621</a>).</li>
@@ -1956,7 +2013,7 @@
             <tr><td>Learned PRM summed into the reward</td><td>Negative (collapse)</td><td>Fast early</td><td>Collapses</td><td>Length, repetition, degenerate output</td><td><span class="grade grade-a">A</span> hacking</td></tr>
             <tr><td>Bounded or telescoping PRM (clip, delta, min-form, implicit PRM)</td><td>Within noise</td><td>Several times fewer steps</td><td>PRM-only still hacked</td><td>Length</td><td><span class="grade grade-c">C</span> gain</td></tr>
             <tr><td>PRM used only to filter samples</td><td>Small gain</td><td>Costs extra sampling</td><td>Stable</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
-            <tr><td>On-policy Monte Carlo or tree credit</td><td>Small, shrinking with scale and context</td><td>Several times fewer steps</td><td>Stable (true verifier)</td><td>Slower rollouts</td><td><span class="grade grade-b">B</span> small models · <span class="grade grade-c">C</span> at scale</td></tr>
+            <tr><td>On-policy Monte Carlo or tree credit</td><td>Small, shrinking with scale and context</td><td>Several times fewer steps</td><td>Stable (true verifier)</td><td>Slower rollouts</td><td><span class="grade grade-b">B</span> efficiency · <span class="grade grade-d">D</span> accuracy</td></tr>
             <tr><td>PRM as a test-time reranker</td><td>Raises best-of-N</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
           </tbody>
         </table>
@@ -1994,7 +2051,7 @@
         <ul>
           <li><strong>Retriever quality.</strong> Swapping a random retriever for a good dense retriever roughly doubled exact match in one search-agent study (<a href="https://arxiv.org/abs/2505.15117">2505.15117</a>).</li>
           <li><strong>Cold-start data.</strong> Supervised warm-up on real tool-use trajectories, rather than stitched synthetic ones, made the difference between a working and a non-working agent in DemyAgent (<a href="https://arxiv.org/abs/2510.11701">2510.11701</a>).</li>
-          <li><strong>Context management.</strong> Three labs independently report that managing the context window at test time — summarizing or discarding old turns — raises BrowseComp scores by 14–16 points: DeepSeek-V3.2 from 51.4 to 67.6, Kimi K2.5 from 60.6 to 74.9, GLM-5 from 62.0 to 75.9 <span class="grade grade-a">A</span>.</li>
+          <li><strong>Context management.</strong> Three labs independently report that managing the context window at test time — summarizing or discarding old turns — raises BrowseComp scores by 14–16 points: DeepSeek-V3.2 from 51.4 to 67.6, Kimi K2.5 from 60.6 to 74.9, GLM-5 from 62.0 to 75.9 <span class="grade grade-a">A</span> (three labs' own reports, without seeds).</li>
         </ul>
 
         <p>The frontier recipes that have been described in reports — DeepSeek, Kimi, GLM, MiniMax, Qwen — converge on a short list: a trajectory-level group baseline, an outcome reward, masking of environment tokens, ratio masking or clipping against the rollout probabilities, a staleness bound for asynchronous rollouts, dropping broken or truncated trajectories, and explicit length or latency terms. None reports using turn-level credit, and none publishes an ablation of its agent RL algorithm. The investment goes into environments: their number, diversity and reliability.</p>
@@ -2012,7 +2069,7 @@
             <tr><td>Token vs turn vs sequence ratio</td><td>—</td><td>—</td><td>Depends on staleness</td><td>—</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td>Critic vs group baseline</td><td>Sign varies</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td>Test-time context management</td><td>BrowseComp +14–16</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-a">A</span></td></tr>
-            <tr><td>Asynchronous rollout with a staleness bound</td><td>Unknown</td><td>1.5–2.4× reported, mostly outside agentic tasks</td><td>Needs off-policy control</td><td>—</td><td><span class="grade grade-b">B</span> efficiency</td></tr>
+            <tr><td>Asynchronous rollout with a staleness bound</td><td>Unknown</td><td>1.5–2.8× reported (mostly math; SkyRL's 1.55× is against naive async)</td><td>Needs off-policy control</td><td>—</td><td><span class="grade grade-b">B</span> efficiency</td></tr>
           </tbody>
         </table>
 
@@ -2030,7 +2087,7 @@
 
         <p>Each training run's validation pass rate R is fitted against training compute C with a sigmoid,</p>
         <div class="formula-display">R(C) = R<sub>0</sub> + (A − R<sub>0</sub>) / (1 + (C<sub>mid</sub> / C)<sup>B</sup>)</div>
-        <p>where A is the asymptote, B governs how steeply the curve rises, and C<sub>mid</sub> is the compute at which half the gain is reached. The experiments use an unnamed 8B dense model and Llama-4 Scout, a mixture-of-experts model, trained on the Polaris-53K math set, with 3.5–4k GB200 GPU-hours per single ablation, 16k per leave-one-out run, and up to 100k for the final recipe — more than 400k GPU-hours in total. Fitting on the first half of a 100k-hour run and extrapolating matched the second half, shown in a figure without an error figure. Two kinds of ablation are run:</p>
+        <p>where A is the asymptote, B governs how steeply the curve rises, and C<sub>mid</sub> is the compute at which half the gain is reached. The experiments use an unnamed 8B dense model and Llama-4 Scout, a mixture-of-experts model, trained on the Polaris-53K math set, with 3.5–4k GB200 GPU-hours per single ablation, 16k per leave-one-out run, and up to 100k for the final recipe — more than 400k GPU-hours in total. Fitting on the first half of a 100k-hour run and extrapolating matched the second half, shown in a figure, without an error estimate. Two kinds of ablation are run:</p>
         <ul>
           <li><strong>Forward:</strong> start from a baseline and change one component at a time.</li>
           <li><strong>Leave-one-out (LOO):</strong> start from the full final recipe and remove one component at a time.</li>
@@ -2040,7 +2097,7 @@
 
         <ul>
           <li><strong>A noise floor for A.</strong> Three repeated runs of the same recipe give asymptotes within ±0.015 of each other, and the authors recommend treating differences under ±0.02 as noise. This is rare: most papers report no run-to-run variance at all.</li>
-          <li><strong>Changes that clearly move A.</strong> Batch size (A ≈ 0.605 → 0.645 from 512 to 2,048 prompts), generation length (0.610 → 0.645 from 14k to 32k tokens, at 4.4× the compute to midpoint), and, against a DAPO-style baseline, computing the LM head in FP32 (0.52 → 0.61).</li>
+          <li><strong>Changes that clearly move A.</strong> Batch size (A ≈ 0.605 → 0.645 from 512 to 2,048 prompts, read from a figure), generation length (0.610 → 0.645 from 14k to 32k tokens, at 4.4× the compute to midpoint), and, against a DAPO-style baseline, computing the LM head in FP32 (0.52 → 0.61).</li>
           <li><strong>Changes that only move efficiency.</strong> In LOO, removing any single component of the final recipe leaves A within the noise band. The differences show up in B: swapping CISPO for the DAPO loss lowers B from 2.01 to 1.77.</li>
         </ul>
 
@@ -2123,7 +2180,7 @@
 
         <h3 id="weak-baseline">What the baseline was</h3>
 
-        <p>The vanilla PPO both papers start from uses GAE with λ = 0.95 and a critic initialized from the reward model. Both choices are known to fail for long chains of thought (<a href="#advantage">axis ①</a>). With λ = 0.95, the final reward reaches a token t positions earlier only through a factor 0.95<sup>t</sup>: about 6·10<sup>−3</sup> after 100 tokens, essentially zero after a few hundred. Early tokens are trained on the critic's opinion alone. And a critic initialized from a reward model was trained only to score complete responses at their last token; its values on early, partial responses are biased. The two failures compound exactly where a long chain of thought begins.</p>
+        <p>The vanilla PPO both papers start from uses GAE with λ = 0.95 and a critic initialized from the reward model (VC-PPO's text is not fully consistent about the actor's default λ, but the baseline's 0.95 is stated in both papers). Both choices are known to fail for long chains of thought (<a href="#advantage">axis ①</a>). With λ = 0.95, the final reward reaches a token t positions earlier only through a factor 0.95<sup>t</sup>: about 6·10<sup>−3</sup> after 100 tokens, essentially zero after a few hundred. Early tokens are trained on the critic's opinion alone. And a critic initialized from a reward model was trained only to score complete responses at their last token; its values on early, partial responses are biased. The two failures compound exactly where a long chain of thought begins.</p>
 
         <p>VAPO's own one-component-at-a-time ablation, reported with three repeated runs, makes this visible. Removing value pre-training drops it from 60 to 11; removing the decoupled GAE drops it to 33; each remaining component costs 5 to 15 points. So the improvements VC-PPO and VAPO report are, first, the repair of a broken PPO: moving from 5.6 to 29.4 by fixing the critic's initialization, and further by restoring λ = 1 for the critic. Whether the repaired PPO also beats a good critic-free method is a separate question, and the comparison against GRPO and DAPO within the same papers does not settle it, because the same team configured both arms.</p>
 
@@ -2212,7 +2269,7 @@
             <tr><td>MiniMax-M1</td><td>Group mean; ÷ std</td><td>CISPO, upper bound only</td><td>None</td><td>16 updates per batch; FP32 LM head</td><td>Yes: CISPO vs DAPO vs GRPO</td></tr>
             <tr><td>MiniMax-M2</td><td>—</td><td>CISPO</td><td>—</td><td>Asynchronous pool</td><td>No</td></tr>
             <tr><td>Magistral</td><td>Group mean; minibatch normalization, no group std</td><td>Clip-higher, 0.26–0.3</td><td>None</td><td>Asynchronous, in-flight updates, ≤ 2 batches of lag</td><td>Yes: several</td></tr>
-            <tr><td>Qwen3</td><td>Group mean (GRPO)</td><td>—</td><td>—</td><td>"Off-policy training", no details</td><td>No</td></tr>
+            <tr><td>Qwen3</td><td>Group mean (GRPO)</td><td>—</td><td>—</td><td>"Off-policy training", no details</td><td>Partial: distillation vs RL only</td></tr>
             <tr><td>GLM-4.5</td><td>Group mean</td><td>—</td><td>None</td><td>FP8 rollout; async for agents</td><td>Yes, on a smaller proxy model</td></tr>
             <tr><td>OLMo 3</td><td>Group mean; no std</td><td>Clip-higher, 0.2 / 0.272</td><td>None</td><td>Async, ≤ 8 steps of lag, truncated IS (cap 2)</td><td>Partial: active sampling</td></tr>
             <tr><td>Seed1.5-Thinking</td><td><strong>Learned critic</strong></td><td>Clip-higher</td><td>—</td><td>Streaming rollout; FP8 rollout</td><td>Yes: VAPO vs DAPO</td></tr>
@@ -2227,7 +2284,7 @@
           <li><strong>No standard-deviation division by default.</strong> Only R1 and MiniMax-M1 keep it; the Kimi line never had it; V3.2, Magistral and OLMo 3 removed it. This matches <a href="#normalization">axis ②</a>.</li>
           <li><strong>No KL anchor to the starting model.</strong> Removed in MiniMax-M1, Magistral, GLM-4.5 and OLMo 3; replaced by a proximal term toward the previous iterate in the Kimi line; kept small and periodically reset in R1; weakened to near zero for math in V3.2. This matches <a href="#kl-entropy">axis ⑤</a>.</li>
           <li><strong>PPO clipping loosened or replaced</strong> — clip-higher, CISPO, a log-ratio mask, no clip at all, or R1's ε = 10. The variety is itself informative: on <a href="#trust-region">axis ④</a> the labs agree only that the default clip is not right, not on what replaces it.</li>
-          <li><strong>Explicit handling of train–inference mismatch</strong> in every report from the second half of 2025 onward: routing replay and masks (V3.2), an FP32 LM head (M1), recorded inference probabilities (K2.5), truncated importance sampling (OLMo 3), low-precision rollout designed in (V4). This matches <a href="#off-policy">axis ⑥</a>.</li>
+          <li><strong>Explicit handling of train–inference mismatch</strong> has become standard since the second half of 2025, though not universal: routing replay and masks (V3.2), an FP32 LM head (M1), recorded inference probabilities (K2.5), truncated importance sampling (OLMo 3), low-precision rollout designed in (V4). This matches <a href="#off-policy">axis ⑥</a>.</li>
           <li><strong>Difficulty filtering or removal of zero-variance groups</strong> in essentially every report that describes its data, and <strong>length control</strong> in the reward or budget in most.</li>
         </ul>
 
@@ -2274,7 +2331,7 @@
 
         <p>The axis sections judge design choices one at a time. Read together, they keep running into the same few pieces of algebra. Each pattern below is stated as a formula, followed by what it explains and where it shows up. Knowing them makes most new papers predictable before reading their experiments.</p>
 
-        <h3 id="pattern-reinforce">1. Every surrogate collapses to REINFORCE at r = 1</h3>
+        <h3 id="pattern-reinforce">1. Every surrogate collapses to REINFORCE at r ≡ 1</h3>
 
         <div class="formula-display">r<sub>i,t</sub> ≡ 1  ⇒  w<sub>i,t</sub> · m<sub>i,t</sub> = 1  ⇒  g = Σ<sub>i,t</sub> c<sub>i,t</sub> Â<sub>i</sub> ∇log π<sub>θ</sub>(y<sub>i,t</sub>)</div>
 
@@ -2286,7 +2343,7 @@
 
         <div class="formula-display">E[g] = Σ<sub>x</sub> ∇p<sub>x</sub> / s(p<sub>x</sub>)  =  ∇ Σ<sub>x</sub> F(p<sub>x</sub>),   F′(p) = 1 / s(p)</div>
 
-        <p>So every normalization rule is gradient ascent on some concave transform of the per-prompt pass rate. With no scale (RLOO, Dr. GRPO) the objective is Σp, the expected pass rate. GRPO's group standard deviation, s = √(p(1−p)), gives Σ 2·arcsin√p. A scale proportional to p gives Σ log p, a maximum-likelihood objective. Pass@k training corresponds to Σ 1 − (1−p)<sup>k</sup>. These limits hold as the group grows; with small groups the estimated mean and scale add their own finite-G effects. <strong>Explains:</strong> the "std normalization" debate splits into two claims. Up-weighting hard prompts (small p) has support; up-weighting easy prompts (p near 1), which GRPO also does, has none and is a source of instability on easy data (<a href="#normalization">axis ②</a>). <strong>Use:</strong> ask of any new advantage rule which F it implies, and whether that F is the objective you want.</p>
+        <p>So every normalization rule is gradient ascent on some transform F of the per-prompt pass rate, fixed by F′ = 1/s. With no scale (RLOO, Dr. GRPO) the objective is Σp, the expected pass rate. GRPO's group standard deviation, s = √(p(1−p)), gives Σ 2·arcsin√p. A scale proportional to p gives Σ log p, a maximum-likelihood objective. Pass@k training corresponds to Σ 1 − (1−p)<sup>k</sup>. These limits hold as the group grows; with small groups the estimated mean and scale add their own finite-G effects. <strong>Explains:</strong> the "std normalization" debate splits into two claims. Up-weighting hard prompts (small p) has support; up-weighting easy prompts (p near 1), which GRPO also does, has none, and removing it helps on easy-heavy data (<a href="#normalization">axis ②</a>). <strong>Use:</strong> ask of any new advantage rule which F it implies, and whether that F is the objective you want.</p>
 
         <h3 id="pattern-sharpening">3. Sharpening helps whenever the mode beats the mean</h3>
 
@@ -2318,13 +2375,13 @@
       </section>
 
       <section id="code">
-        <h2>Reading real code: one loss function, ten config flags</h2>
+        <h2>Reading real code: one loss function, a handful of config flags</h2>
 
         <p>The skeleton's three slots exist in code as a handful of functions and configuration flags. Reading them is the fastest way to check what a run actually computed, because the defaults of a framework are often not the method a paper describes. This section reads verl's policy loss against the axes. The excerpts are trimmed for the argument; the comments give the line numbers in verl at commit <code>7dc39fe</code> (May 2026), where the full code can be checked.</p>
 
         <h3 id="code-loss">The surrogate: one function, four regions</h3>
 
-<a class="source-badge" href="https://github.com/verl-project/verl/blob/main/verl/trainer/ppo/core_algos.py" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· compute_policy_loss_vanilla, lines 1329–1361</span></a>
+<a class="source-badge" href="https://github.com/verl-project/verl/blob/7dc39fe/verl/trainer/ppo/core_algos.py#L1329-L1361" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· compute_policy_loss_vanilla, lines 1329–1361</span></a>
 <pre class="with-source"><code class="language-python">negative_approx_kl = log_prob - old_log_prob
 negative_approx_kl = torch.clamp(negative_approx_kl, min=-20.0, max=20.0)
 ratio = torch.exp(negative_approx_kl)                               # r = π_θ / π_old
@@ -2342,7 +2399,7 @@ pg_loss = agg_loss(loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=lo
 
         <h3 id="code-agg">The normalizer: four aggregation modes</h3>
 
-<a class="source-badge" href="https://github.com/verl-project/verl/blob/main/verl/trainer/ppo/core_algos.py" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· agg_loss, lines 1168–1195</span></a>
+<a class="source-badge" href="https://github.com/verl-project/verl/blob/7dc39fe/verl/trainer/ppo/core_algos.py#L1168-L1195" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· agg_loss, lines 1168–1195</span></a>
 <pre class="with-source"><code class="language-python">if loss_agg_mode == "token-mean":
     loss = <span class="code-hl">verl_F.masked_sum(loss_mat, loss_mask) / batch_num_tokens</span> * dp_size
 elif loss_agg_mode in ["seq-mean-token-sum", "seq-mean-token-sum-norm"]:
@@ -2377,7 +2434,7 @@ elif loss_agg_mode == "seq-mean-token-mean":
           </tbody>
         </table>
 
-        <p>Read against the decision guide, the stock configuration departs from the recommended defaults in three places: it trains with four optimizer steps per batch, divides by the group standard deviation when GRPO is selected, and leaves mismatch correction off. None of these is wrong for every run, but each is a choice the user inherits without making it. <a href="#pitfalls">The next sections</a> collect the cases where an inherited default changes the mathematics.</p>
+        <p>Read against the decision guide, the stock configuration departs from the recommended defaults in three places: it trains with four optimizer steps per batch, divides by the group standard deviation when GRPO is selected, and leaves mismatch correction off. None of these is wrong for every run, but each is a choice the user inherits without making it. <a href="#pitfalls">The pitfalls section</a> collects the cases where an inherited default changes the mathematics.</p>
       </section>
 
       <section id="landscape">
@@ -2386,8 +2443,8 @@ elif loss_agg_mode == "seq-mean-token-mean":
         <p>This section maps the named methods onto the skeleton's slots, so a reader can see at a glance which slot each one changed and how strong the evidence for its core claim is. It extends the short table in <a href="#skel-names">the skeleton</a>. Entries come from the methods' own papers; "—" means the method does not make that choice part of its definition.</p>
 
         <figure>
-          <img src="diagrams/09-timeline.svg" alt="Timeline in two bands from 2017 to 2026: advantage estimators simplify from a learned critic to group and mean-only baselines, while trust-region, importance-sampling and numerical methods multiply from 2025 onward.">
-          <figcaption><span class="fig-label">Figure 9.</span> Two bands of development. The advantage estimator became simpler — critic, then group baseline, then mean only — while the trust-region and importance-sampling layer, and the numerics underneath it, absorbed most of the new names. The evidence elsewhere in the survey says the second band is mostly about off-policy data and stability.</figcaption>
+          <img src="diagrams/07-timeline.svg" alt="Timeline in two bands from 2017 to 2026: advantage estimators simplify from a learned critic to group and mean-only baselines, while trust-region, importance-sampling and numerical methods multiply from 2025 onward.">
+          <figcaption><span class="fig-label">Figure 7.</span> Two bands of development. The advantage estimator became simpler — critic, then group baseline, then mean only — while the trust-region and importance-sampling layer, and the numerics underneath it, absorbed most of the new names. The evidence elsewhere in the survey says the second band is mostly about off-policy data and stability.</figcaption>
         </figure>
 
         <table class="verdict">
@@ -2399,7 +2456,7 @@ elif loss_agg_mode == "seq-mean-token-mean":
             <tr><td>DPO (2023-05)</td><td>Implicit log-ratio</td><td>—</td><td>Implicit KL via β; offline</td><td>Loss shapes tie once tuned <span class="grade grade-a">A</span></td></tr>
             <tr><td>ReMax (2023-10)</td><td>Greedy-response baseline</td><td>None</td><td>KL in reward</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>GRPO (2024-02)</td><td>Group mean ÷ group std</td><td>PPO clip</td><td>k3 KL in loss</td><td>Std and 1/|y| change the objective <span class="grade grade-b">B</span></td></tr>
-            <tr><td>RLOO (2024-02)</td><td>Leave-one-out mean</td><td>None</td><td>KL in reward</td><td>Equals Dr. GRPO × G/(G−1) <span class="grade grade-a">A</span></td></tr>
+            <tr><td>RLOO (2024-02)</td><td>Leave-one-out mean</td><td>None</td><td>KL in reward</td><td>Equals Dr. GRPO × G/(G−1), exactly</td></tr>
             <tr><td>REINFORCE++ (2025-01)</td><td>Batch-normalized</td><td>PPO clip</td><td>KL in reward</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>Kimi k1.5 (2025-01)</td><td>Group mean</td><td>None; squared log-ratio</td><td>Toward previous iterate; partial rollouts</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>DAPO (2025-03)</td><td>Group mean ÷ std</td><td>Clip-higher (0.2 / 0.28)</td><td>No KL; dynamic sampling; overlong handling</td><td>Per component <span class="grade grade-c">C</span>–<span class="grade grade-d">D</span> (<a href="#case-dapo-table">case study</a>)</td></tr>
@@ -2413,17 +2470,17 @@ elif loss_agg_mode == "seq-mean-token-mean":
             <tr><td>GMPO (2025-07)</td><td>Group mean ÷ std</td><td>Geometric mean, per-token log clip</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>Truncated IS (2025-08, blog)</td><td>—</td><td>× min(π<sub>old</sub>/π<sub>sampler</sub>, C)</td><td>Train–inference mismatch</td><td><span class="grade grade-d">D</span> alone</td></tr>
             <tr><td>PipelineRL (2025-09)</td><td>—</td><td>Truncated IS</td><td>In-flight weight updates</td><td>About 2× efficiency <span class="grade grade-b">B</span></td></tr>
-            <tr><td>ScaleRL (2025-10)</td><td>Batch-level std</td><td>CISPO</td><td>Prompt-level averaging; PipelineRL-8; FP32 head; filtering</td><td>Components move B, not A <span class="grade grade-b">B</span></td></tr>
+            <tr><td>ScaleRL (2025-10)</td><td>Batch-level std</td><td>CISPO</td><td>Prompt-level averaging; PipelineRL-8; FP32 head; filtering</td><td>In leave-one-out runs, components move B, not A <span class="grade grade-b">B</span></td></tr>
             <tr><td>R3 routing replay (2025-10)</td><td>—</td><td>—</td><td>Replay inference routing in training</td><td>Prevents MoE collapse <span class="grade grade-a">A</span></td></tr>
             <tr><td>IcePop (2025-10)</td><td>—</td><td>Mask tokens with train/infer ratio outside [0.5, 5]</td><td>Train–inference mismatch</td><td><span class="grade grade-b">B</span></td></tr>
-            <tr><td>SAPO (2025-11)</td><td>Group mean</td><td>Smooth gate</td><td>—</td><td><span class="grade grade-c">C</span>–<span class="grade grade-d">D</span></td></tr>
+            <tr><td>SAPO (2025-11)</td><td>Group mean</td><td>Smooth gate</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>DeepSeek-V3.2 (2025-12)</td><td>Group mean, no std</td><td>PPO clip + off-policy sequence masking</td><td>IS-corrected k3; Keep Routing; Keep Sampling Mask</td><td>No ablation <span class="grade grade-c">C</span></td></tr>
             <tr><td>Qwen "stabilizing RL" (2025-12)</td><td>Group mean</td><td>Token-level, no length normalization</td><td>Train–inference IS; R2/R3 when off-policy</td><td>Controlled study <span class="grade grade-b">B</span></td></tr>
             <tr><td>OLMo 3 / OlmoRL (2025-12)</td><td>Group mean, no std</td><td>Clip-higher (0.2 / 0.272)</td><td>No KL; truncated IS; async ≤ 8</td><td>Open recipe; random-reward control negative</td></tr>
           </tbody>
         </table>
 
-        <p>Three regularities stand out. Most named methods change one or two slots. The advantage column converges after early 2025 on a group mean without standard deviation. And nearly all the activity since then is in the surrogate and off-policy columns, which by <a href="#skel-identity">the r ≡ 1 identity</a> only act when the data is off-policy — the place where the evidence is thinnest and the D grades cluster.</p>
+        <p>Three regularities stand out. Most named methods change one or two slots. The advantage column converges on a group mean, with the group standard deviation increasingly dropped or replaced by a batch-level one. And nearly all the activity since then is in the surrogate and off-policy columns, which by <a href="#skel-identity">the r ≡ 1 identity</a> only act when the data is off-policy — the place where the evidence is thinnest and the D grades cluster.</p>
       </section>
 
       <section id="beyond">
@@ -2444,9 +2501,9 @@ elif loss_agg_mode == "seq-mean-token-mean":
         <p>On-policy distillation trains a student on its own samples, with a teacher scoring each token. It is the same idea as on-policy RL, with the reward replaced by the teacher's opinion.</p>
 
         <ul>
-          <li><strong>The objective.</strong> GKD frames distillation as imitation learning: training only on fixed teacher outputs creates a mismatch between the sequences seen in training and those the student produces, which training on the student's own samples removes (<a href="https://arxiv.org/abs/2306.13649">2306.13649</a>). MiniLLM uses the reverse KL from student to teacher, which is mode-seeking, and derives its gradient as a policy gradient whose per-step reward is log π<sub>teacher</sub> − log π<sub>student</sub> (<a href="https://arxiv.org/abs/2306.08543">2306.08543</a>). Thinking Machines' implementation uses exactly that per-token quantity as the advantage, with no discounting across tokens (<a href="https://thinkingmachines.ai/blog/on-policy-distillation/">Thinking Machines, 2025</a>).</li>
+          <li><strong>The objective.</strong> GKD frames distillation as imitation learning: training only on fixed teacher outputs creates a mismatch between the sequences seen in training and those the student produces, which training on the student's own samples removes (<a href="https://arxiv.org/abs/2306.13649">2306.13649</a>). MiniLLM minimizes KL(π<sub>student</sub>‖π<sub>teacher</sub>), which is mode-seeking, and derives its gradient as a policy gradient whose per-step reward is log π<sub>teacher</sub> − log π<sub>student</sub> (<a href="https://arxiv.org/abs/2306.08543">2306.08543</a>). Thinking Machines' implementation uses exactly that per-token quantity as the advantage, with no discounting across tokens (<a href="https://thinkingmachines.ai/blog/on-policy-distillation/">Thinking Machines, 2025</a>).</li>
           <li><strong>Why it is cheap.</strong> Every token gets a dense signal from the teacher, instead of one outcome bit per response. In Qwen3's report, on-policy distillation of an 8B model reached 74.4 on AIME'24 using about a tenth of the GPU hours that RL needed to reach 67.6, and also raised pass@64, which RL did not (<a href="https://arxiv.org/abs/2505.09388">2505.09388</a>). Thinking Machines report reaching 70% on AIME'24 from a 60% supervised start at roughly 9–30× less compute than further supervised training, depending on what is counted.</li>
-          <li><strong>Its role in 2026.</strong> DeepSeek-V4 replaced its final mixed RL stage entirely with on-policy distillation from more than ten RL-trained specialists, using a full-vocabulary reverse-KL loss (<a href="https://arxiv.org/abs/2606.19348">2606.19348</a>).</li>
+          <li><strong>Its role in 2026.</strong> DeepSeek-V4 replaced its final mixed RL stage entirely with on-policy distillation from more than ten RL-trained specialists, using a full-vocabulary KL(π<sub>student</sub>‖π<sub>teacher</sub>) loss (<a href="https://arxiv.org/abs/2606.19348">2606.19348</a>).</li>
         </ul>
 
         <p>On-policy distillation fits the picture of <a href="#what-rl-changes">what RL changes</a>. RL with an outcome reward sharpens within the student's reach; a teacher's per-token distribution carries information about which responses are good that a single outcome bit cannot, which is why it can raise coverage. The cost is the teacher, which must exist and be better than the student. The current division of labour follows: RL creates strong specialists, and distillation consolidates them.</p>
@@ -2458,17 +2515,17 @@ elif loss_agg_mode == "seq-mean-token-mean":
         <p>The infra survey's scaling chain walked up hardware tiers, from one node to a thousand GPUs, naming what breaks first at each. The algorithmic counterpart asks which choices still matter as compute grows, and in what way. ScaleRL's framing is the right starting point: separate what raises the asymptote from what reaches it faster, and be honest about which of the two a given experiment can see.</p>
 
         <figure>
-          <img src="diagrams/07-sigmoid.svg" alt="Three illustrative sigmoid curves of pass rate against log compute: a baseline, an efficiency change that reaches the same asymptote sooner, and a ceiling change that reaches a higher asymptote later.">
-          <figcaption><span class="fig-label">Figure 7.</span> What A, B and C<sub>mid</sub> mean. An efficiency change steepens the curve and reaches the same asymptote sooner; a ceiling change raises the asymptote and can arrive later. Within the observed compute, a ceiling change can look worse than the baseline. Curves are illustrative, not fitted.</figcaption>
+          <img src="diagrams/08-sigmoid.svg" alt="Three illustrative sigmoid curves of pass rate against log compute: a baseline, an efficiency change that reaches the same asymptote sooner, and a ceiling change that reaches a higher asymptote later.">
+          <figcaption><span class="fig-label">Figure 8.</span> What A, B and C<sub>mid</sub> mean. An efficiency change steepens the curve and reaches the same asymptote sooner; a ceiling change raises the asymptote and can arrive later. Within the observed compute, a ceiling change can look worse than the baseline. Curves are illustrative, not fitted.</figcaption>
         </figure>
 
         <h3 id="scaling-links">The links of the chain</h3>
 
         <ol>
           <li><strong>Base model and mid-training</strong> set the coverage RL can reach (<a href="#base-model">base models</a>). Largest effect, upstream of RL.</li>
-          <li><strong>Generation length and batch size</strong> raise the asymptote within RL: in ScaleRL, 14k → 32k tokens and 512 → 2,048 prompts each moved A by about 0.035, beyond its noise band. Both cost efficiency: the longer budget needed 4.4× the compute to reach its midpoint (<a href="#data-sampling">axis ⑦</a>).</li>
+          <li><strong>Generation length and batch size</strong> raise the asymptote within RL: in ScaleRL, 14k → 32k tokens moved A by about 0.035 and 512 → 2,048 prompts by about 0.04, both beyond its noise band. Both cost efficiency: the longer budget needed 4.4× the compute to reach its midpoint (<a href="#data-sampling">axis ⑦</a>).</li>
           <li><strong>Numerical consistency and routing</strong> decide whether a long run survives to its asymptote at all, especially on MoE models (<a href="#off-policy">axis ⑥</a>). An unstable run fits as a low ceiling.</li>
-          <li><strong>Loss, normalization, aggregation, filtering and the off-policy algorithm</strong> mostly move B: how quickly the asymptote is approached (<a href="#case-scalerl">ScaleRL case study</a>).</li>
+          <li><strong>Loss, normalization, aggregation and filtering</strong> mostly move B: how quickly the asymptote is approached. ScaleRL contradicts itself on whether the off-policy algorithm also moves A (<a href="#case-scalerl">ScaleRL case study</a>).</li>
           <li><strong>Staleness</strong> is budgeted together with learning rate: the largest stable step size scales inversely with lag (<a href="#off-policy">axis ⑥</a>).</li>
         </ol>
 
@@ -2478,7 +2535,7 @@ elif loss_agg_mode == "seq-mean-token-mean":
           <li><strong>Choose by B at small scale, by stability at large scale.</strong> Efficiency differences show up early and cheaply. Stability differences show up late, after thousands of GPU-hours, and are what decide whether the asymptote is reached.</li>
           <li><strong>Watch the truncation rate.</strong> In ScaleRL, truncation rates around 10–15% preceded instability; it is a cheap early warning.</li>
           <li><strong>Extrapolate cautiously.</strong> ScaleRL fitted the first half of a 100k GPU-hour run and the fit matched the second half — shown in a figure, without an error estimate. A log-linear curve with no asymptote often fits as well within the observed range (<a href="https://arxiv.org/abs/2610.04158">2610.04158</a>). Predicting the next factor of two in compute is reasonable; predicting a ceiling is not.</li>
-          <li><strong>Expect the ranking of recipes to change with compute.</strong> Figure 7's ceiling curve is below the baseline until late. A comparison made at a fixed small budget favours efficient recipes and can miss ones that would win with more compute.</li>
+          <li><strong>Expect the ranking of recipes to change with compute.</strong> Figure 8's ceiling curve is below the baseline until late. A comparison made at a fixed small budget favours efficient recipes and can miss ones that would win with more compute.</li>
         </ul>
       </section>
 
@@ -2533,8 +2590,8 @@ elif loss_agg_mode == "seq-mean-token-mean":
 
         <ol>
           <li><strong>Which base models?</strong> If only Qwen2.5 or Qwen2.5-Math, the result is a hypothesis about that family. Random rewards improve Qwen2.5-Math by 21 points and hurt Llama and OLMo (<a href="#case-spurious">spurious rewards</a>).</li>
-          <li><strong>How many training seeds, and how many samples per evaluation problem?</strong> With one sample per AIME problem, two models must differ by about 25 points to be distinguishable; with 32 samples, about 5. Training-seed variance comes on top (<a href="#tension-noise">three layers of noise</a>).</li>
-          <li><strong>Was the baseline tuned as hard as the method, in the same code?</strong> A PPO baseline at 5 points and a DPO baseline that varies by 5.5 points between papers are both documented (<a href="#case-weak-baseline">weak baseline</a>).</li>
+          <li><strong>How many training seeds, and how many samples per evaluation problem?</strong> With one sample per AIME problem, two models must differ by about 26 points to be distinguishable; with 32 samples, about 5. Training-seed variance comes on top (<a href="#tension-noise">three layers of noise</a>).</li>
+          <li><strong>Was the baseline tuned as hard as the method, in the same code?</strong> A PPO baseline at 5 points and a DPO baseline that varies by 5.5 points between papers are both documented (<a href="#case-weak-baseline">weak baseline</a>; <a href="#tension-baselines">baselines</a>).</li>
           <li><strong>How many optimizer steps per batch, how stale is the data, and where does π<sub>old</sub> come from?</strong> With one step and a recomputed π<sub>old</sub>, every clipped surrogate reduces to REINFORCE; a claimed loss improvement must then come from somewhere else (<a href="#skel-identity">r ≡ 1</a>).</li>
           <li><strong>Is there a random- or format-reward control?</strong> Its gain is the part a sharpening update gets for free (<a href="#pattern-sharpening">pattern 3</a>).</li>
           <li><strong>Is the benchmark clean?</strong> Released after the model, or generated synthetically. Qwen2.5-Math reproduces MATH-500 problems from partial prompts (<a href="#base-qwen">base models</a>).</li>
@@ -2546,7 +2603,7 @@ elif loss_agg_mode == "seq-mean-token-mean":
           <li><strong>Does the implementation match the paper?</strong> Framework defaults differ from published methods in ways that change the mathematics (<a href="#pitfalls">pitfalls</a>).</li>
         </ol>
 
-        <p>A paper that does not answer the first three has not established its comparison. A paper that does not answer the first six cannot be placed in the evidence grades of this survey above <span class="grade grade-c">C</span>. The last six are where most of the disagreements between papers turn out to live.</p>
+        <p>A paper that does not answer the first three has not established its comparison. A paper that does not answer the first six cannot earn <span class="grade grade-a">A</span> on its own, and its results count as <span class="grade grade-b">B</span> at most, for the setting it tested. The last six are where most of the disagreements between papers turn out to live.</p>
       </section>
 
       <section id="decision-guide">
@@ -2555,16 +2612,16 @@ elif loss_agg_mode == "seq-mean-token-mean":
         <p>The verdicts of this survey translate into a short procedure for configuring a run. It is ordered by evidence: settings with strong evidence first, settings that need tuning on your own model next, and changes whose benefit is mostly unproven last. It assumes you have chosen a base model; that choice matters more than anything below (<a href="#base-model">base models</a>).</p>
 
         <figure>
-          <img src="diagrams/10-decision-chart.svg" alt="Decision chart: defaults that always apply, then five questions — rule-checkable reward, mixture of experts, off-policy updates, multi-turn tools, aligned starting point — with the settings that follow from each answer.">
-          <figcaption><span class="fig-label">Figure 10.</span> What to set, in what order. The defaults hold in every setting covered here; each question then adds settings that its answer makes necessary.</figcaption>
+          <img src="diagrams/09-decision-chart.svg" alt="Decision chart: defaults that always apply, then five questions — rule-checkable reward, mixture of experts, off-policy updates, multi-turn tools, aligned starting point — with the settings that follow from each answer.">
+          <figcaption><span class="fig-label">Figure 9.</span> What to set, in what order. The defaults hold in every setting covered here; each question then adds settings that its answer makes necessary.</figcaption>
         </figure>
 
         <h3 id="decide-must">1. Get these right: correctness</h3>
         <ul>
-          <li>Keep the estimator what it claims to be: one optimizer step per batch where affordable, or bounded staleness with sampler-aware corrections when not (<a href="#off-policy">axis ⑥</a>). <span class="grade grade-a">A</span></li>
+          <li>Keep the estimator what it claims to be: one optimizer step per batch where affordable <span class="grade grade-a">A</span>, or bounded staleness with sampler-aware corrections when not <span class="grade grade-b">B</span> (<a href="#off-policy">axis ⑥</a>).</li>
           <li>On MoE models with more than one step per batch, use routing replay. <span class="grade grade-a">A</span></li>
           <li>Remove train–inference mismatch at the source where you can, and monitor it where you cannot. <span class="grade grade-b">B</span></li>
-          <li>With a critic, use λ = 1 and do not initialize it from the reward model (<a href="#advantage">axis ①</a>). <span class="grade grade-a">A</span></li>
+          <li>With a critic, use λ = 1 <span class="grade grade-a">A</span>, and do not initialize it from the reward model <span class="grade grade-b">B</span> (<a href="#advantage">axis ①</a>).</li>
           <li>For agents, mask environment tokens and keep the sampled token IDs (<a href="#agentic">agentic RL</a>). <span class="grade grade-b">B</span></li>
           <li>Use a verifier with high precision, and check what it accepts (<a href="#reward">axis ⑧</a>). <span class="grade grade-b">B</span></li>
         </ul>
@@ -2621,13 +2678,13 @@ elif loss_agg_mode == "seq-mean-token-mean":
             <tr><td>7</td><td>Is staleness a staleness × LR budget? (⑥)</td><td>Staleness 1–16 × three learning rates; record steps to collapse</td><td>Collapse boundary along constant S·η</td></tr>
             <tr><td>8</td><td>Does clip-higher's effect scale with staleness? (④)</td><td>ε<sub>high</sub> ∈ {0.2, 0.28, 0.35} × 1 or 4 steps per batch, base and instruct; log clip rate</td><td>Effect grows with clip rate, not with model type</td></tr>
             <tr><td>9</td><td>Is dense credit worth its rollouts? (<a href="#prm-credit">PRM</a>)</td><td>Give GRPO the extra rollouts a tree or MC method uses (larger G or more steps); 4k and 16k context</td><td>Gap closes under matched compute</td></tr>
-            <tr><td>10</td><td>How much does preference data provenance outweigh the loss? (<a href="#preference">DPO</a>)</td><td>Loss (DPO, IPO, SimPO, LN-DPO) × data (offline, semi-online) × β grid, ≥ 3 seeds</td><td>Ratio of data effect to loss effect, with intervals</td></tr>
+            <tr><td>10</td><td>How much does preference data provenance outweigh the loss? (<a href="#preference">DPO</a>)</td><td>Loss (DPO, IPO, SimPO, LN-DPO) × data (offline, semi-online) × β grid, ≥ 5 seeds</td><td>Ratio of data effect to loss effect, with intervals</td></tr>
             <tr><td>11</td><td>Do states recur in open environments? (<a href="#agentic">agentic</a>)</td><td>Count exact and near-duplicate states in SWE and web rollouts</td><td>If near zero, state-grouped credit reduces to GRPO there</td></tr>
-            <tr><td>12</td><td>Do framework KL defaults regularize? (⑤)</td><td>KL as k1-loss, k2-loss, k3-loss, k1-in-reward and none, at low and high KL (e.g. on-policy distillation)</td><td>k1-as-loss behaves like no KL; k3 diverges at high KL</td></tr>
+            <tr><td>12</td><td>Do framework KL defaults regularize? (⑤)</td><td>KL as k1-loss, k2-loss, k3-loss, k1-in-reward and none, at low and high KL (e.g. on-policy distillation)</td><td>k1-as-loss behaves like no KL; k3 lags or stalls at high KL</td></tr>
           </tbody>
         </table>
 
-        <p>Experiments 1, 4 and 2 would move the most verdicts at once: the first tests the identity behind <a href="#trust-region">axis ④</a>, the second the identifiability behind every ceiling claim, the third the transfer behind most D grades. Each costs less than a typical paper proposing a new loss.</p>
+        <p>Three experiments would move the most verdicts at once: Experiment 1 tests the identity behind <a href="#trust-region">axis ④</a>, Experiment 4 the identifiability behind every ceiling claim, and Experiment 2 the transfer behind most D grades. Each costs less than a typical paper proposing a new loss.</p>
       </section>
 
       <section id="open">
@@ -2636,7 +2693,7 @@ elif loss_agg_mode == "seq-mean-token-mean":
         <p>Each question below is a place where a clean mathematical statement would settle a debate this survey could only grade. They are stated as precisely as the evidence allows.</p>
 
         <h3 id="open-identify">1. Is the asymptote identifiable?</h3>
-        <p>Sigmoid and log-linear fits to RL compute curves are often indistinguishable within the observed range (<a href="#case-scalerl">ScaleRL</a>). Under what conditions on the training process does a finite run determine A, and what confidence interval does a given budget buy? Without an answer, every "raises the ceiling" claim rests on an extrapolation of unknown reliability.</p>
+        <p>Sigmoid and log-linear fits to RL compute curves are often indistinguishable within the observed range (<a href="#scalerl-cannot">2610.04158, discussed in the ScaleRL case study</a>). Under what conditions on the training process does a finite run determine A, and what confidence interval does a given budget buy? Without an answer, every "raises the ceiling" claim rests on an extrapolation of unknown reliability.</p>
 
         <h3 id="open-ratio">2. Tight bounds for token-level importance correction</h3>
         <p>Token-level truncated IS corrects the action distribution but not the distribution of prefixes; known bounds on the resulting bias grow polynomially in sequence length and depend on the largest per-token divergence (<a href="#off-policy">axis ⑥</a>). Length-normalized filters work in practice without a matching theory. What is the bias of a geometric-mean filter as a function of length and divergence, and is there a principled threshold?</p>
@@ -2645,7 +2702,7 @@ elif loss_agg_mode == "seq-mean-token-mean":
         <p>Empirically, the largest stable learning rate scales inversely with staleness. A first-order argument suggests the bias from stale data grows with the product of lag and step size. A matching lower bound — showing that runs above the boundary must collapse, not merely may — would turn a tuning rule into a design rule.</p>
 
         <h3 id="open-f">4. Which prompt weighting should RL use?</h3>
-        <p>Every advantage normalization ascends Σ<sub>x</sub> F(p<sub>x</sub>) for some concave F (<a href="#pattern-weighting">pattern 2</a>). Expected pass rate, maximum likelihood and pass@k are three choices with different behaviour on hard prompts. Given that training changes which prompts become solvable, which F maximizes final pass@1 — or final coverage — and does it depend on the initial distribution of pass rates?</p>
+        <p>Every advantage normalization ascends Σ<sub>x</sub> F(p<sub>x</sub>) for some transform F (<a href="#pattern-weighting">pattern 2</a>). Expected pass rate, maximum likelihood and pass@k are three choices with different behaviour on hard prompts. Given that training changes which prompts become solvable, which F maximizes final pass@1 — or final coverage — and does it depend on the initial distribution of pass rates?</p>
 
         <h3 id="open-expansion">5. When does RL expand coverage?</h3>
         <p>An outcome-reward update reweights the base model's responses; on its own it cannot reach responses with zero probability. Expansion must come from generalization across prompts through shared parameters (<a href="#what-rl-changes">what RL changes</a>). A model of how much coverage that generalization creates, as a function of training length and objective, would reconcile the "sharpening" and "expansion" findings.</p>

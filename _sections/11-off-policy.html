@@ -30,7 +30,7 @@
 
         <p>Two further design choices cut across all of these:</p>
         <ul>
-          <li><strong>Truncate or mask.</strong> Truncation (TIS, CISPO) keeps a bounded gradient from every token. Masking (IcePop, masked IS, M2PO) zeroes out-of-band tokens. The masked tokens are disproportionately rare and high-entropy, so masking has an exploration cost. One three-seed study found the lower side matters most: masking tokens whose ratio is small is harmless, but lifting their small weights upward collapsed held-out accuracy on Qwen1.5-MoE from a 28.9 base to 6.0 (<a href="https://arxiv.org/abs/2609.32444">CIS, 2609.32444</a>).</li>
+          <li><strong>Truncate or mask.</strong> Truncation (TIS, CISPO) keeps a bounded gradient from every token. Masking (IcePop, masked IS, M2PO) zeroes out-of-band tokens. The masked tokens are disproportionately rare and high-entropy, so masking has an exploration cost. One three-seed study found the lower side matters most: masking tokens whose ratio is small is harmless, but lifting their small weights upward cut the five-benchmark average on Qwen1.5-MoE from 34.8 to 6.0, below the 28.9 of the untrained base (<a href="https://arxiv.org/abs/2609.32444">CIS, 2609.32444</a>).</li>
           <li><strong>Which tokens are dangerous.</strong> Several independent designs converge on the same asymmetry: negative-advantage tokens that are far off-policy. TOPR truncates importance weights only for negative samples (<a href="https://arxiv.org/abs/2503.14286">2503.14286</a>); DeepSeek-V3.2 masks only negative-advantage sequences that fail its test; M2PO constrains only tokens that clipping would act on (<a href="https://arxiv.org/abs/2510.01161">2510.01161</a>). The same quadrant is where CISPO collapsed in agentic training (<a href="#trust-region">axis ④</a>).</li>
         </ul>
 
@@ -56,7 +56,7 @@
           <li><strong>A budget, not a count.</strong> A 2026 study on Llama-3.2-1B and 3B and Qwen3-8B finds that the largest stable learning rate scales inversely with the staleness S, so Sη is roughly constant at the stability boundary; its O(Sη) bias is an upper bound under regularity assumptions, and most of its sweeps use one seed per configuration (<a href="https://arxiv.org/abs/2607.01083">2607.01083</a>). If that holds, tolerances quoted without a learning rate are not comparable. By that law, a run at η = 10<sup>−6</sup> tolerates about three times the lag of one at 3·10<sup>−6</sup>.</li>
         </ul>
 
-        <p>Staleness also hides inside "synchronous" training: verl's stock configuration takes four optimizer steps per batch (<a href="#skel-identity">the skeleton</a>), so the last minibatch is three updates stale. Every framework surveyed ships the gap-1 corrections, but as of their May 2026 releases all of them leave them off by default.</p>
+        <p>Staleness also hides inside "synchronous" training: verl's stock configuration takes four optimizer steps per batch (<a href="#skel-identity">the skeleton</a>), so the last minibatch is three updates stale. Every framework surveyed ships the gap-1 corrections, but as of their May 2026 releases all of them leave them off in their stock configurations (verl's YAML and code defaults disagree; see <a href="#pit-config">pitfalls</a>).</p>
 
         <table class="verdict">
           <thead>
@@ -64,13 +64,13 @@
           </thead>
           <tbody>
             <tr><td>Fewer optimizer steps per batch</td><td>Similar peaks once stable</td><td>Lower per sample</td><td>Higher; avoids entropy collapse</td><td>—</td><td><span class="grade grade-a">A</span></td></tr>
-            <tr><td>Remove mismatch at source (batch-invariant kernels, FP16)</td><td>≥ every IS variant where compared</td><td>Slower inference with batch-invariant kernels</td><td>Mismatch zero or near zero</td><td>Engineering cost</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Remove mismatch at source (batch-invariant kernels, FP16)</td><td>≥ IS variants in long or MoE runs; within noise of them in the multi-seed short-run test</td><td>Slower inference with batch-invariant kernels</td><td>Mismatch zero or near zero</td><td>Engineering cost</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td>Routing replay (R2/R3) for MoE</td><td>Large gains where runs otherwise crash</td><td>Under 3% overhead</td><td>Prevents MoE collapse off-policy</td><td>Trains a frozen-routing surrogate; no on-policy gain</td><td><span class="grade grade-a">A</span> MoE, multi-step</td></tr>
             <tr><td>Token-level TIS</td><td>0 to small</td><td>Neutral</td><td>Delays collapse; fails alone in long multi-turn runs</td><td>Prefix-distribution bias growing with T</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td>Sequence or geometric masks</td><td>No gain on short tasks</td><td>Neutral</td><td>Highest peak among estimator fixes in long multi-turn runs, but unstable late</td><td>Discards long or rare samples</td><td><span class="grade grade-c">C</span> stability · <span class="grade grade-d">D</span> ceiling</td></tr>
             <tr><td>IcePop</td><td>Among the best in the three-seed comparison</td><td>Neutral</td><td>Stable; too narrow a band destabilizes</td><td>Masks rare, high-entropy tokens</td><td><span class="grade grade-b">B</span></td></tr>
-            <tr><td>FP32 LM head</td><td>Large in one forward ablation, none in a full-recipe one</td><td>Cheap</td><td>Did not prevent collapse in two independent reports</td><td>Fixes only the head</td><td><span class="grade grade-d">D</span></td></tr>
-            <tr><td>Decoupled PPO with a staleness bound</td><td>On-policy level up to ~8 versions</td><td>Up to 2.8× wall-clock (1.5B)</td><td>Yes</td><td>One extra forward pass</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>FP32 LM head</td><td>Large in one forward ablation; little difference in the full recipe on the dense 8B; helps on the Scout MoE</td><td>Cheap</td><td>Did not prevent collapse in two independent reports</td><td>Fixes only the head</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>Decoupled PPO with a staleness bound</td><td>On-policy level up to ~8 versions</td><td>2.77× wall-clock (1.5B)</td><td>Yes</td><td>One extra forward pass</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td>In-flight weight updates (PipelineRL)</td><td>Unresolved; ScaleRL contradicts itself</td><td>About 2×</td><td>Fine up to lag 8</td><td>Mixed-policy sequences</td><td><span class="grade grade-b">B</span> efficiency</td></tr>
           </tbody>
         </table>

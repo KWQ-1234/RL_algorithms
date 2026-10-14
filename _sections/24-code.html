@@ -1,12 +1,12 @@
 
       <section id="code">
-        <h2>Reading real code: one loss function, ten config flags</h2>
+        <h2>Reading real code: one loss function, a handful of config flags</h2>
 
         <p>The skeleton's three slots exist in code as a handful of functions and configuration flags. Reading them is the fastest way to check what a run actually computed, because the defaults of a framework are often not the method a paper describes. This section reads verl's policy loss against the axes. The excerpts are trimmed for the argument; the comments give the line numbers in verl at commit <code>7dc39fe</code> (May 2026), where the full code can be checked.</p>
 
         <h3 id="code-loss">The surrogate: one function, four regions</h3>
 
-<a class="source-badge" href="https://github.com/verl-project/verl/blob/main/verl/trainer/ppo/core_algos.py" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· compute_policy_loss_vanilla, lines 1329–1361</span></a>
+<a class="source-badge" href="https://github.com/verl-project/verl/blob/7dc39fe/verl/trainer/ppo/core_algos.py#L1329-L1361" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· compute_policy_loss_vanilla, lines 1329–1361</span></a>
 <pre class="with-source"><code class="language-python">negative_approx_kl = log_prob - old_log_prob
 negative_approx_kl = torch.clamp(negative_approx_kl, min=-20.0, max=20.0)
 ratio = torch.exp(negative_approx_kl)                               # r = π_θ / π_old
@@ -24,7 +24,7 @@ pg_loss = agg_loss(loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=lo
 
         <h3 id="code-agg">The normalizer: four aggregation modes</h3>
 
-<a class="source-badge" href="https://github.com/verl-project/verl/blob/main/verl/trainer/ppo/core_algos.py" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· agg_loss, lines 1168–1195</span></a>
+<a class="source-badge" href="https://github.com/verl-project/verl/blob/7dc39fe/verl/trainer/ppo/core_algos.py#L1168-L1195" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· agg_loss, lines 1168–1195</span></a>
 <pre class="with-source"><code class="language-python">if loss_agg_mode == "token-mean":
     loss = <span class="code-hl">verl_F.masked_sum(loss_mat, loss_mask) / batch_num_tokens</span> * dp_size
 elif loss_agg_mode in ["seq-mean-token-sum", "seq-mean-token-sum-norm"]:
@@ -59,5 +59,5 @@ elif loss_agg_mode == "seq-mean-token-mean":
           </tbody>
         </table>
 
-        <p>Read against the decision guide, the stock configuration departs from the recommended defaults in three places: it trains with four optimizer steps per batch, divides by the group standard deviation when GRPO is selected, and leaves mismatch correction off. None of these is wrong for every run, but each is a choice the user inherits without making it. <a href="#pitfalls">The next sections</a> collect the cases where an inherited default changes the mathematics.</p>
+        <p>Read against the decision guide, the stock configuration departs from the recommended defaults in three places: it trains with four optimizer steps per batch, divides by the group standard deviation when GRPO is selected, and leaves mismatch correction off. None of these is wrong for every run, but each is a choice the user inherits without making it. <a href="#pitfalls">The pitfalls section</a> collects the cases where an inherited default changes the mathematics.</p>
       </section>

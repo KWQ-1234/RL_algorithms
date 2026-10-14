@@ -27,7 +27,7 @@
         <ul>
           <li><strong>Retriever quality.</strong> Swapping a random retriever for a good dense retriever roughly doubled exact match in one search-agent study (<a href="https://arxiv.org/abs/2505.15117">2505.15117</a>).</li>
           <li><strong>Cold-start data.</strong> Supervised warm-up on real tool-use trajectories, rather than stitched synthetic ones, made the difference between a working and a non-working agent in DemyAgent (<a href="https://arxiv.org/abs/2510.11701">2510.11701</a>).</li>
-          <li><strong>Context management.</strong> Three labs independently report that managing the context window at test time — summarizing or discarding old turns — raises BrowseComp scores by 14–16 points: DeepSeek-V3.2 from 51.4 to 67.6, Kimi K2.5 from 60.6 to 74.9, GLM-5 from 62.0 to 75.9 <span class="grade grade-a">A</span>.</li>
+          <li><strong>Context management.</strong> Three labs independently report that managing the context window at test time — summarizing or discarding old turns — raises BrowseComp scores by 14–16 points: DeepSeek-V3.2 from 51.4 to 67.6, Kimi K2.5 from 60.6 to 74.9, GLM-5 from 62.0 to 75.9 <span class="grade grade-a">A</span> (three labs' own reports, without seeds).</li>
         </ul>
 
         <p>The frontier recipes that have been described in reports — DeepSeek, Kimi, GLM, MiniMax, Qwen — converge on a short list: a trajectory-level group baseline, an outcome reward, masking of environment tokens, ratio masking or clipping against the rollout probabilities, a staleness bound for asynchronous rollouts, dropping broken or truncated trajectories, and explicit length or latency terms. None reports using turn-level credit, and none publishes an ablation of its agent RL algorithm. The investment goes into environments: their number, diversity and reliability.</p>
@@ -45,7 +45,7 @@
             <tr><td>Token vs turn vs sequence ratio</td><td>—</td><td>—</td><td>Depends on staleness</td><td>—</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td>Critic vs group baseline</td><td>Sign varies</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td>Test-time context management</td><td>BrowseComp +14–16</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-a">A</span></td></tr>
-            <tr><td>Asynchronous rollout with a staleness bound</td><td>Unknown</td><td>1.5–2.4× reported, mostly outside agentic tasks</td><td>Needs off-policy control</td><td>—</td><td><span class="grade grade-b">B</span> efficiency</td></tr>
+            <tr><td>Asynchronous rollout with a staleness bound</td><td>Unknown</td><td>1.5–2.8× reported (mostly math; SkyRL's 1.55× is against naive async)</td><td>Needs off-policy control</td><td>—</td><td><span class="grade grade-b">B</span> efficiency</td></tr>
           </tbody>
         </table>
 

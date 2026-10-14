@@ -6,8 +6,8 @@
 
         <ol>
           <li><strong>Which base models?</strong> If only Qwen2.5 or Qwen2.5-Math, the result is a hypothesis about that family. Random rewards improve Qwen2.5-Math by 21 points and hurt Llama and OLMo (<a href="#case-spurious">spurious rewards</a>).</li>
-          <li><strong>How many training seeds, and how many samples per evaluation problem?</strong> With one sample per AIME problem, two models must differ by about 25 points to be distinguishable; with 32 samples, about 5. Training-seed variance comes on top (<a href="#tension-noise">three layers of noise</a>).</li>
-          <li><strong>Was the baseline tuned as hard as the method, in the same code?</strong> A PPO baseline at 5 points and a DPO baseline that varies by 5.5 points between papers are both documented (<a href="#case-weak-baseline">weak baseline</a>).</li>
+          <li><strong>How many training seeds, and how many samples per evaluation problem?</strong> With one sample per AIME problem, two models must differ by about 26 points to be distinguishable; with 32 samples, about 5. Training-seed variance comes on top (<a href="#tension-noise">three layers of noise</a>).</li>
+          <li><strong>Was the baseline tuned as hard as the method, in the same code?</strong> A PPO baseline at 5 points and a DPO baseline that varies by 5.5 points between papers are both documented (<a href="#case-weak-baseline">weak baseline</a>; <a href="#tension-baselines">baselines</a>).</li>
           <li><strong>How many optimizer steps per batch, how stale is the data, and where does π<sub>old</sub> come from?</strong> With one step and a recomputed π<sub>old</sub>, every clipped surrogate reduces to REINFORCE; a claimed loss improvement must then come from somewhere else (<a href="#skel-identity">r ≡ 1</a>).</li>
           <li><strong>Is there a random- or format-reward control?</strong> Its gain is the part a sharpening update gets for free (<a href="#pattern-sharpening">pattern 3</a>).</li>
           <li><strong>Is the benchmark clean?</strong> Released after the model, or generated synthetically. Qwen2.5-Math reproduces MATH-500 problems from partial prompts (<a href="#base-qwen">base models</a>).</li>
@@ -19,5 +19,5 @@
           <li><strong>Does the implementation match the paper?</strong> Framework defaults differ from published methods in ways that change the mathematics (<a href="#pitfalls">pitfalls</a>).</li>
         </ol>
 
-        <p>A paper that does not answer the first three has not established its comparison. A paper that does not answer the first six cannot be placed in the evidence grades of this survey above <span class="grade grade-c">C</span>. The last six are where most of the disagreements between papers turn out to live.</p>
+        <p>A paper that does not answer the first three has not established its comparison. A paper that does not answer the first six cannot earn <span class="grade grade-a">A</span> on its own, and its results count as <span class="grade grade-b">B</span> at most, for the setting it tested. The last six are where most of the disagreements between papers turn out to live.</p>
       </section>

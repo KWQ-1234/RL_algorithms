@@ -2,7 +2,7 @@
 
 > Which changes to LLM post-training actually matter — and how to tell. A companion to [RL Infrastructure for the Mathematically Inclined](https://github.com/chenggong-zhang/RL_infra).
 
-**Status:** draft. Sections are written in the order given in [`plan/2026-10-14-rl-algorithms-blog-outline.md`](plan/2026-10-14-rl-algorithms-blog-outline.md); unwritten sections render as "Draft pending" stubs.
+**Status:** complete first draft (October 2026). Every section is written; numbers were checked against primary sources (`research/notes/verification_*.md`) and the draft passed a consistency read-through (`research/notes/readthrough_2026-10-14.md`). The chapter plan and the log of corrections are in [`plan/2026-10-14-rl-algorithms-blog-outline.md`](plan/2026-10-14-rl-algorithms-blog-outline.md).
 
 ## Layout
 

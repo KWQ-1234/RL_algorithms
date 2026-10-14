@@ -4,7 +4,7 @@
 
         <p>The axis sections judge design choices one at a time. Read together, they keep running into the same few pieces of algebra. Each pattern below is stated as a formula, followed by what it explains and where it shows up. Knowing them makes most new papers predictable before reading their experiments.</p>
 
-        <h3 id="pattern-reinforce">1. Every surrogate collapses to REINFORCE at r = 1</h3>
+        <h3 id="pattern-reinforce">1. Every surrogate collapses to REINFORCE at r ≡ 1</h3>
 
         <div class="formula-display">r<sub>i,t</sub> ≡ 1  ⇒  w<sub>i,t</sub> · m<sub>i,t</sub> = 1  ⇒  g = Σ<sub>i,t</sub> c<sub>i,t</sub> Â<sub>i</sub> ∇log π<sub>θ</sub>(y<sub>i,t</sub>)</div>
 
@@ -16,7 +16,7 @@
 
         <div class="formula-display">E[g] = Σ<sub>x</sub> ∇p<sub>x</sub> / s(p<sub>x</sub>)  =  ∇ Σ<sub>x</sub> F(p<sub>x</sub>),   F′(p) = 1 / s(p)</div>
 
-        <p>So every normalization rule is gradient ascent on some concave transform of the per-prompt pass rate. With no scale (RLOO, Dr. GRPO) the objective is Σp, the expected pass rate. GRPO's group standard deviation, s = √(p(1−p)), gives Σ 2·arcsin√p. A scale proportional to p gives Σ log p, a maximum-likelihood objective. Pass@k training corresponds to Σ 1 − (1−p)<sup>k</sup>. These limits hold as the group grows; with small groups the estimated mean and scale add their own finite-G effects. <strong>Explains:</strong> the "std normalization" debate splits into two claims. Up-weighting hard prompts (small p) has support; up-weighting easy prompts (p near 1), which GRPO also does, has none and is a source of instability on easy data (<a href="#normalization">axis ②</a>). <strong>Use:</strong> ask of any new advantage rule which F it implies, and whether that F is the objective you want.</p>
+        <p>So every normalization rule is gradient ascent on some transform F of the per-prompt pass rate, fixed by F′ = 1/s. With no scale (RLOO, Dr. GRPO) the objective is Σp, the expected pass rate. GRPO's group standard deviation, s = √(p(1−p)), gives Σ 2·arcsin√p. A scale proportional to p gives Σ log p, a maximum-likelihood objective. Pass@k training corresponds to Σ 1 − (1−p)<sup>k</sup>. These limits hold as the group grows; with small groups the estimated mean and scale add their own finite-G effects. <strong>Explains:</strong> the "std normalization" debate splits into two claims. Up-weighting hard prompts (small p) has support; up-weighting easy prompts (p near 1), which GRPO also does, has none, and removing it helps on easy-heavy data (<a href="#normalization">axis ②</a>). <strong>Use:</strong> ask of any new advantage rule which F it implies, and whether that F is the objective you want.</p>
 
         <h3 id="pattern-sharpening">3. Sharpening helps whenever the mode beats the mean</h3>
 

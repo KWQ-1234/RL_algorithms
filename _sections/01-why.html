@@ -2,5 +2,23 @@
       <section id="why">
         <h2>Preface: what this survey is for</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Name vs estimator: a named algorithm is the surface; the choices on eight design axes plus the experimental conditions are what is optimized.</aside>
+        <p>This survey is for theorists, mathematicians and algorithm researchers who read RL post-training papers and want to know which of the changes they propose actually matter. Since 2024 the field has produced a long list of named algorithms — GRPO, DAPO, Dr. GRPO, GSPO, CISPO, SAPO, VAPO and many more — each reporting gains. Most of those gains were measured once, on one model family, against a baseline configured by the same authors. The goal here is to sort the changes by what they do to training and by how strong the evidence is that they do it.</p>
+
+        <p>The organizing idea is to separate the <em>name</em> from the <em>estimator</em>. A name is what a paper's abstract reports: "we use GRPO", "we propose a new clipping objective". The estimator is what the training run actually computes: a gradient estimate whose form depends on a handful of choices — how the advantage is baselined and scaled, how token gradients are weighted and masked, how they are summed, what is regularized, and how far the data has drifted from the policy being trained. Add the experimental conditions — base model, data, evaluation — and you have what a result actually depends on. Two papers using "the same algorithm" can differ on most of these; two papers with different algorithm names can differ on one.</p>
+
+        <p>The boundary of this survey follows from that. If a choice can change the reward curve, the comparison between two methods, or whether a result reproduces, it is examined here, with its mechanism written as a formula and its evidence graded. Engineering detail that does not change the estimator is left to the companion <a href="https://chenggong-zhang.github.io/RL_infra/">RL infrastructure survey</a>, which asks the mirror question: which systems choices silently change the statistical object being optimized.</p>
+
+        <blockquote class="pull">
+          Implementation details can matter more than the choice of algorithm itself.
+          <cite>— paraphrasing Engstrom et al., <a href="https://arxiv.org/abs/2005.12729">Implementation Matters in Deep Policy Gradients</a> (2020), whose conclusion this survey finds again for LLMs</cite>
+        </blockquote>
+
+        <p>The short answer, defended in the rest of the survey:</p>
+        <ol>
+          <li><strong>Most named changes buy efficiency or stability, not a higher ceiling.</strong> In the one study that separates the two, removing any single component of a strong recipe leaves the fitted asymptote within noise (<a href="#case-scalerl">ScaleRL</a>).</li>
+          <li><strong>The ceiling is mostly set outside the loss</strong>: by the base model and its mid-training, the generation budget, the batch size, and whether the reward can be fooled (<a href="#base-model">base models</a>, <a href="#data-sampling">axis ⑦</a>, <a href="#reward">axis ⑧</a>).</li>
+          <li><strong>What decides whether training works is correctness</strong>: keeping the estimator what it claims to be — limited reuse of each batch, consistent numerics between sampler and trainer, routing replay for mixture-of-experts models, masking tokens the policy did not write (<a href="#axes">verdict map</a>, <a href="#agentic">agentic RL</a>).</li>
+        </ol>
+
+        <p>After reading, you should be able to take any new RL paper and ask five questions before its results: which slot of the estimator did it change; was the run on-policy, and if not, how far off; on which base models; against how carefully tuned a baseline; and with how much noise in the evaluation. Those questions are the bridge from an abstract's claim to the evidence behind it.</p>
       </section>

@@ -27,7 +27,7 @@
           </tbody>
         </table>
 
-        <p>Real models have many problems with p<sub>j</sub> near 0 or 1, so the true noise is below this bound. The order of magnitude still holds. A single-sample AIME score cannot separate two methods that differ by less than about 25 points. At k = 32, the threshold falls to about 5.</p>
+        <p>Real models have many problems with p<sub>j</sub> near 0 or 1, so the true noise is below this bound. The order of magnitude still holds. A single-sample AIME score cannot separate two methods that differ by less than about 26 points. At k = 32, the threshold falls to about 5.</p>
 
         <p><strong>Training-seed variance</strong> is the part almost nobody measures. Two training runs with different seeds produce two different models, and no number of evaluation samples removes that difference. The few direct measurements are scattered: ScaleRL's three repeated runs put the fitted asymptote within ±0.015 of each other on its pass-rate scale (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>); LOOP reports 66.4 ± 4.8 on AppWorld across three runs (<a href="https://arxiv.org/abs/2502.01600">2502.01600</a>); WPO reports its DPO baseline at 20.6 ± 0.7 AlpacaEval LC over five seeds (<a href="https://arxiv.org/abs/2406.11827">2406.11827</a>). Most ablation tables in this literature come from one run per row, so this layer is simply unknown for them.</p>
 
@@ -45,7 +45,7 @@
         <p>The second confounder is often the largest, and it concentrates in one model family. Qwen2.5-Math is the most common base model in 2025 RL papers, and it responds to almost any training signal.</p>
         <ul>
           <li><strong>Template.</strong> Before any RL, the same Qwen2.5-Math-7B averages 0.0 over five math benchmarks with the R1 prompt template, 26.5 with the Qwen template and 38.2 with no template (<a href="https://arxiv.org/abs/2503.20783">Dr. GRPO, 2503.20783</a>, Table 1).</li>
-          <li><strong>Reward content.</strong> On MATH-500, RL with the true reward improves Qwen2.5-Math-7B by 29.1 points, with deliberately wrong labels by 24.1, and with random rewards by 21.4. These gains generally do not transfer to Llama3 or OLMo2 (<a href="https://arxiv.org/abs/2506.10947">Spurious Rewards, 2506.10947</a>).</li>
+          <li><strong>Reward content.</strong> On MATH-500, RL with the true reward improves Qwen2.5-Math-7B by 29.1 points, with deliberately wrong labels by 24.1, and with random rewards by 21.4. The same random rewards make Llama3.1-8B-Instruct (−11.5) and OLMo2-7B (−8.3) worse (<a href="https://arxiv.org/abs/2506.10947">Spurious Rewards, 2506.10947</a>).</li>
           <li><strong>Contamination.</strong> Given the first 60% of a MATH-500 problem, Qwen2.5-Math-7B reproduces the rest exactly 54.6% of the time; Llama3.1-8B does so 3.8% of the time (<a href="https://arxiv.org/abs/2507.10532">2507.10532</a>). OLMo 3, whose pre-training data is decontaminated and public, ran random rewards as a negative control and saw no gain (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>).</li>
         </ul>
 

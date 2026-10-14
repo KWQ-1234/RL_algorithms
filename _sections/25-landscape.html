@@ -5,8 +5,8 @@
         <p>This section maps the named methods onto the skeleton's slots, so a reader can see at a glance which slot each one changed and how strong the evidence for its core claim is. It extends the short table in <a href="#skel-names">the skeleton</a>. Entries come from the methods' own papers; "—" means the method does not make that choice part of its definition.</p>
 
         <figure>
-          <img src="diagrams/09-timeline.svg" alt="Timeline in two bands from 2017 to 2026: advantage estimators simplify from a learned critic to group and mean-only baselines, while trust-region, importance-sampling and numerical methods multiply from 2025 onward.">
-          <figcaption><span class="fig-label">Figure 9.</span> Two bands of development. The advantage estimator became simpler — critic, then group baseline, then mean only — while the trust-region and importance-sampling layer, and the numerics underneath it, absorbed most of the new names. The evidence elsewhere in the survey says the second band is mostly about off-policy data and stability.</figcaption>
+          <img src="diagrams/07-timeline.svg" alt="Timeline in two bands from 2017 to 2026: advantage estimators simplify from a learned critic to group and mean-only baselines, while trust-region, importance-sampling and numerical methods multiply from 2025 onward.">
+          <figcaption><span class="fig-label">Figure 7.</span> Two bands of development. The advantage estimator became simpler — critic, then group baseline, then mean only — while the trust-region and importance-sampling layer, and the numerics underneath it, absorbed most of the new names. The evidence elsewhere in the survey says the second band is mostly about off-policy data and stability.</figcaption>
         </figure>
 
         <table class="verdict">
@@ -18,7 +18,7 @@
             <tr><td>DPO (2023-05)</td><td>Implicit log-ratio</td><td>—</td><td>Implicit KL via β; offline</td><td>Loss shapes tie once tuned <span class="grade grade-a">A</span></td></tr>
             <tr><td>ReMax (2023-10)</td><td>Greedy-response baseline</td><td>None</td><td>KL in reward</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>GRPO (2024-02)</td><td>Group mean ÷ group std</td><td>PPO clip</td><td>k3 KL in loss</td><td>Std and 1/|y| change the objective <span class="grade grade-b">B</span></td></tr>
-            <tr><td>RLOO (2024-02)</td><td>Leave-one-out mean</td><td>None</td><td>KL in reward</td><td>Equals Dr. GRPO × G/(G−1) <span class="grade grade-a">A</span></td></tr>
+            <tr><td>RLOO (2024-02)</td><td>Leave-one-out mean</td><td>None</td><td>KL in reward</td><td>Equals Dr. GRPO × G/(G−1), exactly</td></tr>
             <tr><td>REINFORCE++ (2025-01)</td><td>Batch-normalized</td><td>PPO clip</td><td>KL in reward</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>Kimi k1.5 (2025-01)</td><td>Group mean</td><td>None; squared log-ratio</td><td>Toward previous iterate; partial rollouts</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>DAPO (2025-03)</td><td>Group mean ÷ std</td><td>Clip-higher (0.2 / 0.28)</td><td>No KL; dynamic sampling; overlong handling</td><td>Per component <span class="grade grade-c">C</span>–<span class="grade grade-d">D</span> (<a href="#case-dapo-table">case study</a>)</td></tr>
@@ -32,15 +32,15 @@
             <tr><td>GMPO (2025-07)</td><td>Group mean ÷ std</td><td>Geometric mean, per-token log clip</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>Truncated IS (2025-08, blog)</td><td>—</td><td>× min(π<sub>old</sub>/π<sub>sampler</sub>, C)</td><td>Train–inference mismatch</td><td><span class="grade grade-d">D</span> alone</td></tr>
             <tr><td>PipelineRL (2025-09)</td><td>—</td><td>Truncated IS</td><td>In-flight weight updates</td><td>About 2× efficiency <span class="grade grade-b">B</span></td></tr>
-            <tr><td>ScaleRL (2025-10)</td><td>Batch-level std</td><td>CISPO</td><td>Prompt-level averaging; PipelineRL-8; FP32 head; filtering</td><td>Components move B, not A <span class="grade grade-b">B</span></td></tr>
+            <tr><td>ScaleRL (2025-10)</td><td>Batch-level std</td><td>CISPO</td><td>Prompt-level averaging; PipelineRL-8; FP32 head; filtering</td><td>In leave-one-out runs, components move B, not A <span class="grade grade-b">B</span></td></tr>
             <tr><td>R3 routing replay (2025-10)</td><td>—</td><td>—</td><td>Replay inference routing in training</td><td>Prevents MoE collapse <span class="grade grade-a">A</span></td></tr>
             <tr><td>IcePop (2025-10)</td><td>—</td><td>Mask tokens with train/infer ratio outside [0.5, 5]</td><td>Train–inference mismatch</td><td><span class="grade grade-b">B</span></td></tr>
-            <tr><td>SAPO (2025-11)</td><td>Group mean</td><td>Smooth gate</td><td>—</td><td><span class="grade grade-c">C</span>–<span class="grade grade-d">D</span></td></tr>
+            <tr><td>SAPO (2025-11)</td><td>Group mean</td><td>Smooth gate</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>DeepSeek-V3.2 (2025-12)</td><td>Group mean, no std</td><td>PPO clip + off-policy sequence masking</td><td>IS-corrected k3; Keep Routing; Keep Sampling Mask</td><td>No ablation <span class="grade grade-c">C</span></td></tr>
             <tr><td>Qwen "stabilizing RL" (2025-12)</td><td>Group mean</td><td>Token-level, no length normalization</td><td>Train–inference IS; R2/R3 when off-policy</td><td>Controlled study <span class="grade grade-b">B</span></td></tr>
             <tr><td>OLMo 3 / OlmoRL (2025-12)</td><td>Group mean, no std</td><td>Clip-higher (0.2 / 0.272)</td><td>No KL; truncated IS; async ≤ 8</td><td>Open recipe; random-reward control negative</td></tr>
           </tbody>
         </table>
 
-        <p>Three regularities stand out. Most named methods change one or two slots. The advantage column converges after early 2025 on a group mean without standard deviation. And nearly all the activity since then is in the surrogate and off-policy columns, which by <a href="#skel-identity">the r ≡ 1 identity</a> only act when the data is off-policy — the place where the evidence is thinnest and the D grades cluster.</p>
+        <p>Three regularities stand out. Most named methods change one or two slots. The advantage column converges on a group mean, with the group standard deviation increasingly dropped or replaced by a batch-level one. And nearly all the activity since then is in the surrogate and off-policy columns, which by <a href="#skel-identity">the r ≡ 1 identity</a> only act when the data is off-policy — the place where the evidence is thinnest and the D grades cluster.</p>
       </section>

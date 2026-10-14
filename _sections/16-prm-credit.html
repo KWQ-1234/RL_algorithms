@@ -16,7 +16,7 @@
 
         <p><strong>Learned PRMs summed into the reward are hacked.</strong> Four independent groups report it.</p>
         <ul>
-          <li>Gao et al.: after one epoch with a success reward plus a learned process reward, a Qwen2-1.5B model scored 11.16 on MATH, below its 24.90 starting point and the 30.58 from success reward alone; it learned to emit many short, meaningless steps, eventually single words or emoji (<a href="https://arxiv.org/abs/2410.15115">2410.15115</a>).</li>
+          <li>Gao et al.: after one epoch with a success reward plus a learned process reward, a Qwen2-1.5B model scored 11.16 on MATH, below its 24.90 starting point (success reward alone reached 30.58 after five epochs); it learned to emit many short, meaningless steps, eventually single words or emoji (<a href="https://arxiv.org/abs/2410.15115">2410.15115</a>).</li>
           <li>PURE: summing process rewards collapsed training early; even its safer min-form, used alone, was hacked later in training (<a href="https://arxiv.org/abs/2504.15275">2504.15275</a>).</li>
           <li>PROF: mixing process and outcome rewards collapsed entropy (<a href="https://arxiv.org/abs/2509.03403">2509.03403</a>).</li>
           <li>A 2026 study trained Qwen2.5-1.5B-Instruct with GRPO on a process reward alone. With one PRM, the reward reached its maximum within about 100 steps through mode collapse while AIME accuracy stayed at zero; with another, the reward passed 0.8 while accuracy peaked at 3–4% (<a href="https://arxiv.org/abs/2603.06621">2603.06621</a>).</li>
@@ -39,7 +39,7 @@
             <tr><td>Learned PRM summed into the reward</td><td>Negative (collapse)</td><td>Fast early</td><td>Collapses</td><td>Length, repetition, degenerate output</td><td><span class="grade grade-a">A</span> hacking</td></tr>
             <tr><td>Bounded or telescoping PRM (clip, delta, min-form, implicit PRM)</td><td>Within noise</td><td>Several times fewer steps</td><td>PRM-only still hacked</td><td>Length</td><td><span class="grade grade-c">C</span> gain</td></tr>
             <tr><td>PRM used only to filter samples</td><td>Small gain</td><td>Costs extra sampling</td><td>Stable</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
-            <tr><td>On-policy Monte Carlo or tree credit</td><td>Small, shrinking with scale and context</td><td>Several times fewer steps</td><td>Stable (true verifier)</td><td>Slower rollouts</td><td><span class="grade grade-b">B</span> small models · <span class="grade grade-c">C</span> at scale</td></tr>
+            <tr><td>On-policy Monte Carlo or tree credit</td><td>Small, shrinking with scale and context</td><td>Several times fewer steps</td><td>Stable (true verifier)</td><td>Slower rollouts</td><td><span class="grade grade-b">B</span> efficiency · <span class="grade grade-d">D</span> accuracy</td></tr>
             <tr><td>PRM as a test-time reranker</td><td>Raises best-of-N</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
           </tbody>
         </table>

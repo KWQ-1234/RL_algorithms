@@ -35,7 +35,7 @@
             <tr><td>PPO with λ = 1 instead of 0.95</td><td>Decisive against the broken setting</td><td>—</td><td>λ &lt; 1 collapses response length</td><td>Length</td><td><span class="grade grade-a">A</span></td></tr>
             <tr><td>Critic not initialized from the reward model; value pre-training</td><td>Decisive within PPO</td><td>—</td><td>Prevents early collapse</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td>Tuned PPO vs GRPO or RLOO (single-turn RLVR)</td><td>Interchangeable</td><td>Critic faster early</td><td>—</td><td>Critic adds memory and compute</td><td><span class="grade grade-d">D</span> original claims · interchangeable in independent tests</td></tr>
-            <tr><td>RLOO vs Dr. GRPO</td><td>Identical up to a constant</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-a">A</span> algebra</td></tr>
+            <tr><td>RLOO vs Dr. GRPO</td><td>Identical up to a constant</td><td>—</td><td>—</td><td>—</td><td>Exact (algebra)</td></tr>
             <tr><td>ReMax greedy baseline</td><td>≈ others</td><td>Saves memory vs PPO</td><td>—</td><td>Wastes signal with binary rewards</td><td><span class="grade grade-c">C</span></td></tr>
             <tr><td>2025–26 estimators (optimal, quantile, Kalman, max-likelihood)</td><td>Own gains</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
           </tbody>

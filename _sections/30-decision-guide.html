@@ -5,16 +5,16 @@
         <p>The verdicts of this survey translate into a short procedure for configuring a run. It is ordered by evidence: settings with strong evidence first, settings that need tuning on your own model next, and changes whose benefit is mostly unproven last. It assumes you have chosen a base model; that choice matters more than anything below (<a href="#base-model">base models</a>).</p>
 
         <figure>
-          <img src="diagrams/10-decision-chart.svg" alt="Decision chart: defaults that always apply, then five questions — rule-checkable reward, mixture of experts, off-policy updates, multi-turn tools, aligned starting point — with the settings that follow from each answer.">
-          <figcaption><span class="fig-label">Figure 10.</span> What to set, in what order. The defaults hold in every setting covered here; each question then adds settings that its answer makes necessary.</figcaption>
+          <img src="diagrams/09-decision-chart.svg" alt="Decision chart: defaults that always apply, then five questions — rule-checkable reward, mixture of experts, off-policy updates, multi-turn tools, aligned starting point — with the settings that follow from each answer.">
+          <figcaption><span class="fig-label">Figure 9.</span> What to set, in what order. The defaults hold in every setting covered here; each question then adds settings that its answer makes necessary.</figcaption>
         </figure>
 
         <h3 id="decide-must">1. Get these right: correctness</h3>
         <ul>
-          <li>Keep the estimator what it claims to be: one optimizer step per batch where affordable, or bounded staleness with sampler-aware corrections when not (<a href="#off-policy">axis ⑥</a>). <span class="grade grade-a">A</span></li>
+          <li>Keep the estimator what it claims to be: one optimizer step per batch where affordable <span class="grade grade-a">A</span>, or bounded staleness with sampler-aware corrections when not <span class="grade grade-b">B</span> (<a href="#off-policy">axis ⑥</a>).</li>
           <li>On MoE models with more than one step per batch, use routing replay. <span class="grade grade-a">A</span></li>
           <li>Remove train–inference mismatch at the source where you can, and monitor it where you cannot. <span class="grade grade-b">B</span></li>
-          <li>With a critic, use λ = 1 and do not initialize it from the reward model (<a href="#advantage">axis ①</a>). <span class="grade grade-a">A</span></li>
+          <li>With a critic, use λ = 1 <span class="grade grade-a">A</span>, and do not initialize it from the reward model <span class="grade grade-b">B</span> (<a href="#advantage">axis ①</a>).</li>
           <li>For agents, mask environment tokens and keep the sampled token IDs (<a href="#agentic">agentic RL</a>). <span class="grade grade-b">B</span></li>
           <li>Use a verifier with high precision, and check what it accepts (<a href="#reward">axis ⑧</a>). <span class="grade grade-b">B</span></li>
         </ul>

@@ -11,7 +11,7 @@
           <li><strong>Batch size.</strong> Batches of 512, 768 and 2,048 prompts give A ≈ 0.605, 0.610 and 0.645 (read from a figure). Small batches look better early and are overtaken later, with nearly identical per-step entropy.</li>
           <li><strong>Generation length.</strong> Raising the budget from 14k to 32k tokens lifts A from 0.610 to 0.645, while the compute needed to reach the curve's midpoint grows 4.4-fold (C<sub>mid</sub> 2,542 → 11,272). This is the clearest case of trading efficiency for ceiling in the literature.</li>
         </ul>
-        <p>Group size is second-order: at fixed total batch, groups of 8, 16, 24 and 32 responses per prompt give A = 0.585, 0.610, 0.590 and 0.595, a spread just beyond the noise band with no trend. <span class="grade grade-b">B</span> for all three.</p>
+        <p>Group size is second-order: at fixed total batch, groups of 8, 16, 24 and 32 responses per prompt give A = 0.585, 0.610, 0.590 and 0.595, a 0.025 spread at the edge of the noise band, with no trend. <span class="grade grade-b">B</span> for all three.</p>
 
         <h4>Filtering: worth it for stability and efficiency</h4>
 
@@ -53,7 +53,7 @@
             <tr><td>Difficulty filtering</td><td>Weak or unknown</td><td>Fewer steps</td><td>—</td><td>Forgetting of easy skills untested</td><td><span class="grade grade-b">B</span></td></tr>
             <tr><td>Overlong masking or penalty</td><td>No gain</td><td>Helps at short caps</td><td>Interacts with length budget</td><td>Masking can invite length hacking</td><td><span class="grade grade-d">D</span></td></tr>
             <tr><td>Length curriculum</td><td>Depends on base</td><td>Saves compute</td><td>Irreversible drops in some reports</td><td>—</td><td><span class="grade grade-d">D</span></td></tr>
-            <tr><td>Small curated datasets</td><td>Unchanged on Qwen-Math</td><td>—</td><td>Unstable on Llama</td><td>—</td><td><span class="grade grade-b">B</span> Qwen-Math · <span class="grade grade-d">D</span> general</td></tr>
+            <tr><td>Small curated datasets</td><td>Large gains on Qwen-Math; small on Llama</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-b">B</span> Qwen-Math · <span class="grade grade-d">D</span> general</td></tr>
           </tbody>
         </table>
 

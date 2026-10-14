@@ -32,8 +32,8 @@
 
         <ul>
           <li><strong>Report pass@k curves, not one number.</strong> A method that raises pass@1 by concentrating mass is doing something different from a method that raises coverage, and only curves over k tell them apart.</li>
-          <li><strong>Sharpening explains label-free gains.</strong> Updates that only concentrate mass can raise pass@1 up to the base model's majority-vote accuracy (<a href="#pattern-sharpening">pattern 3</a>). That is the most economical explanation for random, wrong or absent rewards helping some models, and it predicts where they will fail.</li>
-          <li><strong>Coverage is mostly bought elsewhere.</strong> Distillation and mid-training expand what the model can solve far more reliably than RL does. The next section is about that layer.</li>
+          <li><strong>Sharpening explains label-free gains.</strong> Updates that only concentrate mass can raise pass@1 up to the base model's majority-vote accuracy (<a href="#pattern-sharpening">pattern 3</a>). That is our preferred reading of why random, wrong or absent rewards help some models — compatible with both published mechanisms (<a href="#case-spurious">case study</a>) — and it predicts where they will fail.</li>
+          <li><strong>Coverage is mostly bought elsewhere.</strong> Distillation and mid-training appear to expand coverage where RL does not: Yue et al.'s distilled model beats its base at every k, and Qwen3's on-policy distillation raised pass@64 where RL did not. The next section is about that layer.</li>
         </ul>
 
         <h3 id="rl-interesting">What's mathematically interesting</h3>

@@ -8,7 +8,7 @@
 
         <p>Each training run's validation pass rate R is fitted against training compute C with a sigmoid,</p>
         <div class="formula-display">R(C) = R<sub>0</sub> + (A − R<sub>0</sub>) / (1 + (C<sub>mid</sub> / C)<sup>B</sup>)</div>
-        <p>where A is the asymptote, B governs how steeply the curve rises, and C<sub>mid</sub> is the compute at which half the gain is reached. The experiments use an unnamed 8B dense model and Llama-4 Scout, a mixture-of-experts model, trained on the Polaris-53K math set, with 3.5–4k GB200 GPU-hours per single ablation, 16k per leave-one-out run, and up to 100k for the final recipe — more than 400k GPU-hours in total. Fitting on the first half of a 100k-hour run and extrapolating matched the second half, shown in a figure without an error figure. Two kinds of ablation are run:</p>
+        <p>where A is the asymptote, B governs how steeply the curve rises, and C<sub>mid</sub> is the compute at which half the gain is reached. The experiments use an unnamed 8B dense model and Llama-4 Scout, a mixture-of-experts model, trained on the Polaris-53K math set, with 3.5–4k GB200 GPU-hours per single ablation, 16k per leave-one-out run, and up to 100k for the final recipe — more than 400k GPU-hours in total. Fitting on the first half of a 100k-hour run and extrapolating matched the second half, shown in a figure, without an error estimate. Two kinds of ablation are run:</p>
         <ul>
           <li><strong>Forward:</strong> start from a baseline and change one component at a time.</li>
           <li><strong>Leave-one-out (LOO):</strong> start from the full final recipe and remove one component at a time.</li>
@@ -18,7 +18,7 @@
 
         <ul>
           <li><strong>A noise floor for A.</strong> Three repeated runs of the same recipe give asymptotes within ±0.015 of each other, and the authors recommend treating differences under ±0.02 as noise. This is rare: most papers report no run-to-run variance at all.</li>
-          <li><strong>Changes that clearly move A.</strong> Batch size (A ≈ 0.605 → 0.645 from 512 to 2,048 prompts), generation length (0.610 → 0.645 from 14k to 32k tokens, at 4.4× the compute to midpoint), and, against a DAPO-style baseline, computing the LM head in FP32 (0.52 → 0.61).</li>
+          <li><strong>Changes that clearly move A.</strong> Batch size (A ≈ 0.605 → 0.645 from 512 to 2,048 prompts, read from a figure), generation length (0.610 → 0.645 from 14k to 32k tokens, at 4.4× the compute to midpoint), and, against a DAPO-style baseline, computing the LM head in FP32 (0.52 → 0.61).</li>
           <li><strong>Changes that only move efficiency.</strong> In LOO, removing any single component of the final recipe leaves A within the noise band. The differences show up in B: swapping CISPO for the DAPO loss lowers B from 2.01 to 1.77.</li>
         </ul>
 

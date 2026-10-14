@@ -14,7 +14,7 @@
             <tr><td>Sequence mean of token means (original GRPO; forced by GSPO and SAPO)</td><td>1/(G·|y<sub>i</sub>|)</td><td>Every response counts equally, whatever its length</td></tr>
             <tr><td>Token mean over a group or batch (DAPO, verl's <code>token-mean</code>)</td><td>1/Σ<sub>j</sub>|y<sub>j</sub>|</td><td>Every token counts equally; long responses carry more total weight</td></tr>
             <tr><td>Sequence mean of token sums</td><td>1/G</td><td>No length division; gradient variance grows with length</td></tr>
-            <tr><td>Constant normalizer (Dr. GRPO)</td><td>1/(G·L<sub>max</sub>)</td><td>No length dependence; the constant folds into the learning rate</td></tr>
+            <tr><td>Constant normalizer (Dr. GRPO)</td><td>1/G in the paper's formula; 1/(G·L<sub>max</sub>) in released code</td><td>No length dependence; the constant folds into the learning rate</td></tr>
           </tbody>
         </table>
 
@@ -44,5 +44,5 @@
 
         <h4>What's mathematically interesting</h4>
 
-        <p>Aggregation is the one axis where the right answer follows from the objective rather than from experiments. If the goal is the expected sequence reward, the policy gradient is Σ<sub>t</sub> R · ∇log π(y<sub>t</sub>), a sum over tokens with no length factor. Any 1/|y| weight is a departure from that objective, and its sign of bias is predictable. The constant normalizer of Dr. GRPO is the only mode that is exactly the policy gradient up to a learning-rate constant. The empirical flips between base and aligned models then look less like evidence for one mode and more like interactions with other parts of the recipe, such as length budgets and truncation (<a href="#data-sampling">axis ⑦</a>).</p>
+        <p>Aggregation is the one axis where the right answer follows from the objective rather than from experiments. If the goal is the expected sequence reward, the policy gradient is Σ<sub>t</sub> R · ∇log π(y<sub>t</sub>), a sum over tokens with no length factor. Any 1/|y| weight is a departure from that objective, and its sign of bias is predictable. The two length-free modes — summing tokens within each response (1/G) and Dr. GRPO's constant normalizer — are exactly the policy gradient up to a learning-rate constant. The empirical flips between base and aligned models then look less like evidence for one mode and more like interactions with other parts of the recipe, such as length budgets and truncation (<a href="#data-sampling">axis ⑦</a>).</p>
       </section>

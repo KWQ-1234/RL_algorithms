@@ -20,11 +20,11 @@
             <tr><td>7</td><td>Is staleness a staleness × LR budget? (⑥)</td><td>Staleness 1–16 × three learning rates; record steps to collapse</td><td>Collapse boundary along constant S·η</td></tr>
             <tr><td>8</td><td>Does clip-higher's effect scale with staleness? (④)</td><td>ε<sub>high</sub> ∈ {0.2, 0.28, 0.35} × 1 or 4 steps per batch, base and instruct; log clip rate</td><td>Effect grows with clip rate, not with model type</td></tr>
             <tr><td>9</td><td>Is dense credit worth its rollouts? (<a href="#prm-credit">PRM</a>)</td><td>Give GRPO the extra rollouts a tree or MC method uses (larger G or more steps); 4k and 16k context</td><td>Gap closes under matched compute</td></tr>
-            <tr><td>10</td><td>How much does preference data provenance outweigh the loss? (<a href="#preference">DPO</a>)</td><td>Loss (DPO, IPO, SimPO, LN-DPO) × data (offline, semi-online) × β grid, ≥ 3 seeds</td><td>Ratio of data effect to loss effect, with intervals</td></tr>
+            <tr><td>10</td><td>How much does preference data provenance outweigh the loss? (<a href="#preference">DPO</a>)</td><td>Loss (DPO, IPO, SimPO, LN-DPO) × data (offline, semi-online) × β grid, ≥ 5 seeds</td><td>Ratio of data effect to loss effect, with intervals</td></tr>
             <tr><td>11</td><td>Do states recur in open environments? (<a href="#agentic">agentic</a>)</td><td>Count exact and near-duplicate states in SWE and web rollouts</td><td>If near zero, state-grouped credit reduces to GRPO there</td></tr>
-            <tr><td>12</td><td>Do framework KL defaults regularize? (⑤)</td><td>KL as k1-loss, k2-loss, k3-loss, k1-in-reward and none, at low and high KL (e.g. on-policy distillation)</td><td>k1-as-loss behaves like no KL; k3 diverges at high KL</td></tr>
+            <tr><td>12</td><td>Do framework KL defaults regularize? (⑤)</td><td>KL as k1-loss, k2-loss, k3-loss, k1-in-reward and none, at low and high KL (e.g. on-policy distillation)</td><td>k1-as-loss behaves like no KL; k3 lags or stalls at high KL</td></tr>
           </tbody>
         </table>
 
-        <p>Experiments 1, 4 and 2 would move the most verdicts at once: the first tests the identity behind <a href="#trust-region">axis ④</a>, the second the identifiability behind every ceiling claim, the third the transfer behind most D grades. Each costs less than a typical paper proposing a new loss.</p>
+        <p>Three experiments would move the most verdicts at once: Experiment 1 tests the identity behind <a href="#trust-region">axis ④</a>, Experiment 4 the identifiability behind every ceiling claim, and Experiment 2 the transfer behind most D grades. Each costs less than a typical paper proposing a new loss.</p>
       </section>

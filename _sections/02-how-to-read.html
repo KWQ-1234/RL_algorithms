@@ -2,5 +2,44 @@
       <section id="how-to-read">
         <h2>How to read this survey</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Three user stories (interpretation, decision, research), the four verdict dimensions, the A–D evidence grades, and the two meanings of “ceiling”.</aside>
+        <p>The survey is a map, not a catalogue. It starts from one gradient estimator (<a href="#skeleton">the skeleton</a>) and one account of why measuring its improvements is hard (<a href="#tension">the measurement problem</a>), then judges each slot of the estimator in turn. The short path is the skeleton, the measurement problem, the <a href="#axes">verdict map</a>, the <a href="#patterns">six patterns</a> and the <a href="#decision-guide">decision guide</a>. The long path adds the axis sections, the three algorithm families, the five case studies, and the closing chapters on code, pitfalls and open questions.</p>
+
+        <p>Three kinds of reader should expect different things from it.</p>
+
+        <div class="question-box">
+          <p><strong>User story: interpretation.</strong> As a researcher reading a new RL paper, I want to know whether its gain could come from the change it proposes, so that I can tell a result about an algorithm from a result about a base model, a baseline or an evaluation setup. The <a href="#checklist">checklist</a> and the <a href="#case-scalerl">case studies</a> are written for this reader.</p>
+        </div>
+        <div class="question-box">
+          <p><strong>User story: decision.</strong> As a practitioner configuring a run, I want to know which settings must be right, which are safe defaults, and which need tuning on my own model, so that I spend effort where it changes the outcome. The <a href="#decision-guide">decision guide</a>, <a href="#code">code walk-through</a> and <a href="#pitfalls">pitfalls</a> are written for this reader.</p>
+        </div>
+        <div class="question-box">
+          <p><strong>User story: research.</strong> As a theorist, I want to find where the evidence is thinnest and a precise statement would settle a debate, so that my work changes what the field believes. The <a href="#patterns">patterns</a>, <a href="#experiments">experiments</a> and <a href="#open">open questions</a> are written for this reader.</p>
+        </div>
+
+        <h3 id="read-verdicts">How verdicts are stated</h3>
+
+        <p>Every change is judged on four dimensions, because a change can matter in one and not another:</p>
+        <ul>
+          <li><strong>Ceiling</strong> — does it change where training ends up with enough compute?</li>
+          <li><strong>Efficiency</strong> — does it get there with less compute?</li>
+          <li><strong>Stability</strong> — does it change the chance that a long or large run collapses?</li>
+          <li><strong>Side effects</strong> — does it change response length, entropy, format, or what the model forgets?</li>
+        </ul>
+
+        <p>Each verdict carries an evidence grade:</p>
+        <ul>
+          <li><span class="grade grade-a">A</span> several independent controlled studies agree.</li>
+          <li><span class="grade grade-b">B</span> one controlled study, or a clear mathematical mechanism.</li>
+          <li><span class="grade grade-c">C</span> only the paper that proposed it.</li>
+          <li><span class="grade grade-d">D</span> the evidence contradicts itself.</li>
+        </ul>
+        <p>A single change can carry two grades for two different claims — for example, "does not move the ceiling" (A) and "helps efficiency in this direction" (D).</p>
+
+        <h3 id="read-ceilings">Two meanings of "ceiling"</h3>
+
+        <p>The word is used in two senses that behave differently under RL, and the survey keeps them apart. The <strong>pass@1 asymptote</strong> is how accurate one sample becomes after training converges; RL usually raises it. <strong>Coverage at large k</strong> is the set of problems the model can solve at all given many attempts; RL often leaves it unchanged or shrinks it (<a href="#what-rl-changes">what RL changes</a>).</p>
+
+        <h3 id="read-sources">About the sources</h3>
+
+        <p>Every number quoted in the survey was checked against the primary source — the paper's full text, the official blog or report, or the framework's code at a stated commit — and where a number exists only in a figure, or a claim only in an abstract, the text says so. Evidence is current as of October 2026. Several 2026 results are recent enough that no one has yet tried to reproduce them; they are graded accordingly.</p>
       </section>
