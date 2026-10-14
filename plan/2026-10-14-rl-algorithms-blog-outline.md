@@ -478,7 +478,7 @@
 
 详见 `research/notes/verification_03_04.md`。会影响后续章节的几条：
 
-- **ScaleRL 生成长度：** 图 9 图例是 "ScaleRL-34k"，A 约 0.650。报告和本大纲第 12、27 节写的 "14k→32k，0.610→0.645" 需改为 14k→34k，0.610→0.650（只在图中，无表格数值）。
+- **ScaleRL 生成长度（二次核实后订正）：** Table 1 是 "ScaleRL-32k"，A 0.610→0.645，C_mid 2542→11272；"34k" 只在附录 A.15 和图 9 图例中出现一次。以 Table 1 为准。
 - **ScaleRL batch：** 512/768/2048 对应 A = 0.605/0.610/0.645，同样只在图中（Fig. 10a）。
 - **FP32 LM head 0.52→0.61：** 是在 DAPO-loss baseline 上测的（§3.2, Fig. 5b），不是完整 recipe。
 - **VC-PPO / VAPO 的 PPO baseline：** VC-PPO 是 5.6（AIME pass@1），VAPO 是 5（AIME24 avg@32），两篇论文、两种指标，不能合写成"约 5"。
@@ -494,3 +494,11 @@
 - **AceReason：** 是"每批 2 或 4 次梯度更新"导致约第 100 步 entropy collapse，不是 22 或 44 次；每批 1 次避免 collapse。
 - **AReaL 速度：** 正文只给 2.77×（1.5B）；1.64× 是由 32B 编码模型的表格训练时长算出来的，不是论文原话。
 - **R3：** "ratio>2 的 token 比例超过 0.1 即崩溃"只是单次运行的描述，不是论文给出的阈值。
+- **KL 方向命名：** Tang & Munos 把 KL(π_ref‖π) 叫 reverse KL，2510.01555 和 Comedy 把 KL(π‖π_ref) 叫 reverse KL。全文统一不用 "reverse/forward"，直接写方向。
+- **DeepSeek-R1 的 KL 细节（β=0.001、k3、每 400 步重置 reference）只在 arXiv v2 / Nature 版里有，引用 v2。**
+- **新坑（28 节）：** slime 打开 `--use-kl-loss` 而不改 `--kl-loss-type` 就是 k1-as-loss（期望梯度为零）；OpenRLHF 会打警告，slime 不会。
+- **verl `token-mean`：** 除以的是每个 PPO mini-batch（一次优化步）的有效 token 数，跨 DP 求和；既不是整个 rollout batch，也不是 prompt 组。此前大纲和报告写的"global batch"不准确。
+- **VC-PPO 5.6/29.4/41.9 来自 8k 上下文消融；16k 主结果是 VC-PPO 48.8 vs GRPO 38.9。论文对默认 λ_actor 的说法前后不一致。**
+- **LOOP：** 9 点是 best checkpoint（71.3→61.9）；按 3 次运行均值算是 6.8 点。
+- **1-shot RLVR：** Llama-3.2-3B 的 17.5→19.0 是 6 个 benchmark 平均；MATH500 上是 40.8→45.8。
+- **RaR：** 不给参考答案时仍有 31.1–34.2（Likert 基线 23.9），所以参考答案只解释部分增益，不是大部分。

@@ -2,5 +2,51 @@
       <section id="normalization">
         <h3>② Normalization: std changes the objective, not the ceiling</h3>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Prompt weights w(p) as implicit objectives: Σp, Σ 2·arcsin√p, Σ log p, pass@k.</aside>
+        <p>GRPO divides each advantage by the standard deviation of its group's rewards. Dr. GRPO removes that division; REINFORCE++ and ScaleRL divide by a batch-wide standard deviation instead. The debate over which is right has produced contradictory ablations. The contradiction resolves once you see what the division does: it does not make the gradient more accurate, it changes which objective the gradient ascends.</p>
+
+        <h4>What the knob changes</h4>
+
+        <p>With a binary reward, a prompt x with pass rate p<sub>x</sub> contributes ∇p<sub>x</sub> / s(p<sub>x</sub>) to the expected update, where s is the scale the advantage is divided by (<a href="#pattern-weighting">pattern 2</a>). Each rule therefore ascends Σ<sub>x</sub> F(p<sub>x</sub>) for the F with F′ = 1/s:</p>
+
+        <table>
+          <thead>
+            <tr><th>Rule</th><th>Weight on a prompt, w(p) = 1/s(p)</th><th>Objective ascended</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>RLOO, Dr. GRPO, batch std</td><td>constant</td><td>Σ p, the expected pass rate</td></tr>
+            <tr><td>GRPO (group std)</td><td>1/√(p(1−p))</td><td>Σ 2·arcsin√p</td></tr>
+            <tr><td>Scale ∝ p (maximum-likelihood weighting)</td><td>≈ 1/p</td><td>≈ Σ log p</td></tr>
+            <tr><td>Pass@k training</td><td>k(1−p)<sup>k−1</sup></td><td>Σ 1 − (1−p)<sup>k</sup></td></tr>
+          </tbody>
+        </table>
+
+        <figure>
+          <img src="diagrams/04-prompt-weights.svg" alt="Relative weight on a prompt as a function of its pass rate for four normalization rules: flat for RLOO and Dr. GRPO, U-shaped for GRPO, decreasing for maximum-likelihood weighting and steeply decreasing for pass@8.">
+          <figcaption><span class="fig-label">Figure 4.</span> The weight each rule puts on a prompt, as a function of the prompt's pass rate. GRPO's group standard deviation up-weights both ends: hard prompts, which other rules also favour, and easy prompts, which no other rule does.</figcaption>
+        </figure>
+
+        <p>MaxRL's practical weight, (1 − (1−p)<sup>T</sup>)/p with T samples per prompt, approaches 1/p as T grows (<a href="https://arxiv.org/abs/2602.02710">2602.02710</a>). Two consequences follow. First, a batch-level standard deviation is one scalar per step; it rescales the whole gradient and leaves the relative weight of prompts unchanged. Under Adam, which normalizes gradient scale anyway, its effect should be small, acting only through gradient clipping, the optimizer's ε, and how quickly its moment estimates adapt. Second, GRPO's group standard deviation is really two changes at once. It up-weights hard prompts (small p), as maximum-likelihood and pass@k weighting do on purpose. It also up-weights easy prompts (p near 1), which nobody argues for. A concrete case: in a group of eight with one success, GRPO gives the success an advantage of about +2.5 to +2.6, depending on whether the standard deviation divides by G or G−1, against +0.875 without the division. After zero-variance groups are filtered out, the worst case is p = 1/G, where the weight grows like √G.</p>
+
+        <h4>Evidence</h4>
+
+        <p><strong>On the final score, the division does not matter.</strong> ScaleRL found prompt-level, batch-level and no normalization "similar" and chose batch-level as slightly better (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>). Magistral saw no significant effect on evaluation or on length growth (<a href="https://arxiv.org/abs/2506.10910">2506.10910</a>). The minimalist comparison found little gain beyond discarding all-wrong prompts (<a href="https://arxiv.org/abs/2504.11343">2504.11343</a>). <span class="grade grade-a">A</span> for "does not move the ceiling".</p>
+
+        <p><strong>On efficiency and stability, the direction depends on the data.</strong> Dr. GRPO's three-run comparison removes the standard deviation and the length normalization together; its single-factor ablations separate them but without repeats, and no statistical test is reported (<a href="https://arxiv.org/abs/2503.20783">2503.20783</a>). Tricks or Traps finds removing the group standard deviation helps on easy data and is neutral on hard data, and recommends group-mean centering with a batch-level standard deviation (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>). In agentic training, LOOP found that dividing by the standard deviation cost several points on AppWorld (<a href="https://arxiv.org/abs/2502.01600">2502.01600</a>). <span class="grade grade-d">D</span> for direction. All of these are what the decomposition predicts: easy-heavy data is where up-weighting easy prompts hurts.</p>
+
+        <p><strong>Practice has moved.</strong> OLMo 3 states it uses no standard-deviation normalization (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>). Magistral, Kimi and GLM-4.5's agentic stage subtract a mean only. DeepSeek-V3.2's advantage formula has no standard deviation, although its text says "normalizing" (<a href="https://arxiv.org/abs/2512.02556">2512.02556</a>). ScaleRL, AReaL and REINFORCE++ use a batch-level standard deviation instead.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Group std normalization (GRPO)</td><td>No effect</td><td>Direction depends on data</td><td>Amplifies easy prompts and small groups</td><td>Objective becomes Σ 2·arcsin√p</td><td><span class="grade grade-a">A</span> ceiling · <span class="grade grade-d">D</span> direction</td></tr>
+            <tr><td>Batch std normalization</td><td>≈ group std</td><td>≈</td><td>Possibly steadier gradient scale</td><td>Leaves the objective almost unchanged</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Asymmetric up-weighting of hard prompts only (max-likelihood, pass@k)</td><td>Pass@k gains reported</td><td>—</td><td>—</td><td>Pass@1 effect unclear</td><td><span class="grade grade-c">C</span></td></tr>
+          </tbody>
+        </table>
+
+        <h4>What's mathematically interesting</h4>
+
+        <p>Every normalization rule is a choice of concave transform F of per-prompt pass rates, and the literature has been arguing about estimators when it should have been arguing about F. Σp maximizes the expected score. Σ log p is the maximum-likelihood objective, which refuses to give up on any prompt. Σ 1 − (1−p)<sup>k</sup> optimizes coverage at k samples. GRPO's Σ 2·arcsin√p has no such interpretation; it is a variance-stabilizing transform of a Bernoulli rate, inherited from dividing by a standard deviation. Which F best serves pass@1 after training, given that RL also changes which prompts are solvable, is an open question with a clean formulation (<a href="#open">open questions</a>).</p>
       </section>

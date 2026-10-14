@@ -902,6 +902,13 @@
     table.verdict { display: block; overflow-x: auto; }
     table.verdict td, table.verdict th { min-width: 96px; }
   }
+  table.map td.sym, table.map th.sym { text-align: center; font-size: 15px; width: 52px; }
+  table.map th.sym { font-size: 12px; }
+  table.map td.sym-up { color: #026e57; font-weight: 700; }
+  table.map td.sym-down { color: #b42318; font-weight: 700; }
+  table.map td.sym-mixed { color: #b85c00; }
+  table.map td.sym-none, table.map td.sym-na { color: #959396; }
+  table.map td:first-child { width: auto; }
   aside.note.draft { border-left-color: var(--text-muted); color: var(--text-muted); }
 </style>
 </head>
@@ -1257,25 +1264,190 @@
       <section id="axes">
         <h2>Eight design axes worth judging</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> One verdict map for every axis, then one subsection per axis: what the knob changes, the mechanism, the controlled evidence, the verdict, and what is mathematically interesting.</aside>
+        <p>The next eight subsections take the slots of <a href="#skeleton">the skeleton</a> one at a time. Each follows the same template: what the knob changes, written as a formula; the mechanism; the controlled evidence, filtered through <a href="#tension">the four confounders</a>; a verdict on ceiling, efficiency, stability and side effects with an evidence grade; and what is mathematically interesting. The map below collects the headline verdicts so the overall shape is visible before the details.</p>
+
+        <figure>
+          <table class="verdict map">
+            <thead>
+              <tr><th>Axis</th><th>Change</th><th>Verdict</th><th class="sym">Ceiling</th><th class="sym">Effic.</th><th class="sym">Stability</th><th>Grade</th></tr>
+            </thead>
+            <tbody>
+            <tr><td class="nowrap"><a href="#advantage">①</a></td><td>λ = 1 in PPO for long chains of thought</td><td>required</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td class="nowrap"><a href="#advantage">①</a></td><td>Tuned critic vs group baseline</td><td>same ceiling; critic costs more</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td class="nowrap"><a href="#normalization">②</a></td><td>Group std normalization</td><td>changes the objective, not the ceiling</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-a">A</span> <span class="grade grade-d">D</span></td></tr>
+            <tr><td class="nowrap"><a href="#aggregation">③</a></td><td>Remove the 1/|y| length factor</td><td>removes a length bias</td><td class="sym sym-na">—</td><td class="sym sym-mixed">◐</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td class="nowrap"><a href="#trust-region">④</a></td><td>Ratio clipping when reusing samples</td><td>required once N &gt; 1</td><td class="sym sym-na">—</td><td class="sym sym-up">↑</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td class="nowrap"><a href="#trust-region">④</a></td><td>Clip-higher</td><td>raises entropy; score gain varies</td><td class="sym sym-mixed">◐</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-b">B</span> <span class="grade grade-d">D</span></td></tr>
+            <tr><td class="nowrap"><a href="#trust-region">④</a></td><td>CISPO or GSPO instead of PPO-clip</td><td>rankings conflict</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td class="nowrap"><a href="#kl-entropy">⑤</a></td><td>Drop the KL to the starting model</td><td>safe with verifiable rewards</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td class="nowrap"><a href="#kl-entropy">⑤</a></td><td>Fixed entropy bonus</td><td>inert or explosive</td><td class="sym sym-none">○</td><td class="sym sym-none">○</td><td class="sym sym-down">↓</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td class="nowrap"><a href="#kl-entropy">⑤⑥</a></td><td>Several optimizer steps per batch</td><td>collapses entropy</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td class="nowrap"><a href="#off-policy">⑥</a></td><td>Remove train–inference mismatch at source</td><td>beats every correction tested</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td class="nowrap"><a href="#off-policy">⑥</a></td><td>Routing replay for MoE</td><td>prevents off-policy collapse</td><td class="sym sym-up">↑</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td class="nowrap"><a href="#off-policy">⑥</a></td><td>Token-level TIS alone</td><td>delays collapse at best</td><td class="sym sym-none">○</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td class="nowrap"><a href="#data-sampling">⑦</a></td><td>Larger batch; longer generation budget</td><td>raise the asymptote</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td class="nowrap"><a href="#data-sampling">⑦</a></td><td>Zero-variance and difficulty filtering</td><td>efficiency and stability</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td class="nowrap"><a href="#data-sampling">⑦</a></td><td>Overlong masking or penalty</td><td>depends on the length budget</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td class="nowrap"><a href="#reward">⑧</a></td><td>High-precision verifier</td><td>first-order</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td class="nowrap"><a href="#reward">⑧</a></td><td>Label-free rewards</td><td>sharpen a strong prior, then fail</td><td class="sym sym-mixed">◐</td><td class="sym sym-na">—</td><td class="sym sym-down">↓</td><td><span class="grade grade-b">B</span> <span class="grade grade-d">D</span></td></tr>
+            </tbody>
+          </table>
+          <figcaption><span class="fig-label">Figure 3.</span> Headline verdicts per axis. ↑ helps, ↓ hurts, ◐ mixed or contested, ○ no measurable effect, — not studied. Grades: <span class="grade grade-a">A</span> several independent controlled studies, <span class="grade grade-b">B</span> one controlled study or a clear mechanism, <span class="grade grade-c">C</span> originating paper only, <span class="grade grade-d">D</span> contradictory evidence. Two grades mean two different claims about the same change. Side effects are listed in each axis's own table.</figcaption>
+        </figure>
+
+        <p>Three things stand out on the map.</p>
+        <ul>
+          <li><strong>Few changes move the ceiling, and none of them is a new loss.</strong> The up-arrows in the ceiling column are batch size, generation length, removing train–inference mismatch, routing replay on MoE, and a verifier that cannot be fooled. Most are about the quality of the estimate or the data, not the form of the objective.</li>
+          <li><strong>The A grades are mostly about not breaking training.</strong> λ = 1, one step per batch, no fixed entropy bonus, routing replay: each says "do not make the estimator something other than what it claims to be."</li>
+          <li><strong>The surrogate axis is where the D grades cluster.</strong> That is what <a href="#skel-identity">the r ≡ 1 identity</a> predicts: those methods only differ off-policy, and papers rarely report how off-policy they were.</li>
+        </ul>
       </section>
 
       <section id="advantage">
         <h3>① Advantage and baseline</h3>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Critic vs critic-free; RLOO = Dr. GRPO × G/(G−1); GAE with λ = 1 is required for long CoT; the critic's benefit is cost, not ceiling.</aside>
+        <p>The advantage slot decides how a response's reward is turned into a learning signal: which baseline is subtracted, and whether a learned critic supplies it. It is the oldest axis — PPO with a value network against REINFORCE-style methods — and the one where the evidence is most settled. Once the basics are right, the choice of estimator barely moves the final score. What it does move is cost, and, for PPO, whether training works at all.</p>
+
+        <h4>What the knob changes</h4>
+
+        <p>Almost every critic-free estimator in use has the form Â<sub>i</sub> = (r<sub>i</sub> − b(x)) · w(x): a per-prompt baseline b and a per-prompt scale w. The baseline keeps the gradient unbiased only if it does not depend on the response it is subtracted from. A group mean includes r<sub>i</sub> itself, which shrinks the advantage by a factor (G−1)/G; leave-one-out removes it. The two are therefore the same estimator up to a constant: RLOO's advantage is exactly Dr. GRPO's times G/(G−1), as Dr. GRPO's appendix derives (<a href="https://arxiv.org/abs/2503.20783">2503.20783</a>). ReMax subtracts the reward of the greedy response instead (<a href="https://arxiv.org/abs/2310.10505">2310.10505</a>). That is unbiased, but with binary rewards it gives a correct sample zero signal on every prompt the greedy decode already solves. The scale w is <a href="#normalization">axis ②</a>.</p>
+
+        <p>PPO's critic works differently. Generalized advantage estimation (GAE) mixes the critic's value predictions with observed rewards, controlled by λ. With an outcome reward at the last token T, the reward reaches token t only through a factor λ<sup>T−t</sup>. For λ = 0.95 and a chain of thought a few thousand tokens long, the early tokens receive essentially nothing from the reward; their advantage is whatever the critic says. At λ = γ = 1 the advantage is simply R − V(s<sub>t</sub>): the critic becomes a state-dependent baseline, and its only job is variance reduction.</p>
+
+        <p>VAPO's length-adaptive λ = 1 − 1/(αℓ) with α = 0.05 sits in between (<a href="https://arxiv.org/abs/2504.05118">2504.05118</a>). For a response of ℓ = 8,000 tokens, λ ≈ 0.9975, an effective horizon of about 400 tokens; the final reward reaches the first token with weight λ<sup>8000</sup> ≈ e<sup>−20</sup>. So for long responses, VAPO's early-token advantages come almost entirely from the critic's bootstrapped values. That makes it a genuinely critic-dependent estimator, unlike PPO at λ = 1. (The arithmetic is ours.)</p>
+
+        <h4>Evidence</h4>
+
+        <p><strong>λ = 1 for long chains of thought.</strong> Four independent sources agree. The RLOO paper found λ = 1 best for PPO on Anthropic HH (<a href="https://arxiv.org/abs/2402.14740">2402.14740</a>). DeepSeek-R1's appendix reports PPO with λ = 0.95 well below GRPO and PPO with λ = 1.0 close to it (<a href="https://arxiv.org/abs/2501.12948">2501.12948</a>). Open-Reasoner-Zero trains PPO with λ = γ = 1 and reports that λ = 0.95 led to collapsing response length (<a href="https://arxiv.org/abs/2503.24290">2503.24290</a>). In its 8k-context ablations, VC-PPO lifts vanilla PPO from 5.6 to 41.9 on AIME, largely by decoupling the critic's λ from the actor's (<a href="https://arxiv.org/abs/2503.01491">2503.01491</a>). <span class="grade grade-a">A</span></p>
+
+        <p><strong>Critic versus critic-free.</strong> Here the original papers and the independent comparisons disagree.</p>
+        <ul>
+          <li>VAPO reports 60.4 on AIME 2024 against 50 for DAPO from the same team. But its PPO baseline sits on the failing configuration above — λ = 0.95 and a critic initialized from the reward model (<a href="#case-weak-baseline">case study</a>).</li>
+          <li>GenAC changes only the advantage estimator under a shared PPO-style loss on Qwen3-8B-Base for about 200 steps. GRPO, RLOO and VC-PPO land at 50.2, 49.9 and 50.4; over three seeds, VC-PPO 50.9 against GRPO 50.0. Value-based estimators learn faster early, and the gap shrinks with training. Per iteration, GRPO costs about 0.6× PPO and VinePPO about 4.3×. All methods share one hyperparameter setting (<a href="https://arxiv.org/abs/2604.10701">2604.10701</a>).</li>
+          <li>On Qwen2.5-Math-7B, a minimalist comparison puts REINFORCE at 53.9, PPO 52.5, GRPO 56.3 and rejection-filtered REINFORCE 56.4, and attributes GRPO's edge mainly to discarding prompts whose responses are all wrong or all right (<a href="https://arxiv.org/abs/2504.11343">2504.11343</a>).</li>
+          <li>Yue et al. reimplemented six algorithms (PPO, GRPO, REINFORCE++, RLOO, ReMax, DAPO) in one framework and found them close to each other (<a href="https://arxiv.org/abs/2504.13837">2504.13837</a>).</li>
+        </ul>
+        <p>The reading that fits all four: a properly configured critic buys early sample efficiency and costs memory and compute; it does not raise the ceiling of single-turn RLVR. Critic-free methods win on cost and on having fewer ways to be misconfigured. Frontier reports have converged accordingly. DeepSeek, Kimi, Qwen, MiniMax, Magistral and OLMo 3 all report critic-free group baselines; ByteDance Seed is the main exception. The case for a critic is stronger in multi-turn agents, where single-paper results exist (<a href="#agentic">agentic RL</a>).</p>
+
+        <p><strong>Newer estimators</strong> — optimal-baseline, quantile, Kalman and maximum-likelihood variants of 2025–2026 — change b or w and report gains in their own papers only <span class="grade grade-c">C</span>. Their real content is usually the implicit objective they choose, which is the subject of the next axis.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PPO with λ = 1 instead of 0.95</td><td>Decisive against the broken setting</td><td>—</td><td>λ &lt; 1 collapses response length</td><td>Length</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td>Critic not initialized from the reward model; value pre-training</td><td>Decisive within PPO</td><td>—</td><td>Prevents early collapse</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Tuned PPO vs GRPO or RLOO (single-turn RLVR)</td><td>Interchangeable</td><td>Critic faster early</td><td>—</td><td>Critic adds memory and compute</td><td><span class="grade grade-d">D</span> original claims · interchangeable in independent tests</td></tr>
+            <tr><td>RLOO vs Dr. GRPO</td><td>Identical up to a constant</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-a">A</span> algebra</td></tr>
+            <tr><td>ReMax greedy baseline</td><td>≈ others</td><td>Saves memory vs PPO</td><td>—</td><td>Wastes signal with binary rewards</td><td><span class="grade grade-c">C</span></td></tr>
+            <tr><td>2025–26 estimators (optimal, quantile, Kalman, max-likelihood)</td><td>Own gains</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
+          </tbody>
+        </table>
+
+        <h4>What's mathematically interesting</h4>
+
+        <p>The estimator debate reduces to one parameter: how much of the advantage at token t comes from observed reward and how much from a learned prediction. At λ = 1 the critic contributes only variance reduction, so it cannot bias the gradient and cannot raise the ceiling, which matches the evidence. At λ &lt; 1 the critic contributes bias, and a poorly initialized critic contributes it exactly where the long chain of thought begins. The interesting regime, which nobody has tested cleanly, is the middle one: a critic good enough that bootstrapping helps credit assignment within a long response, rather than merely reducing variance across responses.</p>
       </section>
 
       <section id="normalization">
         <h3>② Normalization: std changes the objective, not the ceiling</h3>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Prompt weights w(p) as implicit objectives: Σp, Σ 2·arcsin√p, Σ log p, pass@k.</aside>
+        <p>GRPO divides each advantage by the standard deviation of its group's rewards. Dr. GRPO removes that division; REINFORCE++ and ScaleRL divide by a batch-wide standard deviation instead. The debate over which is right has produced contradictory ablations. The contradiction resolves once you see what the division does: it does not make the gradient more accurate, it changes which objective the gradient ascends.</p>
+
+        <h4>What the knob changes</h4>
+
+        <p>With a binary reward, a prompt x with pass rate p<sub>x</sub> contributes ∇p<sub>x</sub> / s(p<sub>x</sub>) to the expected update, where s is the scale the advantage is divided by (<a href="#pattern-weighting">pattern 2</a>). Each rule therefore ascends Σ<sub>x</sub> F(p<sub>x</sub>) for the F with F′ = 1/s:</p>
+
+        <table>
+          <thead>
+            <tr><th>Rule</th><th>Weight on a prompt, w(p) = 1/s(p)</th><th>Objective ascended</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>RLOO, Dr. GRPO, batch std</td><td>constant</td><td>Σ p, the expected pass rate</td></tr>
+            <tr><td>GRPO (group std)</td><td>1/√(p(1−p))</td><td>Σ 2·arcsin√p</td></tr>
+            <tr><td>Scale ∝ p (maximum-likelihood weighting)</td><td>≈ 1/p</td><td>≈ Σ log p</td></tr>
+            <tr><td>Pass@k training</td><td>k(1−p)<sup>k−1</sup></td><td>Σ 1 − (1−p)<sup>k</sup></td></tr>
+          </tbody>
+        </table>
+
+        <figure>
+          <img src="diagrams/04-prompt-weights.svg" alt="Relative weight on a prompt as a function of its pass rate for four normalization rules: flat for RLOO and Dr. GRPO, U-shaped for GRPO, decreasing for maximum-likelihood weighting and steeply decreasing for pass@8.">
+          <figcaption><span class="fig-label">Figure 4.</span> The weight each rule puts on a prompt, as a function of the prompt's pass rate. GRPO's group standard deviation up-weights both ends: hard prompts, which other rules also favour, and easy prompts, which no other rule does.</figcaption>
+        </figure>
+
+        <p>MaxRL's practical weight, (1 − (1−p)<sup>T</sup>)/p with T samples per prompt, approaches 1/p as T grows (<a href="https://arxiv.org/abs/2602.02710">2602.02710</a>). Two consequences follow. First, a batch-level standard deviation is one scalar per step; it rescales the whole gradient and leaves the relative weight of prompts unchanged. Under Adam, which normalizes gradient scale anyway, its effect should be small, acting only through gradient clipping, the optimizer's ε, and how quickly its moment estimates adapt. Second, GRPO's group standard deviation is really two changes at once. It up-weights hard prompts (small p), as maximum-likelihood and pass@k weighting do on purpose. It also up-weights easy prompts (p near 1), which nobody argues for. A concrete case: in a group of eight with one success, GRPO gives the success an advantage of about +2.5 to +2.6, depending on whether the standard deviation divides by G or G−1, against +0.875 without the division. After zero-variance groups are filtered out, the worst case is p = 1/G, where the weight grows like √G.</p>
+
+        <h4>Evidence</h4>
+
+        <p><strong>On the final score, the division does not matter.</strong> ScaleRL found prompt-level, batch-level and no normalization "similar" and chose batch-level as slightly better (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>). Magistral saw no significant effect on evaluation or on length growth (<a href="https://arxiv.org/abs/2506.10910">2506.10910</a>). The minimalist comparison found little gain beyond discarding all-wrong prompts (<a href="https://arxiv.org/abs/2504.11343">2504.11343</a>). <span class="grade grade-a">A</span> for "does not move the ceiling".</p>
+
+        <p><strong>On efficiency and stability, the direction depends on the data.</strong> Dr. GRPO's three-run comparison removes the standard deviation and the length normalization together; its single-factor ablations separate them but without repeats, and no statistical test is reported (<a href="https://arxiv.org/abs/2503.20783">2503.20783</a>). Tricks or Traps finds removing the group standard deviation helps on easy data and is neutral on hard data, and recommends group-mean centering with a batch-level standard deviation (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>). In agentic training, LOOP found that dividing by the standard deviation cost several points on AppWorld (<a href="https://arxiv.org/abs/2502.01600">2502.01600</a>). <span class="grade grade-d">D</span> for direction. All of these are what the decomposition predicts: easy-heavy data is where up-weighting easy prompts hurts.</p>
+
+        <p><strong>Practice has moved.</strong> OLMo 3 states it uses no standard-deviation normalization (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>). Magistral, Kimi and GLM-4.5's agentic stage subtract a mean only. DeepSeek-V3.2's advantage formula has no standard deviation, although its text says "normalizing" (<a href="https://arxiv.org/abs/2512.02556">2512.02556</a>). ScaleRL, AReaL and REINFORCE++ use a batch-level standard deviation instead.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Group std normalization (GRPO)</td><td>No effect</td><td>Direction depends on data</td><td>Amplifies easy prompts and small groups</td><td>Objective becomes Σ 2·arcsin√p</td><td><span class="grade grade-a">A</span> ceiling · <span class="grade grade-d">D</span> direction</td></tr>
+            <tr><td>Batch std normalization</td><td>≈ group std</td><td>≈</td><td>Possibly steadier gradient scale</td><td>Leaves the objective almost unchanged</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Asymmetric up-weighting of hard prompts only (max-likelihood, pass@k)</td><td>Pass@k gains reported</td><td>—</td><td>—</td><td>Pass@1 effect unclear</td><td><span class="grade grade-c">C</span></td></tr>
+          </tbody>
+        </table>
+
+        <h4>What's mathematically interesting</h4>
+
+        <p>Every normalization rule is a choice of concave transform F of per-prompt pass rates, and the literature has been arguing about estimators when it should have been arguing about F. Σp maximizes the expected score. Σ log p is the maximum-likelihood objective, which refuses to give up on any prompt. Σ 1 − (1−p)<sup>k</sup> optimizes coverage at k samples. GRPO's Σ 2·arcsin√p has no such interpretation; it is a variance-stabilizing transform of a Bernoulli rate, inherited from dividing by a standard deviation. Which F best serves pass@1 after training, given that RL also changes which prompts are solvable, is an open question with a clean formulation (<a href="#open">open questions</a>).</p>
       </section>
 
       <section id="aggregation">
         <h3>③ Loss aggregation and the 1/|y| length bias</h3>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Per-token weights under four aggregation modes, and why the empirical direction flips between base and aligned models.</aside>
+        <p>Aggregation decides how per-token losses are summed into one number, and so how much each token counts relative to the others. It looks like bookkeeping. One choice, dividing each response's loss by its own length, has a clear and documented side effect on response length. The rest of the empirical record on this axis is contradictory.</p>
+
+        <h4>What the knob changes</h4>
+
+        <table>
+          <thead>
+            <tr><th>Mode</th><th>Weight per token</th><th>Consequence</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Sequence mean of token means (original GRPO; forced by GSPO and SAPO)</td><td>1/(G·|y<sub>i</sub>|)</td><td>Every response counts equally, whatever its length</td></tr>
+            <tr><td>Token mean over a group or batch (DAPO, verl's <code>token-mean</code>)</td><td>1/Σ<sub>j</sub>|y<sub>j</sub>|</td><td>Every token counts equally; long responses carry more total weight</td></tr>
+            <tr><td>Sequence mean of token sums</td><td>1/G</td><td>No length division; gradient variance grows with length</td></tr>
+            <tr><td>Constant normalizer (Dr. GRPO)</td><td>1/(G·L<sub>max</sub>)</td><td>No length dependence; the constant folds into the learning rate</td></tr>
+          </tbody>
+        </table>
+
+        <p>The 1/|y<sub>i</sub>| in the first mode is what creates the bias. For a correct response, a shorter one gets a larger update per token. For an incorrect one, a longer response is penalized less per token. So the loss quietly favours short correct answers and long wrong ones, and incorrect responses drift longer over training (<a href="https://arxiv.org/abs/2503.20783">Dr. GRPO, 2503.20783</a>). Qwen's analysis of stable RL gives the same conclusion from another direction: the token-level objective is a first-order approximation of the sequence-level reward, and dividing by length breaks that approximation (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>).</p>
+
+        <p>"Token-level" is also not one thing. DAPO's formula normalizes by the total tokens within each prompt's group, which ScaleRL classifies as a prompt-level average. verl's <code>token-mean</code> normalizes by the valid tokens in each PPO mini-batch, summed across data-parallel workers. When prompts differ in typical response length, these give different weights to different prompts.</p>
+
+        <h4>Evidence</h4>
+
+        <ul>
+          <li>DAPO's token-level loss adds one point (41 → 42), inside the evaluation band (<a href="#tension-noise">Figure 2</a>).</li>
+          <li>Tricks or Traps, on Qwen3-8B, finds token-level aggregation better for base models and sequence-level better for instruction-tuned models (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>).</li>
+          <li>ScaleRL's prompt-level average had the highest asymptote in the isolated comparison, but removing it in the leave-one-out runs kept the asymptote within noise (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>).</li>
+          <li>GLM-4.5 reports token-weighted averaging as highly beneficial for code RL; the evidence is a figure from a smaller experimental model, showing faster convergence to a similar endpoint (<a href="https://arxiv.org/abs/2508.06471">2508.06471</a>).</li>
+          <li>MiniMax-M1 describes combining a sample-level loss with token-level normalization in its length-scaling stage, without giving the formula (<a href="https://arxiv.org/abs/2506.13585">2506.13585</a>).</li>
+        </ul>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Remove 1/|y<sub>i</sub>| (token-level or constant)</td><td>Unresolved</td><td>Possibly better on base models</td><td>Steadier lengths</td><td>Wrong answers stop drifting longer</td><td><span class="grade grade-b">B</span> mechanism · <span class="grade grade-d">D</span> "token-level is better"</td></tr>
+            <tr><td>Prompt-level average (ScaleRL)</td><td>Highest alone, within noise in LOO</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
+          </tbody>
+        </table>
+
+        <h4>What's mathematically interesting</h4>
+
+        <p>Aggregation is the one axis where the right answer follows from the objective rather than from experiments. If the goal is the expected sequence reward, the policy gradient is Σ<sub>t</sub> R · ∇log π(y<sub>t</sub>), a sum over tokens with no length factor. Any 1/|y| weight is a departure from that objective, and its sign of bias is predictable. The constant normalizer of Dr. GRPO is the only mode that is exactly the policy gradient up to a learning-rate constant. The empirical flips between base and aligned models then look less like evidence for one mode and more like interactions with other parts of the recipe, such as length budgets and truncation (<a href="#data-sampling">axis ⑦</a>).</p>
       </section>
 
       <section id="trust-region">
@@ -1345,7 +1517,62 @@
       <section id="kl-entropy">
         <h3>⑤ KL and entropy regularization</h3>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Gradients of the k1/k2/k3 estimators; anchor KL vs proximal KL; entropy dynamics and the collapse caused by off-policy SGD reuse.</aside>
+        <p>Step 6 of the skeleton adds terms that are not driven by reward: a KL penalty that holds the policy near a reference, and sometimes an entropy bonus that keeps it from becoming deterministic. Both were standard in RLHF. Both have been largely dropped in reasoning RL. Whether that is safe depends on two distinctions the literature often blurs: which KL estimator is used and how, and whether the reference is the starting model or a recent copy of the policy.</p>
+
+        <h4>KL estimators have different gradients</h4>
+
+        <p>Write δ = π<sub>ref</sub>/π<sub>θ</sub> for a sampled token. Three per-token estimators of KL(π<sub>θ</sub>‖π<sub>ref</sub>) are common: k1 = −log δ, k2 = ½(log δ)², and k3 = δ − 1 − log δ. All three are reasonable estimates of the KL's <em>value</em>. Their <em>gradients</em> differ, because differentiating an estimator through the loss drops the score-function term that the true gradient contains (<a href="https://arxiv.org/abs/2506.09477">Tang &amp; Munos, 2506.09477</a>; <a href="https://arxiv.org/abs/2510.01555">2510.01555</a>):</p>
+
+        <table>
+          <thead>
+            <tr><th>Usage</th><th>Expected gradient</th><th>Verdict</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>k1 as a loss term</td><td>E[∇log π<sub>θ</sub>] = 0</td><td>Zero-mean noise; no regularization at all</td></tr>
+            <tr><td>k3 as a loss term (GRPO's choice)</td><td>∇KL(π<sub>ref</sub>‖π<sub>θ</sub>), the KL in the opposite direction</td><td>Biased relative to the stated objective</td></tr>
+            <tr><td>k2 as a loss term</td><td>∇KL(π<sub>θ</sub>‖π<sub>ref</sub>) on-policy</td><td>Correct</td></tr>
+            <tr><td>k1 subtracted from the reward</td><td>∇KL(π<sub>θ</sub>‖π<sub>ref</sub>) on-policy</td><td>Correct (the RLHF convention)</td></tr>
+          </tbody>
+        </table>
+
+        <p>Off-policy, the loss-term forms also need an importance weight, which is often omitted; DeepSeek-V3.2 multiplies k3 by π<sub>θ</sub>/π<sub>old</sub> for this reason (<a href="https://arxiv.org/abs/2512.02556">2512.02556</a>). When the policy stays near the reference, δ ≈ 1 and the differences shrink: in a low-KL run on an 8B Llama 3 model on MATH, k3 as a loss tracked the correct gradient closely, while k1 as a loss was the least effective at controlling KL. Far from the reference, the choice decides the outcome: in 70B-to-8B on-policy distillation, k3 as a loss made little progress. (The papers name the estimators differently; we use the common k1/k2/k3 labels throughout.) Framework defaults mostly avoid the worst case. verl and slime ship with the KL loss off, and OpenRLHF and AReaL put k1 in the reward. But slime's default estimator, once the KL loss is switched on, is k1 — the form that does nothing — and SkyRL enables a k3 loss by default (<a href="#pitfalls">pitfalls</a>).</p>
+
+        <h4>Anchor KL and proximal KL are different tools</h4>
+
+        <p><strong>A KL to the starting model</strong> limits how far training can move. For verifiable-reward reasoning, the evidence says that limit hurts or does nothing. Skywork-OR1 added a KL with β = 10<sup>−3</sup> in its second stage and AIME24 stopped improving; every released model uses β = 0 (<a href="https://arxiv.org/abs/2505.22312">2505.22312</a>). The Entropy Mechanism paper found a reference KL stabilized entropy but lowered performance (<a href="https://arxiv.org/abs/2505.22617">2505.22617</a>). DAPO, Magistral, GLM-4.5, MiniMax-M1, ScaleRL, OLMo 3 and JustRL all drop it, mostly without an ablation. <span class="grade grade-b">B</span></p>
+
+        <p><strong>A KL to a recent policy</strong> is a proximal term, closer in spirit to a trust region. The systems that keep a KL all use it this way. DeepSeek-R1 uses k3 with β = 0.001 and replaces the reference with the current policy every 400 steps (<a href="https://arxiv.org/abs/2501.12948v2">2501.12948, v2</a>; the first arXiv version omits these details). ProRL resets both the reference and the optimizer whenever validation stalls (<a href="https://arxiv.org/abs/2505.24864">2505.24864</a>). Kimi k1.5 regularizes toward the previous iterate rather than the SFT model, with a KL term that its surrogate loss implements as a squared log-ratio (<a href="https://arxiv.org/abs/2501.12599">2501.12599</a>). None of them ablates the term away. One study found a small KL term stabilized asynchronous training on Countdown that was unstable without it, while another task in the same paper did best with no KL (<a href="https://arxiv.org/abs/2512.21852">2512.21852</a>). Whether proximal KL helps long or asynchronous runs is therefore open <span class="grade grade-c">C</span>.</p>
+
+        <p><strong>With a learned reward model, the anchor still matters.</strong> InstructGPT used a KL coefficient of 0.02 and found the optimum around 0.01–0.02 (<a href="https://arxiv.org/abs/2203.02155">2203.02155</a>). In a careful PPO replication, two 1B runs that drifted to a KL of about 50 and 85 scored higher on the RLHF reward, yet a judge preferred them over the human reference summaries less than 20% of the time (<a href="https://arxiv.org/abs/2403.17031">2403.17031</a>). Gao et al. fit gold reward as d(α − β log d) with d = √KL, and found the KL penalty acts like early stopping: it moves a run along the curve rather than improving the curve (<a href="https://arxiv.org/abs/2210.10760">2210.10760</a>). The anchor's job is to stop the policy from exploiting a reward model it can fool; a rule-based verifier is harder to fool, which is why the anchor is dispensable there.</p>
+
+        <h4>Entropy: what drives it down, and what does not hold it up</h4>
+
+        <p>For a softmax policy, one step of vanilla policy gradient changes entropy by approximately −η · Cov(log π, π · Â) over the tokens at a state (<a href="https://arxiv.org/abs/2505.22617">2505.22617</a>). Entropy falls when the tokens that are already likely also have high advantage, so a policy that is mostly right on easy prompts sharpens fastest. Three findings follow from this, and they are among the best-supported on any axis:</p>
+        <ul>
+          <li><strong>Reusing a batch for several optimizer steps collapses entropy.</strong> Skywork-OR1 and AceReason each found that more than one update per batch collapses entropy — in AceReason, two or four updates did so around step 100 — and that a single update avoids it (<a href="https://arxiv.org/abs/2505.22312">2505.22312</a>, <a href="https://arxiv.org/abs/2505.16400">2505.16400</a>). Magistral saw performance degrade beyond two minibatches per batch. <span class="grade grade-a">A</span> This is the same off-policy dial as <a href="#off-policy">axis ⑥</a>, seen from the entropy side.</li>
+          <li><strong>A fixed entropy bonus does not fix it.</strong> In the Entropy Mechanism paper, small coefficients did nothing and larger ones made entropy explode, with no setting beating the baseline. Magistral saw entropy fall on math data and explode on math plus code under the same bonus, and switched to adjusting ε<sub>high</sub>. Skywork-OR1 replaced the fixed bonus with an adaptive one that switches on only when entropy drops below a target. <span class="grade grade-a">A</span> for the negative result.</li>
+          <li><strong>Low sampling temperature collapses it.</strong> At temperature 0.6, Skywork-OR1's entropy fell to near zero within about a hundred steps. <span class="grade grade-b">B</span></li>
+        </ul>
+        <p>Whether entropy predicts the final score is contested. The Entropy Mechanism paper fits reward as −a·e<sup>H</sup> + b, which implies a ceiling once entropy is spent. ScaleRL finds runs with nearly identical entropy trajectories reaching very different scores (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>). <span class="grade grade-d">D</span></p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Drop the KL to the starting model (verifiable rewards)</td><td>Dropping it does not hurt; keeping it may cap</td><td>Saves the reference forward pass</td><td>—</td><td>Possibly more forgetting</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Proximal KL or periodic reference reset</td><td>?</td><td>—</td><td>May help long or async runs (untested)</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
+            <tr><td>KL with a learned reward model</td><td>Interior optimum</td><td>—</td><td>Prevents over-optimization, like early stopping</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>k3-as-loss vs k2-as-loss or k1-in-reward</td><td>Same at low KL</td><td>—</td><td>k3 biased at high KL</td><td>—</td><td><span class="grade grade-b">B</span> math</td></tr>
+            <tr><td>Fixed entropy bonus</td><td>None</td><td>None</td><td>Explodes or does nothing</td><td>Strongly data-dependent</td><td><span class="grade grade-a">A</span> negative</td></tr>
+            <tr><td>Several optimizer steps per batch</td><td>Lower at fixed budget</td><td>Faster per sample</td><td>Entropy collapse</td><td>Hidden off-policyness</td><td><span class="grade grade-a">A</span> collapse</td></tr>
+            <tr><td>Adaptive entropy control, covariance-based clipping</td><td>Own gains</td><td>—</td><td>—</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
+          </tbody>
+        </table>
+
+        <h4>What's mathematically interesting</h4>
+
+        <p>Two things. The KL estimator story is a clean example of a general trap: an unbiased estimator of a quantity is not, in general, a loss whose gradient is an unbiased estimator of the quantity's gradient. The fix is either to put the estimate into the reward, where the score-function term is supplied automatically, or to choose an estimator whose pathwise gradient happens to be right. And the entropy covariance formula explains why the two strongest results on this axis are the same result. Reusing a batch for several steps, and running at a low temperature, both raise the covariance between a token's current probability and its advantage. The first does it by letting the policy chase the same advantages repeatedly, the second by sampling mostly the tokens that are already likely.</p>
       </section>
 
       <section id="off-policy">
@@ -1432,13 +1659,114 @@
       <section id="data-sampling">
         <h3>⑦ Data and sampling</h3>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Batch size and generation length move the asymptote; filtering, group size and truncation handling mostly do not.</aside>
+        <p>Step 1 of the skeleton decides what the update gets to see: which prompts, how many responses each, how long they may run, and what happens to the ones that are cut off. These choices sit outside the loss, so they rarely get algorithm names. They include two of the very few changes with measured effects on the asymptote, and several of the most contested tricks in the 2025 recipes.</p>
+
+        <h4>What moves the asymptote</h4>
+
+        <p>In ScaleRL's fits, two sampling choices clearly move A beyond its ±0.02 noise band (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>):</p>
+        <ul>
+          <li><strong>Batch size.</strong> Batches of 512, 768 and 2,048 prompts give A ≈ 0.605, 0.610 and 0.645 (read from a figure). Small batches look better early and are overtaken later, with nearly identical per-step entropy.</li>
+          <li><strong>Generation length.</strong> Raising the budget from 14k to 32k tokens lifts A from 0.610 to 0.645, while the compute needed to reach the curve's midpoint grows 4.4-fold (C<sub>mid</sub> 2,542 → 11,272). This is the clearest case of trading efficiency for ceiling in the literature.</li>
+        </ul>
+        <p>Group size is second-order: at fixed total batch, groups of 8, 16, 24 and 32 responses per prompt give A = 0.585, 0.610, 0.590 and 0.595, a spread just beyond the noise band with no trend. <span class="grade grade-b">B</span> for all three.</p>
+
+        <h4>Filtering: worth it for stability and efficiency</h4>
+
+        <p>A group in which every response gets the same reward has zero advantage everywhere and contributes no gradient. Under token-mean normalization it still counts in the denominator, so it silently shrinks the effective step size by an amount that varies from batch to batch. Dynamic sampling and zero-variance filtering remove such groups and refill the batch, which keeps the effective sample count fixed.</p>
+        <ul>
+          <li>DAPO's dynamic sampling adds 8 AIME points, the largest single increment in its table, and DAPO notes it reaches the same performance in fewer steps without much change in wall-clock time (<a href="https://arxiv.org/abs/2503.14476">2503.14476</a>).</li>
+          <li>ScaleRL's main text credits zero-variance filtering with a higher asymptote, but its own leave-one-out run keeps A within noise without it.</li>
+          <li>JustRL reaches strong 1.5B results with no filtering at all (<a href="https://arxiv.org/abs/2512.16649">2512.16649</a>), and a 2025 study on Countdown found dynamic sampling unnecessary, in a figure (<a href="https://arxiv.org/abs/2512.07611">2512.07611</a>).</li>
+          <li>Refilling has a cost that depends on group size and model strength: one study measured 41% of samples surviving the filter at 16 responses per prompt and 62% at 512 (<a href="https://arxiv.org/abs/2510.01180">BroRL, 2510.01180</a>).</li>
+        </ul>
+        <p>Filtering by difficulty — dropping prompts the model already solves, or keeping a hard subset — follows the same logic, since a prompt's gradient signal is proportional to p(1−p). AceReason's hard subset beat its full set by a few points in a single run (<a href="https://arxiv.org/abs/2505.16400">2505.16400</a>), and frontier reports nearly all filter this way. Difficulty labels from eight samples are noisy, though, so the filter is coarse. Verdict: <span class="grade grade-b">B</span> for stability and efficiency; <span class="grade grade-d">D</span> for accuracy gains.</p>
+
+        <h4>Truncation and length: contested</h4>
+
+        <p>When a response hits the length cap, what should its reward be? DAPO masks truncated responses out of the loss and adds a soft penalty near the limit, worth +6 and +3 points in its table. Every later test disagrees with some part of that.</p>
+        <ul>
+          <li>Tricks or Traps finds overlong filtering helps clearly at an 8k cap and much less at 20k (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>).</li>
+          <li>JustRL found that adding DAPO's overlong penalty made AIME24 plateau about five points lower and collapsed entropy.</li>
+          <li>OLMo 3 found overlong filtering gave no consistent improvement (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>).</li>
+          <li>Skywork-OR1 describes the effect of masking truncated responses as a form of reward hacking, found no gain from masking at a 32k budget, and does not mask (<a href="https://arxiv.org/abs/2505.22312">2505.22312</a>).</li>
+        </ul>
+        <p>The reading that fits: masking truncated responses removes a noisy negative signal when the length budget is tight, and removes the only penalty on runaway length when it is not. One robust result is a diagnostic rather than a fix: in ScaleRL, truncation rates in the range of 10–15% preceded instability. <span class="grade grade-d">D</span> for truncation handling, <span class="grade grade-b">B</span> for truncation rate as a warning signal.</p>
+
+        <p>Length curricula — training short first, then long — split the same way. Skywork-OR1 and AceReason used them; GLM-4.5 found a single 64k stage better and multi-stage training irreversibly worse (<a href="https://arxiv.org/abs/2508.06471">2508.06471</a>), and Polaris found a curriculum hurt Qwen3-4B. Sampling temperature splits too: Polaris raises it during training while Kimi K2 lowers it. Both are <span class="grade grade-d">D</span> and probably depend on the base model.</p>
+
+        <h4>How much data</h4>
+
+        <p>Small curated sets go a long way on Qwen-Math. LIMR's 1,389 selected prompts slightly beat its full 8,523 (<a href="https://arxiv.org/abs/2502.11886">2502.11886</a>), and one-shot RLVR trains Qwen2.5-Math to large gains from a single example (<a href="https://arxiv.org/abs/2504.20571">2504.20571</a>). On Llama-3.2-3B the same one-shot recipe barely moves the six-benchmark average (17.5 → 19.0). Read with <a href="#pattern-sharpening">pattern 3</a>, this is what to expect if a few examples are mainly eliciting a strong prior. <span class="grade grade-b">B</span> on Qwen-Math, <span class="grade grade-d">D</span> in general.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Larger batch</td><td>Raises A</td><td>Slower early</td><td>Steadier</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Longer generation budget</td><td>Raises A</td><td>Much more compute to midpoint</td><td>—</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Group size at fixed batch</td><td>Second-order</td><td>Hardware-dependent</td><td>—</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Zero-variance filtering, dynamic sampling</td><td>Neutral in LOO</td><td>Fewer steps</td><td>Steadier effective batch</td><td>Refill cost depends on G</td><td><span class="grade grade-b">B</span> · accuracy <span class="grade grade-d">D</span></td></tr>
+            <tr><td>Difficulty filtering</td><td>Weak or unknown</td><td>Fewer steps</td><td>—</td><td>Forgetting of easy skills untested</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Overlong masking or penalty</td><td>No gain</td><td>Helps at short caps</td><td>Interacts with length budget</td><td>Masking can invite length hacking</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>Length curriculum</td><td>Depends on base</td><td>Saves compute</td><td>Irreversible drops in some reports</td><td>—</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>Small curated datasets</td><td>Unchanged on Qwen-Math</td><td>—</td><td>Unstable on Llama</td><td>—</td><td><span class="grade grade-b">B</span> Qwen-Math · <span class="grade grade-d">D</span> general</td></tr>
+          </tbody>
+        </table>
+
+        <h4>What's mathematically interesting</h4>
+
+        <p>Batch size and generation length move the asymptote; most loss changes do not. Both act on the estimator's inputs rather than its form. A larger batch lowers gradient variance per step, which lets training continue productively where a noisier estimator would stall. A longer budget enlarges the set of responses the policy can produce at all. That suggests the ceiling in pass@1 is set less by how the gradient is computed than by how much the policy is allowed to explore and how cleanly each step is estimated — consistent with the variance-and-support view developed in <a href="#what-rl-changes">the layer beneath the loss</a>.</p>
       </section>
 
       <section id="reward">
         <h3>⑧ Reward signal and verifiers</h3>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Verifier precision over recall; unsupervised rewards sharpen and then collapse; rubric rewards.</aside>
+        <p>Step 2 decides what the policy is actually optimized for. In verifiable-reward RL the reward is a checker — usually rule-based answer matching, sometimes a learned verifier — and the usual assumption is that it is correct. It is not, and its two kinds of error have very different consequences. This axis also covers rewards that carry no information about correctness at all, and rubric rewards for tasks without a single right answer.</p>
+
+        <h4>Verifier errors are asymmetric</h4>
+
+        <p>A verifier can reject a correct answer (a false negative) or accept a wrong one (a false positive). False negatives waste signal. False positives are a target: the optimizer finds and amplifies whatever the verifier wrongly accepts.</p>
+        <ul>
+          <li><strong>False negatives are common and fixable.</strong> In one study, rule-based verifiers had precision above 99% but average recall of 86%, and a popular math checker recalled only 47% of correct answers on WebInstruct (<a href="https://arxiv.org/abs/2505.22203">2505.22203</a>). TinyV found 38.5% of the answers marked wrong in a verified math dataset were in fact correct, and that adding a small verifier only for rejected answers raised average scores by about 2.6–2.8 points, mostly on the authors' own hard-to-verify benchmark (<a href="https://arxiv.org/abs/2505.14625">2505.14625</a>).</li>
+          <li><strong>False positives get exploited.</strong> In the same verifier study, a trained 1.5B generative verifier was hacked during RL: the policy learned to output a single "{" or gibberish that the verifier accepted, and training collapsed. A discriminative verifier was rarely fooled.</li>
+        </ul>
+        <p>Frontier data practice reflects this asymmetry. Kimi k1.5 excludes multiple-choice, true/false and proof questions, and any question a model can guess without reasoning (<a href="https://arxiv.org/abs/2501.12599">2501.12599</a>). DeepSeek-R1 uses no neural reward model for reasoning because of reward hacking, and adds preference rewards only in the final steps of its last stage (<a href="https://arxiv.org/abs/2501.12948">2501.12948</a>). <span class="grade grade-b">B</span>: precision is first-order, recall is a cheap efficiency gain.</p>
+
+        <h4>Rewards without labels</h4>
+
+        <p>Several 2025 methods train with no correctness signal: minimizing the policy's own entropy, rewarding its self-certainty, or rewarding agreement with its own majority vote. Their results follow <a href="#pattern-sharpening">pattern 3</a> closely. They help on models with a strong prior and fail elsewhere.</p>
+        <ul>
+          <li>Entropy minimization matches labeled GRPO and comes close to labeled RLOO on Qwen2.5-7B, but barely moves Llama-3.1-8B, which supervised RL improves substantially (<a href="https://arxiv.org/abs/2505.15134">2505.15134</a>).</li>
+          <li>Test-time RL with majority-vote rewards raised Mistral-Nemo's scores on AMC and MATH-500 by 9–10 points while driving its AIME 2024 score from 0.8 to 0 (<a href="https://arxiv.org/abs/2504.16084">TTRL, 2504.16084</a>). That is the sharpening signature: it helps where the model's mode is usually right and hurts where it is not.</li>
+          <li>An offline self-certainty reward was hacked by appending already-solved problems to the answer (<a href="https://arxiv.org/abs/2505.19590">2505.19590</a>).</li>
+        </ul>
+        <p><span class="grade grade-b">B</span> for "sharpens a strong prior, then fails"; <span class="grade grade-d">D</span> for "competitive with supervised RL" as a general claim. Random and spurious rewards belong to the same family and get <a href="#case-spurious">their own case study</a>.</p>
+
+        <h4>Rubrics and judges</h4>
+
+        <p>For tasks without a checkable answer, a judge model scores responses against a rubric. Rubrics as Rewards lifts HealthBench scores well above a simple Likert-scale judge (<a href="https://arxiv.org/abs/2507.17746">2507.17746</a>). Two caveats limit what this shows. Part of the gain comes from giving the judge a reference answer, and HealthBench is itself graded by rubric, so training and evaluation share a format. <span class="grade grade-c">C</span>. Judges also inherit the hacking problem above: anything a judge rewards that a human would not becomes a target, which is why the reward-model anchor of <a href="#kl-entropy">axis ⑤</a> stays necessary here.</p>
+
+        <h4>Which ceiling the reward can raise</h4>
+
+        <p>Even a perfect verifier raises only one of the two ceilings in <a href="#tension-ceiling">the measurement section</a>. On Omni-MATH, GRPO lifted pass@1 sharply while pass@256 fell slightly; on AIME24 at k = 1,024, some problems were solved only by the base model and none only by the RL model (<a href="https://arxiv.org/abs/2504.13837">Yue et al., 2504.13837</a>). Prolonged RL can expand coverage where the base model is weak (<a href="https://arxiv.org/abs/2505.24864">ProRL</a>). <a href="#what-rl-changes">The layer beneath the loss</a> takes up this debate in full.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>High-precision verifier; exclude guessable and unverifiable items</td><td>Protects it</td><td>—</td><td>Prevents verifier hacking</td><td>—</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Fix false negatives (second-pass verifier)</td><td>Small gains</td><td>More signal per batch</td><td>—</td><td>Extra verifier calls</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Learned generative verifier as the reward</td><td>—</td><td>—</td><td>Hacked</td><td>Degenerate outputs</td><td><span class="grade grade-b">B</span> negative</td></tr>
+            <tr><td>Label-free rewards (entropy, self-certainty, majority vote)</td><td>Up to the prior's mode</td><td>—</td><td>Rise then collapse</td><td>Hackable</td><td><span class="grade grade-b">B</span> limits · <span class="grade grade-d">D</span> general</td></tr>
+            <tr><td>Rubric or judge rewards</td><td>Own gains</td><td>—</td><td>—</td><td>Shares format with rubric-graded evaluations</td><td><span class="grade grade-c">C</span></td></tr>
+          </tbody>
+        </table>
+
+        <h4>What's mathematically interesting</h4>
+
+        <p>A verifier error rate is not a noise level; it is a bias with a direction. Uniform label noise on a binary reward scales the expected gradient down without changing its direction, since a false negative rate α and a false positive rate β turn p into (1−α−β)p + β. Errors that depend on the response are different: they add a gradient toward whatever the verifier misjudges, and RL amplifies it. This is the same structure as <a href="#pattern-proxy">pattern 5</a>. The useful quantity is not the verifier's accuracy on a test set but its accuracy on the responses the policy will learn to produce.</p>
       </section>
 
       <section id="what-rl-changes">
