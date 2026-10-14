@@ -2,5 +2,35 @@
       <section id="case-dapo-table">
         <h2>Case study — re-reading DAPO's ablation table against the noise floor</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Cumulative ablations, order dependence, and single-seed lower bounds.</aside>
+        <p>DAPO's Table 1 is probably the most-cited ablation in 2025 LLM RL. It starts from GRPO on Qwen2.5-32B at 30 AIME24 points and adds five components one at a time, ending at 50. The setup is 512 prompts with 16 responses each per rollout step, responses up to 16k tokens plus a 4k penalty zone, 16 gradient updates per rollout step, and AIME24 averaged over 32 samples (<a href="https://arxiv.org/abs/2503.14476">2503.14476</a>). Four of the five became defaults in open frameworks within months. The table establishes that the full recipe works. It cannot establish that each component does, and the later literature shows why that difference matters.</p>
+
+        <h3 id="dapo-rows">The table, row by row</h3>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Row added</th><th class="num">AIME24</th><th class="num">Δ</th><th>Above the evaluation band?</th><th>What later evidence says</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Naive GRPO</td><td class="num">30</td><td class="num">—</td><td>—</td><td>Baseline; below DeepSeek's own R1-Zero-Qwen-32B (47)</td><td>—</td></tr>
+            <tr><td>+ Overlong filtering</td><td class="num">36</td><td class="num">+6</td><td>Yes</td><td>Helps at short caps, fades at long ones; no consistent gain in OLMo 3; masking invites reward hacking in Skywork-OR1</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>+ Clip-higher</td><td class="num">38</td><td class="num">+2</td><td>No</td><td>Raises entropy reliably; score effect depends on model and staleness</td><td><span class="grade grade-b">B</span> · <span class="grade grade-d">D</span></td></tr>
+            <tr><td>+ Soft overlong punishment</td><td class="num">41</td><td class="num">+3</td><td>No</td><td>Lowered AIME24 and collapsed entropy in JustRL</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>+ Token-level loss</td><td class="num">42</td><td class="num">+1</td><td>No</td><td>Sound length-bias mechanism; empirical direction flips between base and aligned models</td><td><span class="grade grade-b">B</span> · <span class="grade grade-d">D</span></td></tr>
+            <tr><td>+ Dynamic sampling</td><td class="num">50</td><td class="num">+8</td><td>Yes</td><td>Steadier effective batch, fewer steps; unnecessary in JustRL and on Countdown</td><td><span class="grade grade-b">B</span> · accuracy <span class="grade grade-d">D</span></td></tr>
+          </tbody>
+        </table>
+
+        <p>The "evaluation band" is the ±4.6-point bound from <a href="#tension-noise">Figure 2</a>: the worst-case two-standard-deviation noise in the difference between two AIME24 scores, each averaged over 32 samples per problem. It covers only evaluation sampling. Training-seed variance, which DAPO does not report, would widen it.</p>
+
+        <h3 id="dapo-problems">Three structural problems</h3>
+
+        <ol>
+          <li><strong>One run per row.</strong> No row reports seeds or error bars, so even the increments that clear the evaluation band have an unknown training-seed error. Three of the five sit inside the band.</li>
+          <li><strong>The order is fixed.</strong> Each increment is measured given every row above it. Components interact — the ScaleRL case study shows a component that raises the ceiling when added to a weak recipe and does nothing when removed from a strong one (<a href="#case-scalerl">previous case study</a>). Added in a different order, the same five components could have produced a very different-looking table, and no one-at-a-time or leave-one-out version exists. VAPO, from the same team a month later, did ablate one component at a time and repeated its runs three times, so the better design was within reach.</li>
+          <li><strong>The headline compares against a different run.</strong> DAPO's abstract compares its 50 with DeepSeek's R1-Zero-Qwen-32B at 47, trained elsewhere with a different setup. The internal baseline, naive GRPO at 30, is far below that, which says the naive baseline was weak, not that each component recovered a specific share of the gap.</li>
+        </ol>
+
+        <h3 id="dapo-lesson">The lesson</h3>
+
+        <p>A cumulative, single-run table supports exactly one claim: the final recipe reaches the final number in that setting. Every per-row claim needs independent evidence, and for DAPO that evidence arrived over the following year. Two components held up as efficiency or stability tools (dynamic sampling, the entropy effect of clip-higher). The two length-handling components became the most contested items in later recipes. JustRL reached comparable results at 1.5B without most of them (<a href="https://arxiv.org/abs/2512.16649">2512.16649</a>). None of this makes DAPO a bad paper — it released a working recipe, code and data — but its table is a recipe, not a set of findings, and it should be read as one.</p>
       </section>

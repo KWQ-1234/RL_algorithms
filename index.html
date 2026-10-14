@@ -1820,13 +1820,13 @@
 
         <p>Qwen2.5-Math is the most common base model in 2025 RL papers and the most responsive to almost anything (<a href="#tension-base">measurement section</a>). The same model scores 0.0 to 38.2 depending only on the prompt template. Random rewards improve it by 21.4 points on MATH-500, close to the 29.1 from true rewards. It reproduces the rest of a MATH-500 problem from a 60% prefix 54.6% of the time, against 3.8% for Llama-3.1-8B. On a freshly generated arithmetic benchmark it could not have memorized, random and incorrect rewards stop helping while correct rewards still do (<a href="https://arxiv.org/abs/2507.10532">2507.10532</a>).</p>
 
-        <p>The mechanism behind the random-reward gain is contested. The original paper attributes it to clipping, which biases updates toward behaviour the model already prefers, here writing Python to reason, and reports that disabling clipping removes the gain (<a href="https://arxiv.org/abs/2506.10947">2506.10947</a>). A 2025 follow-up bounds the clipping term, in one Qwen-Math setting, at less than a seventeenth of the raw learning signal, finds that disabling clipping often helps, and attributes the gain to an entropy-minimizing effect instead (<a href="https://arxiv.org/abs/2512.16912">2512.16912</a>). Both accounts are forms of sharpening, which is why they predict the same thing: gains appear where the model's preferred behaviour is already good, and vanish on clean benchmarks and other model families. <a href="#case-spurious">The case study</a> follows this in detail.</p>
+        <p>The mechanism behind the random-reward gain is contested. The original paper attributes it to clipping, which biases updates toward behaviour the model already prefers, here writing Python to reason, and reports that disabling clipping removes the gain (<a href="https://arxiv.org/abs/2506.10947">2506.10947</a>). A 2025 follow-up bounds the clipping term, in one Qwen-Math setting, at less than a seventeenth of the raw learning signal, finds that disabling clipping often helps, rejects entropy minimization as a sufficient explanation, and proposes that random rewards simply damage stronger models less (<a href="https://arxiv.org/abs/2512.16912">2512.16912</a>). Both accounts predict the same thing: gains appear where the model's preferred behaviour is already good, and vanish on clean benchmarks and other model families. <a href="#case-spurious">The case study</a> follows this in detail.</p>
 
         <h3 id="base-transfer">What does not transfer</h3>
 
         <p>Several 2025 results that look like algorithmic discoveries on Qwen fail on other families.</p>
         <ul>
-          <li>Random and spurious rewards: large gains on Qwen2.5-Math, little or none on Llama3 and OLMo2.</li>
+          <li>Random and spurious rewards: large gains on Qwen2.5-Math, losses on Llama3.1-8B-Instruct and OLMo2-7B.</li>
           <li>One-shot RLVR: large gains on Qwen2.5-Math from a single training example; on Llama-3.2-3B the six-benchmark average moves from 17.5 to 19.0 (<a href="https://arxiv.org/abs/2504.20571">2504.20571</a>).</li>
           <li>Entropy minimization with no labels: competitive with supervised RL on Qwen2.5-7B, nearly flat on Llama-3.1-8B (<a href="https://arxiv.org/abs/2505.15134">2505.15134</a>).</li>
           <li>Recipe components: in one controlled study on Qwen3, the better aggregation mode and the usefulness of clip-higher flipped between the base and the instruction-tuned model (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>).</li>
@@ -2023,31 +2023,230 @@
       <section id="case-scalerl">
         <h2>Case study — ScaleRL: what a ceiling-vs-efficiency study can and cannot tell</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Protocol, sigmoid fits, leave-one-out design, and four internal contradictions.</aside>
+        <p>ScaleRL is the one study that tries to separate a recipe change's effect on the ceiling from its effect on speed (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>). Most verdicts on the ceiling in this survey lean on it. That makes it worth reading closely — both for what its design can establish and for the places where its own results disagree with each other. The disagreements turn out to teach the most.</p>
+
+        <h3 id="scalerl-design">The design</h3>
+
+        <p>Each training run's validation pass rate R is fitted against training compute C with a sigmoid,</p>
+        <div class="formula-display">R(C) = R<sub>0</sub> + (A − R<sub>0</sub>) / (1 + (C<sub>mid</sub> / C)<sup>B</sup>)</div>
+        <p>where A is the asymptote, B governs how steeply the curve rises, and C<sub>mid</sub> is the compute at which half the gain is reached. The experiments use an unnamed 8B dense model and Llama-4 Scout, a mixture-of-experts model, trained on the Polaris-53K math set, with 3.5–4k GB200 GPU-hours per single ablation, 16k per leave-one-out run, and up to 100k for the final recipe — more than 400k GPU-hours in total. Fitting on the first half of a 100k-hour run and extrapolating matched the second half, shown in a figure without an error figure. Two kinds of ablation are run:</p>
+        <ul>
+          <li><strong>Forward:</strong> start from a baseline and change one component at a time.</li>
+          <li><strong>Leave-one-out (LOO):</strong> start from the full final recipe and remove one component at a time.</li>
+        </ul>
+
+        <h3 id="scalerl-can">What it can establish</h3>
+
+        <ul>
+          <li><strong>A noise floor for A.</strong> Three repeated runs of the same recipe give asymptotes within ±0.015 of each other, and the authors recommend treating differences under ±0.02 as noise. This is rare: most papers report no run-to-run variance at all.</li>
+          <li><strong>Changes that clearly move A.</strong> Batch size (A ≈ 0.605 → 0.645 from 512 to 2,048 prompts), generation length (0.610 → 0.645 from 14k to 32k tokens, at 4.4× the compute to midpoint), and, against a DAPO-style baseline, computing the LM head in FP32 (0.52 → 0.61).</li>
+          <li><strong>Changes that only move efficiency.</strong> In LOO, removing any single component of the final recipe leaves A within the noise band. The differences show up in B: swapping CISPO for the DAPO loss lowers B from 2.01 to 1.77.</li>
+        </ul>
+
+        <h3 id="scalerl-cannot">What it cannot establish</h3>
+
+        <p><strong>A is extrapolated.</strong> The asymptote lies beyond the compute actually spent. A 2026 study fitting the same kind of curves found a log-linear form, with no asymptote at all, "often nearly indistinguishable" from the sigmoid over the fitted range (<a href="https://arxiv.org/abs/2610.04158">2610.04158</a>). And a run that becomes unstable and stops improving fits as a run with a low asymptote. ScaleRL reports that several baseline configurations became unstable after a few thousand GPU-hours, so some "low A" readings may be instability.</p>
+
+        <p><strong>Its own results disagree in four places.</strong></p>
+        <table>
+          <thead>
+            <tr><th>Component</th><th>One place says</th><th>Another place says</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Off-policy algorithm (PipelineRL vs PPO-off-policy)</td><td>Abstract and §3.1: mainly efficiency, similar asymptote</td><td>Appendix A.11: shifts the asymptote, "one of the most consequential design decisions"</td></tr>
+            <tr><td>Zero-variance filtering, No-Positive-Resampling</td><td>Main text: higher asymptote (figures)</td><td>LOO: removing them keeps A within ±0.02</td></tr>
+            <tr><td>Loss type (CISPO, GSPO vs DAPO)</td><td>Forward comparison: higher A</td><td>LOO: A within noise; only B changes</td></tr>
+            <tr><td>FP32 LM head</td><td>Forward, on a DAPO-style loss: A 0.52 → 0.61</td><td>Full recipe on the dense 8B: "little difference"; helps on Scout</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="scalerl-lesson">The lesson: forward and leave-one-out answer different questions</h3>
+
+        <p>Three of the four disagreements have the same shape: a component raises A in a forward ablation and not in LOO. That is not necessarily an error. A forward ablation asks what a component adds to a weak recipe. LOO asks what it adds to a strong one. If components fix overlapping weaknesses — FP32 logits and CISPO both reduce the damage from noisy ratios, for example — each one looks decisive when added alone and redundant when removed from the full set. The ceiling effect belongs to the weakness, not to any one fix.</p>
+
+        <p>Two reading rules follow for any ablation in this literature:</p>
+        <ul>
+          <li><strong>Ask which kind of ablation it is.</strong> A forward ablation against a weak baseline overstates a component's marginal value in a mature recipe. Cumulative tables like DAPO's (<a href="#case-dapo-table">next case study</a>) are forward ablations whose baseline changes at every row.</li>
+          <li><strong>Trust "efficiency only" more than "raises the ceiling".</strong> The first is a statement about observed compute; the second depends on an extrapolation that a competing functional form fits equally well. This is the asymmetric rule of <a href="#tension-ceiling">the measurement section</a>, and ScaleRL is where it comes from.</li>
+        </ul>
       </section>
 
       <section id="case-dapo-table">
         <h2>Case study — re-reading DAPO's ablation table against the noise floor</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Cumulative ablations, order dependence, and single-seed lower bounds.</aside>
+        <p>DAPO's Table 1 is probably the most-cited ablation in 2025 LLM RL. It starts from GRPO on Qwen2.5-32B at 30 AIME24 points and adds five components one at a time, ending at 50. The setup is 512 prompts with 16 responses each per rollout step, responses up to 16k tokens plus a 4k penalty zone, 16 gradient updates per rollout step, and AIME24 averaged over 32 samples (<a href="https://arxiv.org/abs/2503.14476">2503.14476</a>). Four of the five became defaults in open frameworks within months. The table establishes that the full recipe works. It cannot establish that each component does, and the later literature shows why that difference matters.</p>
+
+        <h3 id="dapo-rows">The table, row by row</h3>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Row added</th><th class="num">AIME24</th><th class="num">Δ</th><th>Above the evaluation band?</th><th>What later evidence says</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Naive GRPO</td><td class="num">30</td><td class="num">—</td><td>—</td><td>Baseline; below DeepSeek's own R1-Zero-Qwen-32B (47)</td><td>—</td></tr>
+            <tr><td>+ Overlong filtering</td><td class="num">36</td><td class="num">+6</td><td>Yes</td><td>Helps at short caps, fades at long ones; no consistent gain in OLMo 3; masking invites reward hacking in Skywork-OR1</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>+ Clip-higher</td><td class="num">38</td><td class="num">+2</td><td>No</td><td>Raises entropy reliably; score effect depends on model and staleness</td><td><span class="grade grade-b">B</span> · <span class="grade grade-d">D</span></td></tr>
+            <tr><td>+ Soft overlong punishment</td><td class="num">41</td><td class="num">+3</td><td>No</td><td>Lowered AIME24 and collapsed entropy in JustRL</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>+ Token-level loss</td><td class="num">42</td><td class="num">+1</td><td>No</td><td>Sound length-bias mechanism; empirical direction flips between base and aligned models</td><td><span class="grade grade-b">B</span> · <span class="grade grade-d">D</span></td></tr>
+            <tr><td>+ Dynamic sampling</td><td class="num">50</td><td class="num">+8</td><td>Yes</td><td>Steadier effective batch, fewer steps; unnecessary in JustRL and on Countdown</td><td><span class="grade grade-b">B</span> · accuracy <span class="grade grade-d">D</span></td></tr>
+          </tbody>
+        </table>
+
+        <p>The "evaluation band" is the ±4.6-point bound from <a href="#tension-noise">Figure 2</a>: the worst-case two-standard-deviation noise in the difference between two AIME24 scores, each averaged over 32 samples per problem. It covers only evaluation sampling. Training-seed variance, which DAPO does not report, would widen it.</p>
+
+        <h3 id="dapo-problems">Three structural problems</h3>
+
+        <ol>
+          <li><strong>One run per row.</strong> No row reports seeds or error bars, so even the increments that clear the evaluation band have an unknown training-seed error. Three of the five sit inside the band.</li>
+          <li><strong>The order is fixed.</strong> Each increment is measured given every row above it. Components interact — the ScaleRL case study shows a component that raises the ceiling when added to a weak recipe and does nothing when removed from a strong one (<a href="#case-scalerl">previous case study</a>). Added in a different order, the same five components could have produced a very different-looking table, and no one-at-a-time or leave-one-out version exists. VAPO, from the same team a month later, did ablate one component at a time and repeated its runs three times, so the better design was within reach.</li>
+          <li><strong>The headline compares against a different run.</strong> DAPO's abstract compares its 50 with DeepSeek's R1-Zero-Qwen-32B at 47, trained elsewhere with a different setup. The internal baseline, naive GRPO at 30, is far below that, which says the naive baseline was weak, not that each component recovered a specific share of the gap.</li>
+        </ol>
+
+        <h3 id="dapo-lesson">The lesson</h3>
+
+        <p>A cumulative, single-run table supports exactly one claim: the final recipe reaches the final number in that setting. Every per-row claim needs independent evidence, and for DAPO that evidence arrived over the following year. Two components held up as efficiency or stability tools (dynamic sampling, the entropy effect of clip-higher). The two length-handling components became the most contested items in later recipes. JustRL reached comparable results at 1.5B without most of them (<a href="https://arxiv.org/abs/2512.16649">2512.16649</a>). None of this makes DAPO a bad paper — it released a working recipe, code and data — but its table is a recipe, not a set of findings, and it should be read as one.</p>
       </section>
 
       <section id="case-weak-baseline">
         <h2>Case study — anatomy of a vanishing 10-point gain</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> VC-PPO / VAPO vs GenAC: the baseline PPO sat on a known bad configuration.</aside>
+        <p>In early 2025, ByteDance Seed reported that value-based PPO, properly fixed, beats critic-free methods by about ten AIME points. VC-PPO and then VAPO reported large margins over GRPO and DAPO. A year later, a comparison that changed only the advantage estimator found the gap gone. Tracing how a ten-point gain can be real in one setup and absent in another is a compact lesson in what a baseline is for.</p>
+
+        <h3 id="weak-claims">The claims</h3>
+
+        <ul>
+          <li><strong>VC-PPO</strong> starts from vanilla PPO at 5.6 on AIME in its 8k-context ablations. Pre-training the value network lifts it to 29.4; decoupling the critic's λ from the actor's lifts it further to 41.9. At 16k context, VC-PPO reports 48.8 against GRPO's 38.9 (<a href="https://arxiv.org/abs/2503.01491">2503.01491</a>).</li>
+          <li><strong>VAPO</strong> reports 60.4 on AIME24 against 50 for DAPO from the same team; its vanilla PPO baseline scores 5 (<a href="https://arxiv.org/abs/2504.05118">2504.05118</a>).</li>
+          <li><strong>Seed1.5-Thinking</strong> repeats the comparison at scale: VAPO beats DAPO on a 150B mixture-of-experts model, 79 against 73 (<a href="https://arxiv.org/abs/2504.13914">2504.13914</a>).</li>
+        </ul>
+
+        <h3 id="weak-baseline">What the baseline was</h3>
+
+        <p>The vanilla PPO both papers start from uses GAE with λ = 0.95 and a critic initialized from the reward model. Both choices are known to fail for long chains of thought (<a href="#advantage">axis ①</a>). With λ = 0.95, the final reward reaches a token t positions earlier only through a factor 0.95<sup>t</sup>: about 6·10<sup>−3</sup> after 100 tokens, essentially zero after a few hundred. Early tokens are trained on the critic's opinion alone. And a critic initialized from a reward model was trained only to score complete responses at their last token; its values on early, partial responses are biased. The two failures compound exactly where a long chain of thought begins.</p>
+
+        <p>VAPO's own one-component-at-a-time ablation, reported with three repeated runs, makes this visible. Removing value pre-training drops it from 60 to 11; removing the decoupled GAE drops it to 33; each remaining component costs 5 to 15 points. So the improvements VC-PPO and VAPO report are, first, the repair of a broken PPO: moving from 5.6 to 29.4 by fixing the critic's initialization, and further by restoring λ = 1 for the critic. Whether the repaired PPO also beats a good critic-free method is a separate question, and the comparison against GRPO and DAPO within the same papers does not settle it, because the same team configured both arms.</p>
+
+        <h3 id="weak-genac">The controlled comparison</h3>
+
+        <p>GenAC changed only the advantage estimator, under one shared loss and one shared hyperparameter setting, on Qwen3-8B-Base for about 200 steps (<a href="https://arxiv.org/abs/2604.10701">2604.10701</a>). GRPO scored 50.2, RLOO 49.9 and VC-PPO 50.4; across three seeds, VC-PPO 50.9 against GRPO 50.0. The value-based estimator learned faster early, and the gap shrank as training continued. The ten points are gone.</p>
+
+        <p>The remaining tension is Seed1.5-Thinking's 79-against-73 on a 150B model, which a short 8B comparison cannot rule out. Three explanations fit: a critic matters more at larger scale or longer training; the Seed team's VAPO was tuned more thoroughly than its DAPO; or the large model differs in some other way. The available evidence does not separate them. <span class="grade grade-d">D</span> for "a critic beats critic-free methods".</p>
+
+        <h3 id="weak-lesson">The lesson</h3>
+
+        <ul>
+          <li><strong>Check the baseline against known failure modes.</strong> A baseline at 5 points when well-configured versions of the same method reach 30–50 is a broken baseline. Gains measured from it include the repair.</li>
+          <li><strong>Prefer comparisons that change one thing.</strong> Shared loss, shared hyperparameters, multiple seeds. GenAC's design is the template; its limitation is length and scale.</li>
+          <li><strong>Discount same-team comparisons of a new method against a rival.</strong> Not because of bad faith, but because the effort spent tuning each arm is invisible and rarely equal.</li>
+        </ul>
       </section>
 
       <section id="case-spurious">
         <h2>Case study — spurious rewards on Qwen2.5-Math</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> A robust phenomenon with a contested mechanism, and the controls it demands of every other paper.</aside>
+        <p>In mid-2025, Shao et al. showed that RL with random rewards — a coin flip per response, uncorrelated with correctness — improves Qwen2.5-Math-7B on MATH-500 by more than 20 points (<a href="https://arxiv.org/abs/2506.10947">2506.10947</a>). The result is robust. Its explanation is not. Together they make the clearest case in the literature for why every RL gain needs a control.</p>
+
+        <h3 id="spurious-phenomenon">The phenomenon</h3>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Reward used for RL on Qwen2.5-Math-7B</th><th class="num">MATH-500 gain (points)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Ground-truth correctness</td><td class="num">+29.1</td></tr>
+            <tr><td>Deliberately incorrect labels</td><td class="num">+24.1</td></tr>
+            <tr><td>Random</td><td class="num">+21.4</td></tr>
+            <tr><td>Format only</td><td class="num">+13.8</td></tr>
+          </tbody>
+        </table>
+
+        <p>What changes is the model's style. Before training, about 65% of its responses reason by writing Python; after random-reward training, up to 95.6% do, and responses that use code are far more accurate than ones that do not (60.9% against 28.0%). Random rewards also help the general Qwen2.5-7B (+16.4), but they <em>hurt</em> Llama3.1-8B-Instruct (−11.5) and OLMo2-7B (−8.3). <span class="grade grade-a">A</span> for the phenomenon on Qwen2.5-Math with MATH-500.</p>
+
+        <h3 id="spurious-mechanism">Two explanations</h3>
+
+        <p><strong>Clipping bias.</strong> With a random reward the expected advantage is zero, so the expected policy gradient is zero — unless something makes the update asymmetric. Shao et al. point to PPO-style clipping, which caps how far a token's probability can rise and so favours tokens that are already likely (<a href="#trust-region">axis ④</a>). They report that disabling clipping in three different ways removes the random-reward gain.</p>
+
+        <p><strong>Neither clipping nor entropy.</strong> A follow-up bounds the clipping term, in one Qwen-Math setting, at less than a seventeenth of the raw learning signal, and finds that disabling clipping often helps rather than hurts. It shows clipping acts as an implicit entropy minimizer, but also that entropy minimization alone does not produce the gains. Its own account is reward misalignment: random rewards damage a model less the stronger it already is. It observes random-reward gains on R1-Distill-Llama-8B too, while noting that model's lineage is itself contaminated on MATH-500 (<a href="https://arxiv.org/abs/2512.16912">2512.16912</a>). <span class="grade grade-d">D</span> for the mechanism.</p>
+
+        <h3 id="spurious-contamination">The memorization angle</h3>
+
+        <p>A third line of evidence explains why Qwen2.5-Math in particular. Given the first 60% of a MATH-500 problem, Qwen2.5-Math-7B reproduces the rest exactly 54.6% of the time, against 3.8% for Llama3.1-8B (<a href="https://arxiv.org/abs/2507.10532">2507.10532</a>). On a synthetic arithmetic benchmark generated after the model's release, correct rewards still help while random and incorrect rewards give no reliable gain. OLMo 3, with public and decontaminated pre-training data, ran random rewards as a negative control and saw no gain on any benchmark (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>).</p>
+
+        <h3 id="spurious-synthesis">One account that fits everything</h3>
+
+        <p>The following reading is ours, not either paper's. Whatever the precise mechanism, the training that follows a random reward concentrates probability on what the model already prefers — the code-writing shift is the visible sign. Such sharpening raises accuracy exactly when the model's preferred behaviour is better than its average behaviour (<a href="#pattern-sharpening">pattern 3</a>). On Qwen2.5-Math with MATH-500 it is, for two reasons: writing code is a strong strategy for this model, and many answers are partly memorized. On Llama, on OLMo, and on benchmarks the model has not seen, the preferred behaviour is not much better than average, and the gain disappears or reverses. The reading does not need to settle which mechanism produces the concentration, and it is consistent with the misalignment account's observation that stronger priors are damaged less.</p>
+
+        <h3 id="spurious-controls">The controls it demands</h3>
+
+        <p>Read in reverse, the case gives a checklist for any reported RL gain:</p>
+        <ul>
+          <li><strong>A random- or format-reward control.</strong> The gain above that control is the part attributable to the reward's information.</li>
+          <li><strong>A benchmark the model cannot have memorized</strong> — released after the model, or generated synthetically.</li>
+          <li><strong>A second model family.</strong> If the gain appears only on Qwen2.5-Math, it is at best a statement about Qwen2.5-Math.</li>
+          <li><strong>Pass@k curves alongside pass@1.</strong> Sharpening raises pass@1 without raising coverage (<a href="#what-rl-changes">what RL changes</a>).</li>
+        </ul>
+        <p>Few 2025 papers meet all four. Applied retroactively, the checklist would downgrade a large share of single-family results in this survey to <span class="grade grade-c">C</span>, which is where <a href="#checklist">the researcher's checklist</a> puts them.</p>
       </section>
 
       <section id="case-frontier">
         <h2>Case study — what frontier reports actually do</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> DeepSeek, Kimi, MiniMax, Magistral, OLMo 3, Qwen3, GLM: choices on each axis, ablated or merely declared.</aside>
+        <p>The previous case studies examined individual papers. This one reads the technical reports of thirteen frontier and open models across the eight axes and asks two questions. What do they agree on? And how much of what they do is backed by an ablation in the report itself, rather than declared? The answers line up with the verdict map closely enough to be a useful check on it (<a href="#axes">Figure 3</a>).</p>
+
+        <h3 id="frontier-table">The recipes, axis by axis</h3>
+
+        <p>Entries are taken from the reports' own text; "—" means the report does not say. Clip and coefficient values are often unreported, and an unreported value is not evidence of a default.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Report</th><th>Baseline (÷ group std?)</th><th>Clip / surrogate</th><th>KL to SFT model</th><th>Off-policy handling</th><th>Ablates its RL choices?</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>DeepSeek-R1</td><td>Group mean; ÷ std</td><td>PPO clip, ε = 10 in stage 1</td><td>β = 0.001, reference reset every 400 steps</td><td>16 minibatch updates per rollout</td><td>Yes: PPO vs GRPO on a smaller model</td></tr>
+            <tr><td>DeepSeek-V3.2</td><td>Group mean; no std</td><td>PPO clip</td><td>IS-corrected k3, near zero for math</td><td>Off-policy sequence masking, Keep Routing, Keep Sampling Mask</td><td>No</td></tr>
+            <tr><td>DeepSeek-V4</td><td>Group mean (specialists)</td><td>—</td><td>Final stage is on-policy distillation, not RL</td><td>FP4 rollout</td><td>No</td></tr>
+            <tr><td>Kimi k1.5</td><td>Group mean; no std</td><td>None; squared log-ratio term</td><td>No; regularizes toward previous iterate</td><td>Partial rollouts</td><td>Yes: negative gradients, curriculum</td></tr>
+            <tr><td>Kimi K2</td><td>Group mean; no std</td><td>None; squared log-ratio term</td><td>No; previous iterate</td><td>Synchronous, partial rollouts</td><td>No</td></tr>
+            <tr><td>Kimi K2.5</td><td>Group mean; no std</td><td>Token log-ratio mask</td><td>No; previous iterate</td><td>Recorded inference log-probabilities</td><td>Partial: length heuristic only</td></tr>
+            <tr><td>MiniMax-M1</td><td>Group mean; ÷ std</td><td>CISPO, upper bound only</td><td>None</td><td>16 updates per batch; FP32 LM head</td><td>Yes: CISPO vs DAPO vs GRPO</td></tr>
+            <tr><td>MiniMax-M2</td><td>—</td><td>CISPO</td><td>—</td><td>Asynchronous pool</td><td>No</td></tr>
+            <tr><td>Magistral</td><td>Group mean; minibatch normalization, no group std</td><td>Clip-higher, 0.26–0.3</td><td>None</td><td>Asynchronous, in-flight updates, ≤ 2 batches of lag</td><td>Yes: several</td></tr>
+            <tr><td>Qwen3</td><td>Group mean (GRPO)</td><td>—</td><td>—</td><td>"Off-policy training", no details</td><td>No</td></tr>
+            <tr><td>GLM-4.5</td><td>Group mean</td><td>—</td><td>None</td><td>FP8 rollout; async for agents</td><td>Yes, on a smaller proxy model</td></tr>
+            <tr><td>OLMo 3</td><td>Group mean; no std</td><td>Clip-higher, 0.2 / 0.272</td><td>None</td><td>Async, ≤ 8 steps of lag, truncated IS (cap 2)</td><td>Partial: active sampling</td></tr>
+            <tr><td>Seed1.5-Thinking</td><td><strong>Learned critic</strong></td><td>Clip-higher</td><td>—</td><td>Streaming rollout; FP8 rollout</td><td>Yes: VAPO vs DAPO</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:13px;color:var(--text-muted)">Source: each report's own text (<a href="https://arxiv.org/abs/2501.12948v2">R1 v2</a>, <a href="https://arxiv.org/abs/2512.02556">V3.2</a>, <a href="https://arxiv.org/abs/2606.19348">V4</a>, <a href="https://arxiv.org/abs/2501.12599">k1.5</a>, <a href="https://arxiv.org/abs/2507.20534">K2</a>, <a href="https://arxiv.org/abs/2602.02276">K2.5</a>, <a href="https://arxiv.org/abs/2506.13585">M1</a>, <a href="https://arxiv.org/abs/2605.26494">M2</a>, <a href="https://arxiv.org/abs/2506.10910">Magistral</a>, <a href="https://arxiv.org/abs/2505.09388">Qwen3</a>, <a href="https://arxiv.org/abs/2508.06471">GLM-4.5</a>, <a href="https://arxiv.org/abs/2512.13961">OLMo 3</a>, <a href="https://arxiv.org/abs/2504.13914">Seed1.5</a>).</p>
+
+        <h3 id="frontier-agree">What they agree on</h3>
+
+        <ul>
+          <li><strong>No critic.</strong> Eleven of thirteen use a critic-free group baseline; Seed1.5-Thinking is the only one with an explicit value model. This matches <a href="#advantage">axis ①</a>: a critic costs more and does not raise the ceiling in independent tests.</li>
+          <li><strong>No standard-deviation division by default.</strong> Only R1 and MiniMax-M1 keep it; the Kimi line never had it; V3.2, Magistral and OLMo 3 removed it. This matches <a href="#normalization">axis ②</a>.</li>
+          <li><strong>No KL anchor to the starting model.</strong> Removed in MiniMax-M1, Magistral, GLM-4.5 and OLMo 3; replaced by a proximal term toward the previous iterate in the Kimi line; kept small and periodically reset in R1; weakened to near zero for math in V3.2. This matches <a href="#kl-entropy">axis ⑤</a>.</li>
+          <li><strong>PPO clipping loosened or replaced</strong> — clip-higher, CISPO, a log-ratio mask, no clip at all, or R1's ε = 10. The variety is itself informative: on <a href="#trust-region">axis ④</a> the labs agree only that the default clip is not right, not on what replaces it.</li>
+          <li><strong>Explicit handling of train–inference mismatch</strong> in every report from the second half of 2025 onward: routing replay and masks (V3.2), an FP32 LM head (M1), recorded inference probabilities (K2.5), truncated importance sampling (OLMo 3), low-precision rollout designed in (V4). This matches <a href="#off-policy">axis ⑥</a>.</li>
+          <li><strong>Difficulty filtering or removal of zero-variance groups</strong> in essentially every report that describes its data, and <strong>length control</strong> in the reward or budget in most.</li>
+        </ul>
+
+        <h3 id="frontier-ablated">What is ablated and what is declared</h3>
+
+        <p>Six reports ablate some of their RL algorithm choices: Magistral most thoroughly (batch and minibatch size, advantage normalization, reward granularity, entropy bonus against clip-higher), MiniMax-M1 (its loss against DAPO's and GRPO's), GLM-4.5 (aggregation, length schedule and curriculum on a smaller proxy model), Kimi k1.5 (negative gradients, curriculum), Seed1.5-Thinking (VAPO against DAPO) and DeepSeek-R1 (PPO against GRPO on a smaller model). Three ablate one component or only systems choices. Four — DeepSeek-V3.2 and V4, Kimi K2, MiniMax-M2 — ablate none of their RL algorithm choices; V3.2's stability fixes in particular rest on qualitative statements.</p>
+
+        <p>The shared choices are, in other words, mostly the ones with good independent evidence, and the contested choices are mostly the ones each lab makes differently without ablating. That is reassuring about the field's direction and a caution about reading any one report as evidence: a choice that appears in a frontier recipe has passed that lab's internal tests, which are not published, at a scale nobody else can check.</p>
+
+        <h3 id="frontier-distill">The drift toward distillation</h3>
+
+        <p>One trend cuts across the table. DeepSeek-V4's final stage replaces mixed RL entirely with on-policy distillation from more than ten domain specialists, each trained with SFT and then GRPO. Qwen3 trains its small models by on-policy distillation from larger ones, GLM-4.5 finishes with self-distillation from expert RL models, and V3.2 distills specialists before its final mixed RL stage. RL still produces the specialists, but consolidating many skills into one model is increasingly done by distillation. That fits <a href="#what-rl-changes">what RL changes</a>: RL sharpens within a model's reach, and distillation moves what a stronger model can reach into a weaker one. On-policy distillation gets its own treatment in <a href="#beyond">beyond verifiable rewards</a>.</p>
+
+        <h3 id="frontier-caveats">Caveats</h3>
+
+        <ul>
+          <li>Reports describe recipes at the level their authors chose; silence on an axis means nothing.</li>
+          <li>DeepSeek-V4's arXiv identifier (2606.19348) is confirmed by the official model cards, though arXiv lists its first version as April 2026, which the identifier's prefix does not match.</li>
+          <li>Some entries are readings of equations rather than statements: R1's version 2 writes GRPO with sequence-level ratios and does not say how the loss is normalized; MiniMax-M2 describes its baseline only as computed per trajectory.</li>
+        </ul>
       </section>
 
       <section id="recent">

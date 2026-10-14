@@ -513,3 +513,8 @@
 - **BrowseComp 上下文管理：** GLM-5 表中是 62.0→75.9（55.3 是完全不做上下文处理）；三家增益为 14–16 点，不是 7–16。
 - **GiGPO 开销：** 论文写 <0.002%，按其自己的数字是约 0.15%。
 - **异步加速数字：** verl 1.6/2.35× 是数学 RL；SkyRL 1.55× 相对朴素异步；Kimi ≥1.5× 来自 turn-level partial rollout；MiniMax 40× 是训练端加速。
+- **Spurious Rewards 按模型：** 随机奖励 Qwen2.5-Math-7B +21.4、Qwen2.5-7B +16.4；Llama3.1-8B-Instruct −11.5、OLMo2-7B −8.3（是变差，不是"无效"）。v1 摘要未给机制，v2（2026-02，仍为预印本）才把 clipping bias 写入摘要。
+- **2512.16912 的解释不是 entropy minimization：** 它说 clipping 起隐式 entropy 最小化作用，但"entropy minimization alone is insufficient"；其解释是 reward misalignment（越强的模型受随机奖励伤害越小），并指出 distill Llama 的谱系有 MATH500 污染。
+- **ScaleRL A=0.610/B=1.92 是 batch 768 的标准运行；100k GPU-h 的 8B 运行是 batch 2048，A=0.645、B=1.70。8B 模型未具名。**
+- **VAPO：** 表中满分是 60（正文 60.4）；逐项消融并报告 3 次重复运行。
+- **DeepSeek-R1 v2：** 每次 rollout 16 个 minibatch 更新，同时 stage 1 的 ε = 10。DeepSeek-V4 终段是多教师 on-policy distillation，ID 2606.19348 由官方 HF 卡确认。
