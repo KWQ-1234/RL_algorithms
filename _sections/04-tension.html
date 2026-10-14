@@ -1,0 +1,97 @@
+
+      <section id="tension">
+        <h2>Why the estimator is not enough: the measurement problem</h2>
+
+        <p>The skeleton tells you what a method changes. It does not tell you whether the change helped. That judgement rests on a measurement, usually a benchmark score after training. In LLM RL that measurement is noisier, more confounded and less comparable across papers than the gains it is asked to detect. This section sizes the four confounders that matter most, then explains why "raises the ceiling" is the hardest claim of all to establish. Every verdict in the axis sections has been passed through both filters.</p>
+
+        <h3 id="tension-noise">Three layers of noise</h3>
+
+        <p>A reported score carries three kinds of variation. They have different causes, different sizes and different remedies, and papers rarely separate them.</p>
+
+        <p><strong>Evaluation sampling noise</strong> is the part you can compute. Take a fixed trained model that solves problem <code>j</code> with probability p<sub>j</sub>. Estimate pass@1 on <code>n</code> problems with <code>k</code> samples each. The estimate's variance is</p>
+
+        <div class="formula-display">Var = (1/n²) Σ<sub>j</sub> p<sub>j</sub>(1 − p<sub>j</sub>) / k  ≤  1 / (4nk)</div>
+
+        <p>AIME has n = 30 problems, so one problem is worth 3.3 points. The bound gives the following noise floor, as a worst case at p<sub>j</sub> = ½. It is the noise floor for comparing two models evaluated independently.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Samples per problem k</th><th class="num">Std of one score (pts)</th><th class="num">Std of a difference (pts)</th><th class="num">2σ of a difference (pts)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td class="num">9.1</td><td class="num">12.9</td><td class="num">25.8</td></tr>
+            <tr><td>4</td><td class="num">4.6</td><td class="num">6.5</td><td class="num">12.9</td></tr>
+            <tr><td>16</td><td class="num">2.3</td><td class="num">3.2</td><td class="num">6.5</td></tr>
+            <tr><td>32</td><td class="num">1.6</td><td class="num">2.3</td><td class="num">4.6</td></tr>
+            <tr><td>64</td><td class="num">1.1</td><td class="num">1.6</td><td class="num">3.2</td></tr>
+          </tbody>
+        </table>
+
+        <p>Real models have many problems with p<sub>j</sub> near 0 or 1, so the true noise is below this bound. The order of magnitude still holds. A single-sample AIME score cannot separate two methods that differ by less than about 25 points. At k = 32, the threshold falls to about 5.</p>
+
+        <p><strong>Training-seed variance</strong> is the part almost nobody measures. Two training runs with different seeds produce two different models, and no number of evaluation samples removes that difference. The few direct measurements are scattered: ScaleRL's three repeated runs put the fitted asymptote within ±0.015 of each other on its pass-rate scale (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>); LOOP reports 66.4 ± 4.8 on AppWorld across three runs (<a href="https://arxiv.org/abs/2502.01600">2502.01600</a>); WPO reports its DPO baseline at 20.6 ± 0.7 AlpacaEval LC over five seeds (<a href="https://arxiv.org/abs/2406.11827">2406.11827</a>). Most ablation tables in this literature come from one run per row, so this layer is simply unknown for them.</p>
+
+        <p><strong>Evaluation configuration</strong> shifts scores systematically rather than randomly. Hochlehnert et al. re-evaluated published reasoning models and found that changing the sampling temperature moves AIME scores by up to about 15 points, top-p by up to about 8, and the hardware cluster by up to about 8; switching evaluation framework moved one model by 4.5 points and another by none (<a href="https://arxiv.org/abs/2504.07086">2504.07086</a>). Within one paper these offsets cancel if the setup is held fixed. Across papers they do not, which is why numbers copied from another paper's table make poor baselines.</p>
+
+        <figure>
+          <img src="diagrams/02-dapo-noise-floor.svg" alt="DAPO's cumulative ablation increments on AIME 2024 plotted against the evaluation-noise band for a difference at 32 samples per problem.">
+          <figcaption><span class="fig-label">Figure 2.</span> DAPO's cumulative ablation (Table 1 of the paper), one row per added component, against the evaluation-sampling noise of a difference at k = 32 (shaded, ±2σ upper bound). Increments inside the band cannot be distinguished from evaluation noise alone. Training-seed variance, which would widen the band, is not reported.</figcaption>
+        </figure>
+
+        <p>Figure 2 applies the bound to the most-cited ablation table of 2025. DAPO trains Qwen2.5-32B and reports avg@32 on AIME 2024; the table gives no seeds or error bars, so each row reads as a single training run (<a href="https://arxiv.org/abs/2503.14476">2503.14476</a>, Table 1). Two increments, overlong filtering (+6) and dynamic sampling (+8), clear the evaluation band. The other three (+1 to +3) do not. That does not show those components are useless. It shows this table cannot establish them, and the axis sections look for other evidence before grading them.</p>
+
+        <h3 id="tension-base">Base model, template and contamination</h3>
+
+        <p>The second confounder is often the largest, and it concentrates in one model family. Qwen2.5-Math is the most common base model in 2025 RL papers, and it responds to almost any training signal.</p>
+        <ul>
+          <li><strong>Template.</strong> Before any RL, the same Qwen2.5-Math-7B averages 0.0 over five math benchmarks with the R1 prompt template, 26.5 with the Qwen template and 38.2 with no template (<a href="https://arxiv.org/abs/2503.20783">Dr. GRPO, 2503.20783</a>, Table 1).</li>
+          <li><strong>Reward content.</strong> On MATH-500, RL with the true reward improves Qwen2.5-Math-7B by 29.1 points, with deliberately wrong labels by 24.1, and with random rewards by 21.4. These gains generally do not transfer to Llama3 or OLMo2 (<a href="https://arxiv.org/abs/2506.10947">Spurious Rewards, 2506.10947</a>).</li>
+          <li><strong>Contamination.</strong> Given the first 60% of a MATH-500 problem, Qwen2.5-Math-7B reproduces the rest exactly 54.6% of the time; Llama3.1-8B does so 3.8% of the time (<a href="https://arxiv.org/abs/2507.10532">2507.10532</a>). OLMo 3, whose pre-training data is decontaminated and public, ran random rewards as a negative control and saw no gain (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>).</li>
+        </ul>
+
+        <p>Read together, these say that on Qwen2.5-Math a large part of any RL gain is elicitation of behaviour the base model already has. A method's gain there is an upper bound on what it does elsewhere until it is reproduced on another family. Even the direction of an effect can depend on the starting point: in a controlled study on Qwen3, the better loss-aggregation mode and the usefulness of clip-higher both flipped between the base and the instruction-tuned model (<a href="https://arxiv.org/abs/2508.08221">Tricks or Traps, 2508.08221</a>). Section <a href="#base-model">Base models and the ceiling</a> takes this up in full.</p>
+
+        <h3 id="tension-baselines">Baselines and implementations</h3>
+
+        <p>A gain is measured against a baseline, and the baseline is often the least-tuned run in the paper.</p>
+        <ul>
+          <li>VC-PPO and VAPO report large gains over a vanilla PPO baseline that scores 5.6 on AIME in VC-PPO and 5 on AIME 2024 in VAPO. That baseline uses GAE with λ = 0.95 and a critic initialized from the reward model. The axis section on advantages shows that this is a known failing configuration for long chains of thought (<a href="https://arxiv.org/abs/2503.01491">2503.01491</a>, <a href="https://arxiv.org/abs/2504.05118">2504.05118</a>; <a href="#advantage">axis ①</a>).</li>
+          <li>DPO on Mistral-7B, with UltraChat SFT and UltraFeedback preferences, scores 15.1 AlpacaEval LC in the SimPO paper and 20.6 ± 0.7 over five seeds in the WPO paper. The two SFT starting points differ by about one LC point (8.4 vs 9.5), much less than the 5.5-point spread in their DPO results. A margin of a few points over "DPO" depends on whose DPO (<a href="https://arxiv.org/abs/2405.14734">2405.14734</a>, <a href="https://arxiv.org/abs/2406.11827">2406.11827</a>).</li>
+          <li>Framework bugs move baselines too. TRL's IPO loss once summed where it should have averaged, which made IPO look worse than DPO until it was fixed (<a href="https://huggingface.co/blog/pref-tuning">Hugging Face, 2024</a>). A 2026 paper reports, in its abstract, that an optimizer-offload bug and a loss-aggregation bug depressed the SFT baselines of several mixed-policy papers (<a href="https://arxiv.org/abs/2604.23747">2604.23747</a>).</li>
+        </ul>
+
+        <h3 id="tension-accounting">Compute accounting and reporting</h3>
+
+        <p>"Faster" usually means fewer optimizer steps, not less compute. Methods that add work per step look better under step counting than under GPU-hours. PRIME's own timing table gives 680 s per step against 531 s for its RLOO baseline, 28% more (<a href="https://arxiv.org/abs/2502.01456">2502.01456</a>, Table 2). TreeRL trains on 480 responses per update against its baseline's 256 (<a href="https://arxiv.org/abs/2506.11902">2506.11902</a>; see <a href="#prm-credit">process rewards</a>). Stability claims have a parallel problem: several papers report the best checkpoint within a window rather than the final one, which hides late collapse.</p>
+
+        <h3 id="tension-ceiling">The ceiling is the hardest claim</h3>
+
+        <p>The strongest claim a method can make is that it raises the asymptote — the score training converges to with unlimited compute — rather than reaching the same score faster. Only one study measures this directly. ScaleRL fits each run's pass rate R against compute C with a sigmoid,</p>
+
+        <div class="formula-display">R(C) = R<sub>0</sub> + (A − R<sub>0</sub>) / (1 + (C<sub>mid</sub> / C)<sup>B</sup>)</div>
+
+        <p>and reads A as the asymptote and B as the efficiency (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>). Three facts limit how far A can be trusted:</p>
+        <ul>
+          <li>Repeated runs place A within ±0.015 of each other, and the authors recommend treating differences under ±0.02 as noise. B has no error estimate at all.</li>
+          <li>Within the fitting window, a log-linear curve with no asymptote fits about as well as the sigmoid: on Qwen3-14B-Base the two are "often nearly indistinguishable" over the fitting range (<a href="https://arxiv.org/abs/2610.04158">2610.04158</a>, §6.1). A is extrapolated, not observed.</li>
+          <li>A run that becomes unstable and is cut short fits as a run with a low asymptote. Instability can therefore masquerade as a lower ceiling.</li>
+        </ul>
+
+        <p>This survey therefore applies one asymmetric rule. A verdict of "affects efficiency only" is more reliable than "raises the ceiling". Differences in A below about 0.02–0.03 are reported as unresolved. The ceiling also has a second meaning, coverage at large k (pass@k), which behaves differently and is treated in <a href="#what-rl-changes">what RL actually changes</a>.</p>
+
+        <h3 id="tension-summary">The four filters</h3>
+
+        <table>
+          <thead>
+            <tr><th>Confounder</th><th>Typical size</th><th>What to ask of a paper</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Evaluation noise</td><td>Up to ~26 pts (2σ, difference) on AIME at k = 1; ~5 at k = 32</td><td>Samples per problem, number of training seeds, confidence intervals</td></tr>
+            <tr><td>Base model and contamination</td><td>Random rewards +21 on Qwen2.5-Math; template 0 → 38</td><td>A second model family; a random-reward control; a post-cutoff benchmark</td></tr>
+            <tr><td>Baseline and implementation</td><td>5.5 LC between two papers' DPO on the same recipe</td><td>Was the baseline tuned as hard as the method, and in the same code?</td></tr>
+            <tr><td>Accounting and reporting</td><td>+28% time per step; 480 vs 256 responses</td><td>GPU-hours, not steps; final, not best, checkpoint</td></tr>
+          </tbody>
+        </table>
+
+        <p>None of this makes the literature useless. It sets the grade a result can earn. A single-run increment smaller than the evaluation band is at best grade <span class="grade grade-c">C</span>. Agreement across independent controlled studies, on more than one model family, is what earns <span class="grade grade-a">A</span>. <a href="#checklist">The checklist</a> turns these filters into twelve questions. The axis sections apply them one design choice at a time, starting from <a href="#axes">the map of all eight axes</a>.</p>
+      </section>

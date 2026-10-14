@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL Algorithms for the Mathematically Inclined — Which Changes Matter</title>
+<meta name="description" content="A survey of LLM RL post-training algorithms for mathematicians and RL theorists: eight design axes of the policy-gradient estimator, three algorithm families, five evidence case studies, and a decision guide, with every claim graded by the strength of its controlled evidence.">
+<style>
+  :root {
+    --purple: #7253ed;
+    --purple-dark: #5f3ceb;
+    --purple-soft: #f5f2ff;
+    --blue: #2869e6;
+    --green: #026e57;
+    --red: #dd2e2e;
+    --yellow: #f7d12e;
+    --c-miles: #7253ed;
+    --c-slime: #026e57;
+    --c-sglang: #b85c00;
+    --c-skyrl: #0ea5e9;
+    --c-cosmos: #76b900;
+    --c-rlinf: #ea580c;
+    --c-verl:  #cc4444;
+    --c-openrlhf: #666;
+    --c-areal: #0891b2;
+
+    --text: #27262b;
+    --text-body: #4a4852;
+    --text-muted: #959396;
+    --bg: #ffffff;
+    --bg-soft: #f7f7fa;
+    --bg-soft-2: #ecebed;
+    --border: #e6e1e8;
+    --header-bg: #1c1d23;
+
+    --sidebar-w: 280px;
+    --header-h: 56px;
+
+    --font-serif: "Charter", "Georgia", "Cambria", "Times New Roman", serif;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-sans);
+    color: var(--text-body);
+    background: var(--bg);
+    font-size: 16px;
+    line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .site-header {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--header-h);
+    background: var(--header-bg);
+    color: #fff;
+    display: flex; align-items: center;
+    padding: 0 24px;
+    z-index: 50;
+    border-bottom: 1px solid #0e0f13;
+  }
+  .site-header .brand {
+    font-weight: 500; font-size: 14px; color: #e9e6f0;
+    text-decoration: none;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .site-header .brand .logo {
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    background: linear-gradient(135deg, var(--purple), var(--c-skyrl) 50%, var(--c-cosmos));
+  }
+  .site-header .brand em { color: #8e8b96; font-style: normal; font-weight: 400; margin-left: 4px; }
+  .site-header .aux-nav {
+    margin-left: auto;
+    display: flex; gap: 14px;
+    font-size: 12px;
+  }
+  .site-header .aux-nav a { color: #9d99a5; text-decoration: none; }
+  .site-header .aux-nav a:hover { color: #fff; }
+
+  .search-bar {
+    margin-left: 28px;
+    flex: 0 1 240px;
+    position: relative;
+  }
+  .search-bar input {
+    width: 100%;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.08);
+    color: #fff;
+    border-radius: 4px;
+    padding: 5px 12px 5px 32px;
+    font-size: 12px;
+    font-family: var(--font-sans);
+    outline: none;
+  }
+  .search-bar input::placeholder { color: #6c6975; }
+  .search-bar input:focus { border-color: var(--purple); background: rgba(255,255,255,.1); }
+  .search-bar::before {
+    content: ''; position: absolute; left: 10px; top: 50%;
+    transform: translateY(-50%); width: 13px; height: 13px;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%236c6975'><path d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/></svg>") no-repeat center;
+  }
+
+  .site-nav {
+    position: fixed;
+    top: var(--header-h); left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    background: #fafafc;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 28px 0 32px;
+  }
+  .site-nav .nav-heading {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    padding: 14px 28px 4px;
+  }
+  .site-nav ul { list-style: none; }
+  .site-nav a {
+    display: block;
+    padding: 4px 28px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px;
+    border-left: 3px solid transparent;
+    transition: all .15s;
+    line-height: 1.45;
+  }
+  .site-nav a:hover {
+    background: rgba(114,83,237,0.05);
+    color: var(--purple-dark);
+  }
+  .site-nav a.active {
+    color: var(--purple-dark);
+    font-weight: 600;
+    border-left-color: var(--purple);
+  }
+  .site-nav .nav-collapsible .nav-row {
+    display: flex;
+    align-items: stretch;
+  }
+  .site-nav .nav-collapsible .nav-row .nav-link {
+    flex: 1;
+    min-width: 0;
+    padding-right: 8px;
+  }
+  .site-nav .nav-toggle {
+    width: 34px;
+    border: 0;
+    border-left: 1px solid rgba(114,83,237,0.08);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .site-nav .nav-toggle:hover,
+  .site-nav .nav-toggle:focus-visible {
+    color: var(--purple-dark);
+    background: rgba(114,83,237,0.05);
+    outline: none;
+  }
+  .site-nav .nav-toggle::before {
+    content: "-";
+  }
+  .site-nav .nav-collapsible.is-collapsed .nav-toggle::before {
+    content: "+";
+  }
+  .site-nav .nav-collapsible.is-collapsed .nav-sublist {
+    display: none;
+  }
+  .site-nav .nav-sublist {
+    margin: 2px 0 8px 0;
+  }
+  .site-nav .nav-sublink {
+    padding: 2px 28px 2px 44px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.35;
+    border-left: 3px solid transparent;
+  }
+  .site-nav .nav-sublink:hover {
+    background: rgba(114,83,237,0.04);
+    color: var(--purple-dark);
+  }
+
+  .main-wrap {
+    margin-left: var(--sidebar-w);
+    margin-top: var(--header-h);
+    display: flex;
+    min-height: calc(100vh - var(--header-h));
+  }
+  main {
+    flex: 1;
+    max-width: 760px;
+    padding: 56px 64px 96px;
+    min-width: 0;
+  }
+  .toc-rail {
+    width: 220px;
+    flex-shrink: 0;
+    padding: 56px 24px;
+    border-left: 1px solid var(--border);
+    position: sticky;
+    top: var(--header-h);
+    align-self: flex-start;
+    max-height: calc(100vh - var(--header-h));
+    overflow-y: auto;
+  }
+  .toc-rail h4 {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--purple);
+    margin-bottom: 8px;
+    margin-top: 22px;
+    padding-left: 8px;
+    border-left: 2px solid var(--purple-soft);
+  }
+  .toc-rail h4:first-child { margin-top: 0; }
+  .toc-rail ul {
+    list-style: none;
+    margin: 0 0 14px 6px;
+    padding-left: 0;
+  }
+  .toc-rail a {
+    display: block;
+    padding: 3px 0;
+    color: var(--text-body);
+    text-decoration: none;
+    font-size: 12px;
+    line-height: 1.5;
+    border-bottom: none;
+  }
+  .toc-rail a:hover { color: var(--purple); }
+  .toc-rail a.active {
+    color: var(--purple-dark);
+    font-weight: 600;
+  }
+
+  article {
+    font-family: var(--font-serif);
+    font-size: 17px;
+    line-height: 1.75;
+    color: var(--text-body);
+  }
+
+  article > header {
+    margin-bottom: 48px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  article > header .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--purple);
+    margin-bottom: 14px;
+  }
+  article > header h1 {
+    font-family: var(--font-serif);
+    font-size: 38px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--text);
+    margin-bottom: 16px;
+    letter-spacing: -0.01em;
+  }
+  article > header .subtitle {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    line-height: 1.45;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-bottom: 18px;
+  }
+  article > header .byline {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+
+  article h2 {
+    font-family: var(--font-serif);
+    font-size: 28px;
+    font-weight: 500;
+    color: var(--text);
+    margin: 56px 0 16px;
+    line-height: 1.25;
+    letter-spacing: -0.005em;
+  }
+  article h3 {
+    font-family: var(--font-serif);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+    margin: 36px 0 12px;
+    line-height: 1.3;
+  }
+  article h4 {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 24px 0 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  article p {
+    margin-bottom: 18px;
+  }
+  article p + p { text-indent: 0; }
+
+  article ul, article ol {
+    margin: 0 0 18px 26px;
+    padding: 0;
+  }
+  article li { margin-bottom: 6px; }
+
+  article a {
+    color: var(--purple);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(114,83,237,0.25);
+    transition: border-color .15s;
+  }
+  article a:hover {
+    border-bottom-color: var(--purple);
+    text-decoration: none;
+  }
+
+  article code {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    background: var(--bg-soft);
+    color: var(--purple-dark);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border-bottom: none;
+  }
+  article a code { color: inherit; }
+
+  pre {
+    background: #fafafc;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 18px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.55;
+    overflow-x: auto;
+    margin: 0 0 22px;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 13px;
+    border: none;
+  }
+  pre code .code-hl {
+    display: inline;
+    padding: 1px 3px;
+    background: rgba(247, 209, 46, 0.22);
+    border-radius: 3px;
+  }
+  article pre code { font-size: 13px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18px 0 24px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+  }
+  th {
+    background: var(--bg-soft);
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--text);
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    line-height: 1.55;
+  }
+  tr:hover td { background: rgba(245,242,255,.4); }
+
+  section[id], h3[id], h4[id] {
+    scroll-margin-top: 72px;
+  }
+
+  /* Pull quotes (sidebar/inline emphasis) */
+  blockquote.pull {
+    margin: 28px 0;
+    padding: 18px 24px;
+    border-left: 3px solid var(--purple);
+    background: var(--purple-soft);
+    font-family: var(--font-serif);
+    font-size: 18px;
+    line-height: 1.55;
+    color: var(--text);
+    font-style: italic;
+  }
+  blockquote.pull cite {
+    display: block;
+    margin-top: 10px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: normal;
+  }
+
+  .primer-box {
+    margin: 18px 0 22px;
+    padding: 14px 16px;
+    background: #f7fbff;
+    border: 1px solid #cfe4ff;
+    border-left: 4px solid var(--blue);
+    border-radius: 6px;
+  }
+  .primer-box p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.65;
+    color: #34445f;
+  }
+  .primer-box strong {
+    color: #193968;
+  }
+  .primer-box .formula-display {
+    margin: 10px 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+    background: #ffffff;
+    border: 1px solid #dbeafe;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: #1d3557;
+    white-space: nowrap;
+  }
+  .glossary {
+    position: relative;
+    display: inline-flex;
+    align-items: baseline;
+    border-bottom: 1px dotted var(--purple);
+    color: var(--purple-dark);
+    cursor: help;
+    outline: none;
+  }
+  .glossary::after {
+    content: "?";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    margin-left: 3px;
+    border-radius: 50%;
+    background: var(--purple-soft);
+    color: var(--purple-dark);
+    font-family: var(--font-sans);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .glossary .glossary-panel {
+    display: none;
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 8px);
+    width: min(300px, 78vw);
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--purple);
+    border-radius: 6px;
+    box-shadow: 0 14px 36px rgba(28, 29, 35, 0.16);
+    color: var(--text-body);
+    font-size: 13px;
+    line-height: 1.45;
+    z-index: 20;
+  }
+  .glossary:hover .glossary-panel,
+  .glossary:focus .glossary-panel,
+  .glossary:focus-within .glossary-panel {
+    display: block;
+  }
+  .question-box {
+    margin: 18px 0 22px;
+    padding: 14px 16px;
+    background: #fffaf0;
+    border: 1px solid #f1d49a;
+    border-left: 4px solid #c98200;
+    border-radius: 6px;
+  }
+  .question-box p {
+    margin: 0 0 10px;
+    font-size: 14px;
+    line-height: 1.65;
+    color: #4d3a17;
+  }
+  .question-box p:last-child {
+    margin-bottom: 0;
+  }
+  .question-box strong {
+    color: #7a4d00;
+  }
+
+  .compare-box {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin: 18px 0 24px;
+    padding: 14px;
+    border: 1px solid #d7dde8;
+    border-left: 4px solid #6172f3;
+    border-radius: 8px;
+    background: #f8fbff;
+  }
+  .compare-card {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+  }
+  .compare-card h5 {
+    margin: 0 0 8px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 720;
+    color: var(--text);
+  }
+  .compare-card p {
+    margin: 0 0 8px;
+    font-size: 13px;
+    line-height: 1.58;
+  }
+  .compare-card p:last-child {
+    margin-bottom: 0;
+  }
+  @media (max-width: 720px) {
+    .compare-box {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .extra-box {
+    margin: 24px 0 28px;
+    padding: 4px 0 4px 18px;
+    background: linear-gradient(90deg, #fff8ea 0, #fffdf7 54px, transparent 100%);
+    border-left: 4px solid #d08a1d;
+    border-radius: 0;
+  }
+  .extra-box .extra-title {
+    margin: 0 0 10px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: #7a4d00;
+  }
+  .extra-box p {
+    color: var(--text-body);
+  }
+  .extra-box p:last-child {
+    margin-bottom: 0;
+  }
+  .extra-box figure {
+    margin: 16px 0 18px;
+  }
+  .extra-box figure img,
+  .extra-box figure svg {
+    border-color: var(--border);
+    background: #fff;
+  }
+  .extra-box .source-badge {
+    margin-top: 4px;
+    background: #fff;
+    border-color: var(--border);
+  }
+
+  .label {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 12px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    background: var(--bg-soft-2);
+    color: var(--text);
+    border-bottom: none;
+  }
+  .label-purple { background: var(--c-miles); color: #fff; }
+  .label-blue   { background: var(--blue); color: #fff; }
+  .label-green  { background: var(--c-slime); color: #fff; }
+  .label-orange { background: var(--c-sglang); color: #fff; }
+  .label-sky    { background: var(--c-skyrl); color: #fff; }
+  .label-nv     { background: var(--c-cosmos); color: #fff; }
+  .label-rlinf  { background: var(--c-rlinf); color: #fff; }
+  .label-verl   { background: var(--c-verl); color: #fff; }
+  .label-openrlhf { background: var(--c-openrlhf); color: #fff; }
+  .label-areal  { background: var(--c-areal); color: #fff; }
+  .label-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-body);
+  }
+  .wall-solution-label {
+    display: inline-block;
+    padding: 2px 8px 3px;
+    margin-right: 4px;
+    border-radius: 5px;
+    background: #d9f99d;
+    color: #234300;
+    border: 1px solid #a3e635;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1.35;
+  }
+  .wall-solution {
+    margin: 16px 0 24px;
+    padding: 0;
+  }
+  .wall-problem {
+    margin: 14px 0 16px;
+    padding: 16px 18px;
+    border-radius: 8px;
+    border: 1px solid #fbbf24;
+    background: #fffbeb;
+  }
+  .wall-problem p {
+    margin: 0;
+  }
+  .wall-solution p {
+    margin: 0 0 12px;
+  }
+  .wall-solution p:last-child {
+    margin-bottom: 0;
+  }
+  .technique-pill {
+    display: inline-block;
+    padding: 2px 7px 3px;
+    margin-right: 5px;
+    border-radius: 999px;
+    border: 1px solid #86efac;
+    background: #ffffff;
+    color: #14532d;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1.35;
+  }
+  .technique-card {
+    margin: 12px 0;
+    padding: 14px 16px;
+    border-radius: 8px;
+    border: 1px solid #86efac;
+    background: #ecfdf5;
+  }
+  .technique-card p {
+    margin: 0;
+  }
+  .technique-card .formula-display {
+    margin: 10px 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+    background: #ffffff;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: #14532d;
+    white-space: nowrap;
+  }
+
+  /* Figures with SVG diagrams */
+  figure {
+    margin: 28px 0 32px;
+  }
+  figure img, figure svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    padding: 12px;
+  }
+  .diagram-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: stretch;
+  }
+  .photo-grid img {
+    height: 240px;
+    object-fit: contain;
+    background: #fff;
+  }
+  @media (max-width: 720px) {
+    .photo-grid {
+      grid-template-columns: 1fr;
+    }
+    .photo-grid img {
+      height: auto;
+    }
+  }
+  figcaption {
+    margin-top: 10px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.5;
+  }
+  figcaption .fig-label {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* Aside / callout */
+  aside.note {
+    margin: 24px 0;
+    padding: 16px 20px;
+    background: #fafafc;
+    border-left: 3px solid var(--blue);
+    border-radius: 0 4px 4px 0;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  aside.note.warn { border-left-color: var(--red); background: #fff8f8; }
+  aside.note strong { color: var(--text); }
+
+  /* Source badge above code */
+  .source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 4px 4px 0 0;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-body);
+    margin-bottom: -1px;
+    text-decoration: none;
+    transition: all .15s;
+    border-bottom: 1px solid var(--border);
+  }
+  .source-badge:hover {
+    background: var(--bg-soft);
+    color: var(--purple-dark);
+    border-color: var(--purple);
+    text-decoration: none;
+  }
+  .source-badge::before {
+    content: "";
+    width: 13px; height: 13px;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235c5962'><path d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z'/></svg>") no-repeat center;
+    flex-shrink: 0;
+  }
+  .source-badge .file-path { color: var(--purple-dark); font-weight: 500; }
+  .source-badge .file-meta { color: var(--text-muted); font-size: 11px; margin-left: 6px; }
+  pre.with-source { border-top-left-radius: 0; margin-top: 0; }
+
+  /* Study/Further reading lists */
+  .study {
+    background: #fdfdff;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--blue);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 22px 0 24px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+  }
+  .study-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--blue);
+    margin-bottom: 10px;
+  }
+  .study ul { padding-left: 0; list-style: none; margin: 0; }
+  .study li {
+    padding: 4px 0 4px 22px;
+    position: relative;
+    line-height: 1.55;
+  }
+  .study li::before {
+    content: "→";
+    position: absolute; left: 0; top: 4px;
+    color: var(--blue);
+    font-weight: 700;
+  }
+  .study li a { color: var(--purple); text-decoration: none; border-bottom: none; }
+  .study li a:hover { text-decoration: underline; }
+  .study li code { font-size: 11px; background: var(--bg-soft); color: var(--text); }
+
+  /* Footer */
+  footer {
+    margin-top: 64px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  footer a { color: var(--purple); border-bottom: 1px solid rgba(114,83,237,0.25); }
+
+  /* Responsive */
+  @media (max-width: 1180px) { .toc-rail { display: none; } }
+  @media (max-width: 820px) {
+    .site-nav { display: none; }
+    .main-wrap { margin-left: 0; }
+    main { padding: 32px 22px; overflow-x: hidden; }
+    .search-bar { display: none; }
+    article > header h1 { font-size: 30px; }
+    article > header .subtitle { font-size: 17px; }
+    article h2 { font-size: 24px; }
+    article table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .fsdp-lifecycle-figure .diagram-scroll svg,
+    .fsdp-strategy-figure .diagram-scroll svg,
+    .hsdp-layout-figure .diagram-scroll svg,
+    .fsdp-export-figure .diagram-scroll svg,
+    .fsdp-memory-switch-figure .diagram-scroll svg,
+    .triton-grid-figure .diagram-scroll svg,
+    .flash-tile-figure .diagram-scroll svg {
+      min-width: 700px;
+    }
+  }
+
+  /* RL_algorithms additions: evidence grades, verdict tables, display formulas */
+  .grade {
+    display: inline-block;
+    min-width: 22px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.5;
+    text-align: center;
+    border-bottom: none;
+  }
+  .grade-a { background: #dcfce7; color: #14532d; border: 1px solid #86efac; }
+  .grade-b { background: #dbeafe; color: #1e3a8a; border: 1px solid #93c5fd; }
+  .grade-c { background: #fef3c7; color: #78350f; border: 1px solid #fcd34d; }
+  .grade-d { background: #fee2e2; color: #7f1d1d; border: 1px solid #fca5a5; }
+  article .formula-display {
+    margin: 14px 0 18px;
+    padding: 12px 16px;
+    overflow-x: auto;
+    background: #fafafc;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    color: var(--text);
+    white-space: nowrap;
+    text-align: center;
+  }
+  table.verdict td:first-child { font-weight: 600; color: var(--text); }
+  table.verdict td.num, table.verdict th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.nowrap, th.nowrap { white-space: nowrap; }
+  aside.note.draft { border-left-color: var(--text-muted); color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="#top" class="brand"><span class="logo"></span> RL Algorithms Survey <em>· a blog</em></a>
+  <div class="search-bar">
+    <input type="search" id="searchBox" placeholder="Search this survey..." />
+  </div>
+  <nav class="aux-nav">
+    <a href="https://chenggong-zhang.github.io/" target="_blank">Homepage</a>
+    <a href="https://chenggong-zhang.github.io/blog/" target="_blank">Blog</a>
+    <a href="https://chenggong-zhang.github.io/RL_infra/" target="_blank">Infra survey</a>
+    <a href="https://github.com/chenggong-zhang/RL_algorithms" target="_blank">Source</a>
+  </nav>
+</header>
+
+<aside class="site-nav">
+  <div class="nav-heading">Survey</div>
+  <ul>
+    <li><a href="#top" class="nav-link active">Opening</a></li>
+    <li><a href="#why" class="nav-link">Preface</a></li>
+    <li><a href="#how-to-read" class="nav-link">How to read this survey</a></li>
+    <li class="nav-collapsible" data-nav-collapsible>
+      <div class="nav-row">
+        <a href="#skeleton" class="nav-link">The skeleton</a>
+        <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="skeleton-subs" aria-label="Collapse skeleton subsections"></button>
+      </div>
+      <ul id="skeleton-subs" class="nav-sublist">
+        <li><a href="#skel-steps" class="nav-sublink">One update, seven steps</a></li>
+        <li><a href="#skel-knobs" class="nav-sublink">Three knobs</a></li>
+        <li><a href="#skel-identity" class="nav-sublink">The r ≡ 1 identity</a></li>
+        <li><a href="#skel-names" class="nav-sublink">Names as knob settings</a></li>
+      </ul>
+    </li>
+    <li><a href="#tension" class="nav-link">Why the estimator is not enough</a></li>
+  </ul>
+
+  <div class="nav-heading">Design axes</div>
+  <ul>
+    <li><a href="#axes" class="nav-link">Eight axes at a glance</a></li>
+    <li><a href="#advantage" class="nav-link">① Advantage &amp; baseline</a></li>
+    <li><a href="#normalization" class="nav-link">② Normalization</a></li>
+    <li><a href="#aggregation" class="nav-link">③ Loss aggregation</a></li>
+    <li><a href="#trust-region" class="nav-link">④ Clipping &amp; trust regions</a></li>
+    <li><a href="#kl-entropy" class="nav-link">⑤ KL &amp; entropy</a></li>
+    <li><a href="#off-policy" class="nav-link">⑥ Off-policy &amp; mismatch</a></li>
+    <li><a href="#data-sampling" class="nav-link">⑦ Data &amp; sampling</a></li>
+    <li><a href="#reward" class="nav-link">⑧ Reward &amp; verifiers</a></li>
+  </ul>
+
+  <div class="nav-heading">The layer beneath</div>
+  <ul>
+    <li><a href="#what-rl-changes" class="nav-link">What RL actually changes</a></li>
+    <li><a href="#base-model" class="nav-link">Base models &amp; the ceiling</a></li>
+  </ul>
+
+  <div class="nav-heading">Algorithm families</div>
+  <ul>
+    <li><a href="#preference" class="nav-link">DPO &amp; preference optimization</a></li>
+    <li><a href="#prm-credit" class="nav-link">Process rewards &amp; credit</a></li>
+    <li><a href="#agentic" class="nav-link">Agentic multi-turn RL</a></li>
+  </ul>
+
+  <div class="nav-heading">Evidence case studies</div>
+  <ul>
+    <li><a href="#case-scalerl" class="nav-link">ScaleRL · ceiling vs efficiency</a></li>
+    <li><a href="#case-dapo-table" class="nav-link">DAPO's ablation table</a></li>
+    <li><a href="#case-weak-baseline" class="nav-link">A vanishing 10-point gain</a></li>
+    <li><a href="#case-spurious" class="nav-link">Spurious rewards</a></li>
+    <li><a href="#case-frontier" class="nav-link">Frontier recipes</a></li>
+    <li><a href="#recent" class="nav-link">Recent results</a></li>
+  </ul>
+
+  <div class="nav-heading">Putting it together</div>
+  <ul>
+    <li><a href="#patterns" class="nav-link">Patterns · algebraic view</a></li>
+    <li><a href="#code" class="nav-link">Reading real code</a></li>
+    <li><a href="#landscape" class="nav-link">Algorithm landscape</a></li>
+    <li><a href="#beyond" class="nav-link">Beyond verifiable rewards</a></li>
+    <li><a href="#scaling" class="nav-link">Scaling chain</a></li>
+    <li><a href="#pitfalls" class="nav-link">Pitfalls (踩坑录)</a></li>
+    <li><a href="#checklist" class="nav-link">Researcher's checklist</a></li>
+  </ul>
+
+  <div class="nav-heading">Going further</div>
+  <ul>
+    <li><a href="#decision-guide" class="nav-link">Decision guide</a></li>
+    <li><a href="#experiments" class="nav-link">Twelve small experiments</a></li>
+    <li><a href="#open" class="nav-link">Open questions</a></li>
+    <li><a href="#reading" class="nav-link">Reading list</a></li>
+  </ul>
+
+</aside>
+
+<div class="main-wrap">
+  <main>
+    <article id="top">
+
+      <header>
+        <div class="eyebrow">An algorithms survey · for the mathematically inclined</div>
+        <h1>RL Algorithms for the Mathematically Inclined</h1>
+        <p class="subtitle">Which changes to LLM post-training actually matter — and how to tell. Eight design axes of the policy-gradient estimator, three algorithm families (preference optimization · process rewards · agentic multi-turn), five evidence case studies, six recurring patterns, a researcher's checklist, a decision guide, and twelve small experiments. Every verdict is stated on four dimensions — ceiling, efficiency, stability, side effects — and graded by the strength of its controlled evidence. A companion to <a href="https://chenggong-zhang.github.io/RL_infra/">RL Infrastructure for the Mathematically Inclined</a>.</p>
+        <div class="byline">
+          <span>Draft · evidence as of October 2026</span>
+          <span>·</span>
+          <span>8 design axes · 3 algorithm families · 5 evidence case studies</span>
+          <span>·</span>
+          <span>A–D evidence grades · 12-question checklist · 12 experiments</span>
+        </div>
+      </header>
+
+      <section id="why">
+        <h2>Preface: what this survey is for</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Name vs estimator: a named algorithm is the surface; the choices on eight design axes plus the experimental conditions are what is optimized.</aside>
+      </section>
+
+      <section id="how-to-read">
+        <h2>How to read this survey</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Three user stories (interpretation, decision, research), the four verdict dimensions, the A–D evidence grades, and the two meanings of “ceiling”.</aside>
+      </section>
+
+      <section id="skeleton">
+        <h2>The skeleton: one gradient estimator, three knobs</h2>
+
+        <p>The simplest useful map of RL post-training algorithms is not a list of names. It is the one quantity they all compute: a gradient estimate from a batch of sampled responses. Every method in this survey writes that estimate in the same form and differs only in what it puts into three slots. Reading a new paper therefore comes down to two questions: which slot did it change, and can that slot matter in the regime where the paper ran its experiments?</p>
+
+        <figure>
+          <img src="diagrams/01-estimator-pipeline.svg" alt="One update in seven steps — sample, score, baseline, weight and mask, aggregate, regularize, step — each labelled with its design axes, above the single gradient estimator whose three knobs they set.">
+          <figcaption><span class="fig-label">Figure 1.</span> One update of a policy-gradient method. Steps 1–2 decide what data the update sees, steps 3–6 decide how the loss reads it, and step 7 decides how long the data stays in use. Circled numbers are the design axes of this survey.</figcaption>
+        </figure>
+
+        <h3 id="skel-steps">One update, seven steps</h3>
+
+        <p>One update takes a batch of prompts and returns a parameter change. Each of its seven steps is a decision, and each decision is one of the design axes judged later in the survey.</p>
+
+        <table>
+          <thead>
+            <tr><th class="nowrap">Step</th><th>What is decided</th><th class="nowrap">Axis</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="nowrap">1 · Sample</td><td>Which policy generates the responses, how many per prompt (<code>G</code>), at what temperature. The generator is the inference engine's copy of the policy, π<sub>sampler</sub>, which need not match the trainer's copy numerically.</td><td class="nowrap">⑥ ⑦</td></tr>
+            <tr><td class="nowrap">2 · Score</td><td>Which reward <code>r(x, y)</code> each response receives: a rule-based verifier, a learned reward model, or a judge.</td><td class="nowrap">⑧</td></tr>
+            <tr><td class="nowrap">3 · Baseline</td><td>How the reward becomes an advantage <code>Â</code>: which baseline is subtracted and which scale divides it.</td><td class="nowrap">① ②</td></tr>
+            <tr><td class="nowrap">4 · Weight, mask</td><td>How each token's gradient is reweighted or zeroed, as a function of the probability ratio between the current policy and the policy at the start of the update.</td><td class="nowrap">④ ⑥</td></tr>
+            <tr><td class="nowrap">5 · Aggregate</td><td>How per-token terms are summed: per token, per sequence, per prompt, or with a constant.</td><td class="nowrap">③</td></tr>
+            <tr><td class="nowrap">6 · Regularize</td><td>Which KL or entropy terms are added.</td><td class="nowrap">⑤</td></tr>
+            <tr><td class="nowrap">7 · Step</td><td>How many optimizer steps the batch receives before new data is sampled.</td><td class="nowrap">⑥</td></tr>
+          </tbody>
+        </table>
+
+        <p>Steps 1 and 2 sit outside the loss function. That is why data and reward get their own axes (⑦, ⑧) rather than being treated as experimental setup: as <a href="#tension">the next section</a> and <a href="#what-rl-changes">the layer beneath the loss</a> show, they move results more than most loss changes do.</p>
+
+        <h3 id="skel-knobs">Three knobs</h3>
+
+        <p>Steps 3–5 fill the three slots of one expression. Every method in this survey computes</p>
+
+        <div class="formula-display">g = Σ<sub>i</sub> Σ<sub>t</sub> c<sub>i,t</sub> · w<sub>i,t</sub> · m<sub>i,t</sub> · Â<sub>i</sub> · ∇<sub>θ</sub> log π<sub>θ</sub>(y<sub>i,t</sub> | x, y<sub>i,&lt;t</sub>)</div>
+
+        <div class="primer-box">
+          <p><strong>Notation.</strong> <code>i</code> indexes the responses in the batch and <code>t</code> the tokens of response <code>y_i</code>. π<sub>θ</sub> is the policy being optimized. π<sub>old</sub> is the same network at the start of the update; its log-probabilities are computed once, before the first optimizer step. π<sub>sampler</sub> is the inference engine's copy that actually generated the tokens. The <strong>probability ratio</strong> is r<sub>i,t</sub> = π<sub>θ</sub>(y<sub>i,t</sub> | ·) / π<sub>old</sub>(y<sub>i,t</sub> | ·).</p>
+        </div>
+
+        <ul>
+          <li><strong>Â<sub>i</sub>, the advantage</strong> (step 3). With outcome rewards it is one scalar per response; a learned critic makes it per-token, Â<sub>i,t</sub>.</li>
+          <li><strong>w<sub>i,t</sub> · m<sub>i,t</sub>, the surrogate</strong> (step 4). The weight <code>w</code> rescales a token's gradient; the mask <code>m ∈ {0, 1}</code> removes it. This is the slot where PPO, DAPO, GSPO, CISPO and SAPO differ.</li>
+          <li><strong>c<sub>i,t</sub>, the normalizer</strong> (step 5). It fixes how much each token counts relative to the others: 1/(G·|y<sub>i</sub>|), 1/Σ<sub>j</sub>|y<sub>j</sub>|, or a constant.</li>
+        </ul>
+
+        <p>The surrogate slot is easiest to read off the gradient, not the loss. PPO's per-token objective is r<sub>i,t</sub>·Â<sub>i</sub>, and ∇r = r·∇log π, so an unclipped token contributes with weight w = r. Clipping does not shrink the weight; it sets the mask to zero once the ratio has moved far enough in the direction the advantage favours. The other surrogates change one of these two rules.</p>
+
+        <table>
+          <thead>
+            <tr><th>Surrogate</th><th>Weight w<sub>i,t</sub></th><th>Mask m<sub>i,t</sub> = 0 when</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PPO-clip</td><td>r<sub>i,t</sub></td><td>Â &gt; 0 and r &gt; 1+ε, or Â &lt; 0 and r &lt; 1−ε</td></tr>
+            <tr><td>DAPO (clip-higher)</td><td>r<sub>i,t</sub></td><td>Same rule with ε<sub>high</sub> &gt; ε<sub>low</sub> on the upper side</td></tr>
+            <tr><td>CISPO</td><td>sg(min(r<sub>i,t</sub>, 1+ε<sub>high</sub>)), a stop-gradient weight; MiniMax-M1 effectively disables the lower bound</td><td>Never; the clipped weight replaces the mask</td></tr>
+            <tr><td>GSPO</td><td>s<sub>i</sub> = exp((1/|y<sub>i</sub>|) Σ<sub>t</sub> log r<sub>i,t</sub>), shared by all tokens of the response</td><td>For the whole response, when s<sub>i</sub> leaves its band (1 − 3·10<sup>−4</sup>, 1 + 4·10<sup>−4</sup>) in the advantage's direction</td></tr>
+            <tr><td>SAPO</td><td>r<sub>i,t</sub> · 4p(1 − p) with p = σ(τ(r<sub>i,t</sub> − 1)), a smooth gate</td><td>Never hard-masked; the gate decays instead</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="skel-identity">The r ≡ 1 identity</h3>
+
+        <p>The surrogate slot only acts through the ratio. That makes one condition decisive.</p>
+
+        <div class="technique-card">
+          <p><strong>Identity.</strong> Suppose each rollout batch receives a single optimizer step and π<sub>old</sub> is computed by the trainer at the current parameters. Then r<sub>i,t</sub> = 1 for every token when the gradient is taken, and PPO-clip, DAPO, GSPO, GMPO, CISPO and SAPO all return</p>
+          <div class="formula-display">g = Σ<sub>i</sub> Σ<sub>t</sub> c<sub>i,t</sub> · Â<sub>i</sub> · ∇<sub>θ</sub> log π<sub>θ</sub>(y<sub>i,t</sub> | x, y<sub>i,&lt;t</sub>)</div>
+          <p>That is REINFORCE with a baseline. The six surrogates then differ only in <code>c</code> and <code>Â</code>, plus whatever regularizer step 6 adds — GRPO's KL term, for instance, still contributes β(π<sub>ref</sub>/π<sub>θ</sub> − 1) per token.</p>
+        </div>
+
+        <p>The check is one line per method:</p>
+        <ul>
+          <li><strong>PPO-clip, DAPO:</strong> 1 lies inside [1−ε<sub>low</sub>, 1+ε<sub>high</sub>], so no token is masked and w = r = 1.</li>
+          <li><strong>CISPO:</strong> min(1, 1+ε<sub>high</sub>) = 1, so w = 1.</li>
+          <li><strong>GSPO, GMPO:</strong> without clipping both optimize the geometric mean of the token ratios times Â; they differ only in where the clip acts (whole sequence vs per token in log space). At ratios equal to 1 the mean is 1, so w = 1, and the 1/|y<sub>i</sub>| from differentiating the mean moves into <code>c</code>.</li>
+          <li><strong>SAPO:</strong> p = σ(0) = ½, so 4p(1 − p) = 1 and w = 1, whatever the temperature τ.</li>
+        </ul>
+
+        <p>What remains is the normalizer. At r = 1 the table of differences is short:</p>
+
+        <table>
+          <thead>
+            <tr><th>Method</th><th>c<sub>i,t</sub> at r = 1</th><th>Consequence</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>GRPO, GSPO, GMPO, SAPO</td><td>1/(G·|y<sub>i</sub>|)</td><td>Each response counts equally; long responses get less weight per token</td></tr>
+            <tr><td>DAPO, CISPO</td><td>1/Σ<sub>j</sub>|y<sub>j</sub>|</td><td>Each token counts equally within the normalizing group</td></tr>
+            <tr><td>Dr. GRPO</td><td>A constant (1/G in the paper's formula; the released code divides by a fixed <code>MAX_TOKENS</code>)</td><td>No length dependence at all</td></tr>
+          </tbody>
+        </table>
+
+        <p>The ratio leaves 1 for exactly two reasons:</p>
+        <ol>
+          <li><strong>More than one optimizer step per batch.</strong> Minibatch <code>k</code> is evaluated at the parameters left by the previous <code>k − 1</code> steps. The step count is often a silent default: verl's stock configuration (<code>train_batch_size = 1024</code>, <code>ppo_mini_batch_size = 256</code>) takes four steps per batch. Asynchronous rollout adds whole policy versions of staleness on top (see <a href="https://chenggong-zhang.github.io/RL_infra/#async">the infra survey's async section</a>).</li>
+          <li><strong>π<sub>old</sub> taken from the sampler.</strong> If the loss uses the inference engine's log-probabilities instead of recomputing them on the trainer, then r = π<sub>θ</sub>/π<sub>sampler</sub> already on the first step, and the ratio carries the train–inference mismatch.</li>
+        </ol>
+
+        <p>The second point has a consequence that is easy to miss. When π<sub>old</sub> is recomputed on the trainer — the standard setup, and the one the infra survey recommends — the ratio starts at exactly 1 no matter what π<sub>sampler</sub> did. The train–inference mismatch is then invisible to every surrogate in the table: all six are biased by it in the same way. Only corrections that read π<sub>sampler</sub> explicitly, such as truncated or masked importance sampling, can see it (<a href="#off-policy">axis ⑥</a>).</p>
+
+        <div class="question-box">
+          <p><strong>Reading rule.</strong> A gap between two of these surrogates, measured with one optimizer step per batch and a recomputed π<sub>old</sub>, cannot come from the surrogate. It comes from the normalizer, the advantage, or noise. A gap measured with many steps per batch measures how each surrogate copes with that run's staleness. It is a property of the run, not of the loss alone.</p>
+          <p>None of the papers that introduced these surrogates trained at r ≡ 1 in its own experiments. DAPO takes 16 gradient updates per rollout step, MiniMax-M1 (CISPO) 16, GMPO 8, and GSPO and SAPO split each rollout batch into 4 minibatches. Their reported gains are therefore gains under staleness, and the reported rankings of these losses contradict each other across papers (<a href="#trust-region">axis ④</a>). That is what this rule predicts if the papers ran at different staleness levels. <a href="#experiments">Experiment 1</a> tests the prediction directly.</p>
+        </div>
+
+        <p>Two qualifications keep the identity honest. It holds up to the trainer's own numerical nondeterminism: recomputing log-probabilities twice with batch-dependent kernels can give ratios that differ from 1 in the last bits. And it says nothing about the optimizer: with Adam, the overall scale of <code>c</code> is largely absorbed, so normalizers matter mainly through the <em>relative</em> weight they give different responses (<a href="#aggregation">axis ③</a>).</p>
+
+        <h3 id="skel-names">Names as knob settings</h3>
+
+        <p>With the three slots fixed, a named algorithm becomes a row of settings. Most names change one or two cells.</p>
+
+        <table>
+          <thead>
+            <tr><th>Method</th><th>Â (step 3)</th><th>w, m (step 4)</th><th>c (step 5)</th><th>Regularizer (step 6)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PPO for RLHF</td><td>GAE from a learned critic, per token</td><td>PPO-clip, ε = 0.2</td><td>Token mean</td><td>KL to the SFT model, added to the reward</td></tr>
+            <tr><td>RLOO</td><td>r<sub>i</sub> − mean of the other G−1 rewards</td><td>None (one step per batch)</td><td>Whole sequence, no length division</td><td>KL in the reward</td></tr>
+            <tr><td>GRPO</td><td>(r − group mean) / group std</td><td>PPO-clip</td><td>1/(G·|y<sub>i</sub>|)</td><td>k3 KL estimator in the loss, β = 0.04</td></tr>
+            <tr><td>Dr. GRPO</td><td>r − group mean</td><td>PPO-clip</td><td>Constant</td><td>—</td></tr>
+            <tr><td>DAPO</td><td>(r − group mean) / group std</td><td>PPO-clip with ε<sub>low</sub> = 0.2, ε<sub>high</sub> = 0.28</td><td>1/Σ<sub>j</sub>|y<sub>j</sub>|</td><td>None</td></tr>
+            <tr><td>GSPO</td><td>(r − group mean) / group std</td><td>Sequence ratio s<sub>i</sub>, sequence mask</td><td>1/(G·|y<sub>i</sub>|)</td><td>—</td></tr>
+            <tr><td>CISPO</td><td>(r − group mean) / group std</td><td>Clipped stop-gradient weight, no mask</td><td>1/Σ<sub>j</sub>|y<sub>j</sub>|</td><td>—</td></tr>
+          </tbody>
+        </table>
+
+        <p>A dash means the paper does not make the choice part of the method. Dr. GRPO's advantage equals RLOO's times (G−1)/G, so the two rows differ only in the surrogate and the normalizer. Two things stand out. The advantage column has nearly converged: a group mean, with or without dividing by the group's standard deviation. The surrogate column holds most of the named innovations of 2025 — and by the identity above, that column only acts when the run is off-policy. <a href="#landscape">The algorithm landscape</a> extends this table to about twenty-five methods. The axis sections ask which cells can move results, and how strongly the evidence says so. Before that, one more ingredient is needed: <a href="#tension">a way to tell whether a change helped at all</a>.</p>
+      </section>
+
+      <section id="tension">
+        <h2>Why the estimator is not enough: the measurement problem</h2>
+
+        <p>The skeleton tells you what a method changes. It does not tell you whether the change helped. That judgement rests on a measurement, usually a benchmark score after training. In LLM RL that measurement is noisier, more confounded and less comparable across papers than the gains it is asked to detect. This section sizes the four confounders that matter most, then explains why "raises the ceiling" is the hardest claim of all to establish. Every verdict in the axis sections has been passed through both filters.</p>
+
+        <h3 id="tension-noise">Three layers of noise</h3>
+
+        <p>A reported score carries three kinds of variation. They have different causes, different sizes and different remedies, and papers rarely separate them.</p>
+
+        <p><strong>Evaluation sampling noise</strong> is the part you can compute. Take a fixed trained model that solves problem <code>j</code> with probability p<sub>j</sub>. Estimate pass@1 on <code>n</code> problems with <code>k</code> samples each. The estimate's variance is</p>
+
+        <div class="formula-display">Var = (1/n²) Σ<sub>j</sub> p<sub>j</sub>(1 − p<sub>j</sub>) / k  ≤  1 / (4nk)</div>
+
+        <p>AIME has n = 30 problems, so one problem is worth 3.3 points. The bound gives the following noise floor, as a worst case at p<sub>j</sub> = ½. It is the noise floor for comparing two models evaluated independently.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Samples per problem k</th><th class="num">Std of one score (pts)</th><th class="num">Std of a difference (pts)</th><th class="num">2σ of a difference (pts)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td class="num">9.1</td><td class="num">12.9</td><td class="num">25.8</td></tr>
+            <tr><td>4</td><td class="num">4.6</td><td class="num">6.5</td><td class="num">12.9</td></tr>
+            <tr><td>16</td><td class="num">2.3</td><td class="num">3.2</td><td class="num">6.5</td></tr>
+            <tr><td>32</td><td class="num">1.6</td><td class="num">2.3</td><td class="num">4.6</td></tr>
+            <tr><td>64</td><td class="num">1.1</td><td class="num">1.6</td><td class="num">3.2</td></tr>
+          </tbody>
+        </table>
+
+        <p>Real models have many problems with p<sub>j</sub> near 0 or 1, so the true noise is below this bound. The order of magnitude still holds. A single-sample AIME score cannot separate two methods that differ by less than about 25 points. At k = 32, the threshold falls to about 5.</p>
+
+        <p><strong>Training-seed variance</strong> is the part almost nobody measures. Two training runs with different seeds produce two different models, and no number of evaluation samples removes that difference. The few direct measurements are scattered: ScaleRL's three repeated runs put the fitted asymptote within ±0.015 of each other on its pass-rate scale (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>); LOOP reports 66.4 ± 4.8 on AppWorld across three runs (<a href="https://arxiv.org/abs/2502.01600">2502.01600</a>); WPO reports its DPO baseline at 20.6 ± 0.7 AlpacaEval LC over five seeds (<a href="https://arxiv.org/abs/2406.11827">2406.11827</a>). Most ablation tables in this literature come from one run per row, so this layer is simply unknown for them.</p>
+
+        <p><strong>Evaluation configuration</strong> shifts scores systematically rather than randomly. Hochlehnert et al. re-evaluated published reasoning models and found that changing the sampling temperature moves AIME scores by up to about 15 points, top-p by up to about 8, and the hardware cluster by up to about 8; switching evaluation framework moved one model by 4.5 points and another by none (<a href="https://arxiv.org/abs/2504.07086">2504.07086</a>). Within one paper these offsets cancel if the setup is held fixed. Across papers they do not, which is why numbers copied from another paper's table make poor baselines.</p>
+
+        <figure>
+          <img src="diagrams/02-dapo-noise-floor.svg" alt="DAPO's cumulative ablation increments on AIME 2024 plotted against the evaluation-noise band for a difference at 32 samples per problem.">
+          <figcaption><span class="fig-label">Figure 2.</span> DAPO's cumulative ablation (Table 1 of the paper), one row per added component, against the evaluation-sampling noise of a difference at k = 32 (shaded, ±2σ upper bound). Increments inside the band cannot be distinguished from evaluation noise alone. Training-seed variance, which would widen the band, is not reported.</figcaption>
+        </figure>
+
+        <p>Figure 2 applies the bound to the most-cited ablation table of 2025. DAPO trains Qwen2.5-32B and reports avg@32 on AIME 2024; the table gives no seeds or error bars, so each row reads as a single training run (<a href="https://arxiv.org/abs/2503.14476">2503.14476</a>, Table 1). Two increments, overlong filtering (+6) and dynamic sampling (+8), clear the evaluation band. The other three (+1 to +3) do not. That does not show those components are useless. It shows this table cannot establish them, and the axis sections look for other evidence before grading them.</p>
+
+        <h3 id="tension-base">Base model, template and contamination</h3>
+
+        <p>The second confounder is often the largest, and it concentrates in one model family. Qwen2.5-Math is the most common base model in 2025 RL papers, and it responds to almost any training signal.</p>
+        <ul>
+          <li><strong>Template.</strong> Before any RL, the same Qwen2.5-Math-7B averages 0.0 over five math benchmarks with the R1 prompt template, 26.5 with the Qwen template and 38.2 with no template (<a href="https://arxiv.org/abs/2503.20783">Dr. GRPO, 2503.20783</a>, Table 1).</li>
+          <li><strong>Reward content.</strong> On MATH-500, RL with the true reward improves Qwen2.5-Math-7B by 29.1 points, with deliberately wrong labels by 24.1, and with random rewards by 21.4. These gains generally do not transfer to Llama3 or OLMo2 (<a href="https://arxiv.org/abs/2506.10947">Spurious Rewards, 2506.10947</a>).</li>
+          <li><strong>Contamination.</strong> Given the first 60% of a MATH-500 problem, Qwen2.5-Math-7B reproduces the rest exactly 54.6% of the time; Llama3.1-8B does so 3.8% of the time (<a href="https://arxiv.org/abs/2507.10532">2507.10532</a>). OLMo 3, whose pre-training data is decontaminated and public, ran random rewards as a negative control and saw no gain (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>).</li>
+        </ul>
+
+        <p>Read together, these say that on Qwen2.5-Math a large part of any RL gain is elicitation of behaviour the base model already has. A method's gain there is an upper bound on what it does elsewhere until it is reproduced on another family. Even the direction of an effect can depend on the starting point: in a controlled study on Qwen3, the better loss-aggregation mode and the usefulness of clip-higher both flipped between the base and the instruction-tuned model (<a href="https://arxiv.org/abs/2508.08221">Tricks or Traps, 2508.08221</a>). Section <a href="#base-model">Base models and the ceiling</a> takes this up in full.</p>
+
+        <h3 id="tension-baselines">Baselines and implementations</h3>
+
+        <p>A gain is measured against a baseline, and the baseline is often the least-tuned run in the paper.</p>
+        <ul>
+          <li>VC-PPO and VAPO report large gains over a vanilla PPO baseline that scores 5.6 on AIME in VC-PPO and 5 on AIME 2024 in VAPO. That baseline uses GAE with λ = 0.95 and a critic initialized from the reward model. The axis section on advantages shows that this is a known failing configuration for long chains of thought (<a href="https://arxiv.org/abs/2503.01491">2503.01491</a>, <a href="https://arxiv.org/abs/2504.05118">2504.05118</a>; <a href="#advantage">axis ①</a>).</li>
+          <li>DPO on Mistral-7B, with UltraChat SFT and UltraFeedback preferences, scores 15.1 AlpacaEval LC in the SimPO paper and 20.6 ± 0.7 over five seeds in the WPO paper. The two SFT starting points differ by about one LC point (8.4 vs 9.5), much less than the 5.5-point spread in their DPO results. A margin of a few points over "DPO" depends on whose DPO (<a href="https://arxiv.org/abs/2405.14734">2405.14734</a>, <a href="https://arxiv.org/abs/2406.11827">2406.11827</a>).</li>
+          <li>Framework bugs move baselines too. TRL's IPO loss once summed where it should have averaged, which made IPO look worse than DPO until it was fixed (<a href="https://huggingface.co/blog/pref-tuning">Hugging Face, 2024</a>). A 2026 paper reports, in its abstract, that an optimizer-offload bug and a loss-aggregation bug depressed the SFT baselines of several mixed-policy papers (<a href="https://arxiv.org/abs/2604.23747">2604.23747</a>).</li>
+        </ul>
+
+        <h3 id="tension-accounting">Compute accounting and reporting</h3>
+
+        <p>"Faster" usually means fewer optimizer steps, not less compute. Methods that add work per step look better under step counting than under GPU-hours. PRIME's own timing table gives 680 s per step against 531 s for its RLOO baseline, 28% more (<a href="https://arxiv.org/abs/2502.01456">2502.01456</a>, Table 2). TreeRL trains on 480 responses per update against its baseline's 256 (<a href="https://arxiv.org/abs/2506.11902">2506.11902</a>; see <a href="#prm-credit">process rewards</a>). Stability claims have a parallel problem: several papers report the best checkpoint within a window rather than the final one, which hides late collapse.</p>
+
+        <h3 id="tension-ceiling">The ceiling is the hardest claim</h3>
+
+        <p>The strongest claim a method can make is that it raises the asymptote — the score training converges to with unlimited compute — rather than reaching the same score faster. Only one study measures this directly. ScaleRL fits each run's pass rate R against compute C with a sigmoid,</p>
+
+        <div class="formula-display">R(C) = R<sub>0</sub> + (A − R<sub>0</sub>) / (1 + (C<sub>mid</sub> / C)<sup>B</sup>)</div>
+
+        <p>and reads A as the asymptote and B as the efficiency (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>). Three facts limit how far A can be trusted:</p>
+        <ul>
+          <li>Repeated runs place A within ±0.015 of each other, and the authors recommend treating differences under ±0.02 as noise. B has no error estimate at all.</li>
+          <li>Within the fitting window, a log-linear curve with no asymptote fits about as well as the sigmoid: on Qwen3-14B-Base the two are "often nearly indistinguishable" over the fitting range (<a href="https://arxiv.org/abs/2610.04158">2610.04158</a>, §6.1). A is extrapolated, not observed.</li>
+          <li>A run that becomes unstable and is cut short fits as a run with a low asymptote. Instability can therefore masquerade as a lower ceiling.</li>
+        </ul>
+
+        <p>This survey therefore applies one asymmetric rule. A verdict of "affects efficiency only" is more reliable than "raises the ceiling". Differences in A below about 0.02–0.03 are reported as unresolved. The ceiling also has a second meaning, coverage at large k (pass@k), which behaves differently and is treated in <a href="#what-rl-changes">what RL actually changes</a>.</p>
+
+        <h3 id="tension-summary">The four filters</h3>
+
+        <table>
+          <thead>
+            <tr><th>Confounder</th><th>Typical size</th><th>What to ask of a paper</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Evaluation noise</td><td>Up to ~26 pts (2σ, difference) on AIME at k = 1; ~5 at k = 32</td><td>Samples per problem, number of training seeds, confidence intervals</td></tr>
+            <tr><td>Base model and contamination</td><td>Random rewards +21 on Qwen2.5-Math; template 0 → 38</td><td>A second model family; a random-reward control; a post-cutoff benchmark</td></tr>
+            <tr><td>Baseline and implementation</td><td>5.5 LC between two papers' DPO on the same recipe</td><td>Was the baseline tuned as hard as the method, and in the same code?</td></tr>
+            <tr><td>Accounting and reporting</td><td>+28% time per step; 480 vs 256 responses</td><td>GPU-hours, not steps; final, not best, checkpoint</td></tr>
+          </tbody>
+        </table>
+
+        <p>None of this makes the literature useless. It sets the grade a result can earn. A single-run increment smaller than the evaluation band is at best grade <span class="grade grade-c">C</span>. Agreement across independent controlled studies, on more than one model family, is what earns <span class="grade grade-a">A</span>. <a href="#checklist">The checklist</a> turns these filters into twelve questions. The axis sections apply them one design choice at a time, starting from <a href="#axes">the map of all eight axes</a>.</p>
+      </section>
+
+      <section id="axes">
+        <h2>Eight design axes worth judging</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> One verdict map for every axis, then one subsection per axis: what the knob changes, the mechanism, the controlled evidence, the verdict, and what is mathematically interesting.</aside>
+      </section>
+
+      <section id="advantage">
+        <h3>① Advantage and baseline</h3>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Critic vs critic-free; RLOO = Dr. GRPO × G/(G−1); GAE with λ = 1 is required for long CoT; the critic's benefit is cost, not ceiling.</aside>
+      </section>
+
+      <section id="normalization">
+        <h3>② Normalization: std changes the objective, not the ceiling</h3>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Prompt weights w(p) as implicit objectives: Σp, Σ 2·arcsin√p, Σ log p, pass@k.</aside>
+      </section>
+
+      <section id="aggregation">
+        <h3>③ Loss aggregation and the 1/|y| length bias</h3>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Per-token weights under four aggregation modes, and why the empirical direction flips between base and aligned models.</aside>
+      </section>
+
+      <section id="trust-region">
+        <h3>④ Clipping, trust regions, and ratio granularity</h3>
+
+        <aside class="note draft"><strong>Draft pending.</strong> The ratio × advantage quadrant map of PPO-clip, clip-higher, CISPO, GSPO, SAPO, IcePop.</aside>
+      </section>
+
+      <section id="kl-entropy">
+        <h3>⑤ KL and entropy regularization</h3>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Gradients of the k1/k2/k3 estimators; anchor KL vs proximal KL; entropy dynamics and the collapse caused by off-policy SGD reuse.</aside>
+      </section>
+
+      <section id="off-policy">
+        <h3>⑥ Off-policy data and train–inference mismatch</h3>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Four sources of off-policyness, the correction family (TIS, sequence IS, masks, routing replay), and staleness as an S·η budget.</aside>
+      </section>
+
+      <section id="data-sampling">
+        <h3>⑦ Data and sampling</h3>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Batch size and generation length move the asymptote; filtering, group size and truncation handling mostly do not.</aside>
+      </section>
+
+      <section id="reward">
+        <h3>⑧ Reward signal and verifiers</h3>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Verifier precision over recall; unsupervised rewards sharpen and then collapse; rubric rewards.</aside>
+      </section>
+
+      <section id="what-rl-changes">
+        <h2>The layer beneath the loss: what RL actually changes</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Sharpening vs expansion: pass@1 rises while pass@large-k often falls.</aside>
+      </section>
+
+      <section id="base-model">
+        <h2>Base models, mid-training, and the ceiling outside RL</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Templates, contamination, and why Qwen and Llama/OLMo diverge under the same RL recipe.</aside>
+      </section>
+
+      <section id="preference">
+        <h2>Family case study — DPO and preference optimization</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Data on-policyness dominates loss shape; tuned-β losses tie.</aside>
+      </section>
+
+      <section id="prm-credit">
+        <h2>Family case study — process rewards and dense credit assignment</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Learned PRMs summed into the return get hacked; on-policy MC credit buys efficiency, not ceiling.</aside>
+      </section>
+
+      <section id="agentic">
+        <h2>Family case study — agentic multi-turn RL</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Correctness constraints decide success; turn-level credit remains single-paper evidence.</aside>
+      </section>
+
+      <section id="case-scalerl">
+        <h2>Case study — ScaleRL: what a ceiling-vs-efficiency study can and cannot tell</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Protocol, sigmoid fits, leave-one-out design, and four internal contradictions.</aside>
+      </section>
+
+      <section id="case-dapo-table">
+        <h2>Case study — re-reading DAPO's ablation table against the noise floor</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Cumulative ablations, order dependence, and single-seed lower bounds.</aside>
+      </section>
+
+      <section id="case-weak-baseline">
+        <h2>Case study — anatomy of a vanishing 10-point gain</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> VC-PPO / VAPO vs GenAC: the baseline PPO sat on a known bad configuration.</aside>
+      </section>
+
+      <section id="case-spurious">
+        <h2>Case study — spurious rewards on Qwen2.5-Math</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> A robust phenomenon with a contested mechanism, and the controls it demands of every other paper.</aside>
+      </section>
+
+      <section id="case-frontier">
+        <h2>Case study — what frontier reports actually do</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> DeepSeek, Kimi, MiniMax, Magistral, OLMo 3, Qwen3, GLM: choices on each axis, ablated or merely declared.</aside>
+      </section>
+
+      <section id="recent">
+        <h2>Recent results (2026)</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> GenAC, CIS, VeXact, the identifiability of A, the S·η scaling law, the group-std identity.</aside>
+      </section>
+
+      <section id="patterns">
+        <h2>Recurring patterns — the algebraic view</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Six patterns: collapse to REINFORCE, prompt weighting as objective, sharpening, the dangerous quadrant, bounded proxies, data on-policyness.</aside>
+      </section>
+
+      <section id="code">
+        <h2>Reading real code: one loss function, ten config flags</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> verl's policy-loss code, read flag by flag against the eight axes, plus a table of framework defaults.</aside>
+      </section>
+
+      <section id="landscape">
+        <h2>The algorithm landscape</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Algorithm × axis map and a two-band timeline (2017–2026).</aside>
+      </section>
+
+      <section id="beyond">
+        <h2>Beyond verifiable single-turn rewards</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> RLHF with learned reward models, rubric and judge rewards, on-policy distillation.</aside>
+      </section>
+
+      <section id="scaling">
+        <h2>The scaling chain</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> What moves the asymptote A versus the efficiency B.</aside>
+      </section>
+
+      <section id="pitfalls">
+        <h2>Pitfalls — 踩坑录 at the algorithm layer</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Framework defaults and bugs that silently change the mathematics.</aside>
+      </section>
+
+      <section id="checklist">
+        <h2>A researcher's checklist — what to verify before trusting an RL algorithm result</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Twelve questions, ordered by how often they change the conclusion.</aside>
+      </section>
+
+      <section id="decision-guide">
+        <h2>A decision guide — what to set, in what order</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Must-get-right, cheap defaults, per-model knobs, and folklore to skip; a decision tree by setting.</aside>
+      </section>
+
+      <section id="experiments">
+        <h2>Twelve small experiments — how to do this yourself</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Each experiment is chosen to change the evidence grade of one verdict.</aside>
+      </section>
+
+      <section id="open">
+        <h2>Open questions at the algorithm–theory boundary</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> Identifiability of the ceiling, tight off-policy bounds, the S·η law, choosing f(p), sharpening vs expansion.</aside>
+      </section>
+
+      <section id="reading">
+        <h2>A reading list for the theoretically inclined</h2>
+
+        <aside class="note draft"><strong>Draft pending.</strong> About twenty papers in four groups.</aside>
+      </section>
+
+      <footer>
+        Written as an algorithms survey for theorists, and as a companion to <a href="https://chenggong-zhang.github.io/RL_infra/">RL Infrastructure for the Mathematically Inclined</a>: that survey asks which engineering choices change the statistical object being optimized; this one asks which algorithmic choices change the outcome. Evidence is current as of October 2026. Where a number was checked only against an abstract, the text says so.
+        <br><br>
+        Visual styling after <a href="https://github.com/just-the-docs/just-the-docs">just-the-docs</a>.
+        <br><br>
+        Written by <a href="https://chenggong-zhang.github.io/">Chenggong Zhang</a>
+        · <a href="https://chenggong-zhang.github.io/blog/">more notes on the blog</a>
+        · <a href="https://github.com/chenggong-zhang/RL_algorithms">source on GitHub</a>.
+      </footer>
+
+    </article>
+  </main>
+
+  <aside class="toc-rail">
+    <h4>① Survey</h4>
+    <ul>
+      <li><a href="#why">Preface</a></li>
+      <li><a href="#how-to-read">How to read this survey</a></li>
+      <li><a href="#skeleton">The skeleton</a></li>
+      <li><a href="#tension">Why the estimator is not enough</a></li>
+    </ul>
+
+    <h4>② Design axes</h4>
+    <ul>
+      <li><a href="#axes">Eight axes at a glance</a></li>
+      <li><a href="#advantage">① Advantage &amp; baseline</a></li>
+      <li><a href="#normalization">② Normalization</a></li>
+      <li><a href="#aggregation">③ Loss aggregation</a></li>
+      <li><a href="#trust-region">④ Clipping &amp; trust regions</a></li>
+      <li><a href="#kl-entropy">⑤ KL &amp; entropy</a></li>
+      <li><a href="#off-policy">⑥ Off-policy &amp; mismatch</a></li>
+      <li><a href="#data-sampling">⑦ Data &amp; sampling</a></li>
+      <li><a href="#reward">⑧ Reward &amp; verifiers</a></li>
+    </ul>
+
+    <h4>③ The layer beneath</h4>
+    <ul>
+      <li><a href="#what-rl-changes">What RL actually changes</a></li>
+      <li><a href="#base-model">Base models &amp; the ceiling</a></li>
+    </ul>
+
+    <h4>④ Algorithm families</h4>
+    <ul>
+      <li><a href="#preference">DPO &amp; preference optimization</a></li>
+      <li><a href="#prm-credit">Process rewards &amp; credit</a></li>
+      <li><a href="#agentic">Agentic multi-turn RL</a></li>
+    </ul>
+
+    <h4>⑤ Evidence case studies</h4>
+    <ul>
+      <li><a href="#case-scalerl">ScaleRL · ceiling vs efficiency</a></li>
+      <li><a href="#case-dapo-table">DAPO's ablation table</a></li>
+      <li><a href="#case-weak-baseline">A vanishing 10-point gain</a></li>
+      <li><a href="#case-spurious">Spurious rewards</a></li>
+      <li><a href="#case-frontier">Frontier recipes</a></li>
+      <li><a href="#recent">Recent results</a></li>
+    </ul>
+
+    <h4>⑥ Putting it together</h4>
+    <ul>
+      <li><a href="#patterns">Patterns · algebraic view</a></li>
+      <li><a href="#code">Reading real code</a></li>
+      <li><a href="#landscape">Algorithm landscape</a></li>
+      <li><a href="#beyond">Beyond verifiable rewards</a></li>
+      <li><a href="#scaling">Scaling chain</a></li>
+      <li><a href="#pitfalls">Pitfalls (踩坑录)</a></li>
+      <li><a href="#checklist">Researcher's checklist</a></li>
+    </ul>
+
+    <h4>⑦ Going further</h4>
+    <ul>
+      <li><a href="#decision-guide">Decision guide</a></li>
+      <li><a href="#experiments">Twelve small experiments</a></li>
+      <li><a href="#open">Open questions</a></li>
+      <li><a href="#reading">Reading list</a></li>
+    </ul>
+
+  </aside>
+</div>
+
+<script>
+// Active-link tracking spans both sidebars: left nav (.nav-link) and right toc-rail (.toc-rail a)
+const navLinks = document.querySelectorAll('.nav-link, .toc-rail a');
+const sections = document.querySelectorAll('article section, article > header');
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const id = entry.target.id;
+      if (!id) return;
+      navLinks.forEach(a => {
+        a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+      });
+    }
+  });
+}, { rootMargin: '-80px 0px -70% 0px' });
+sections.forEach(s => { if (s.id) observer.observe(s); });
+
+document.querySelectorAll('[data-nav-collapsible]').forEach(item => {
+  const toggle = item.querySelector('.nav-toggle');
+  if (!toggle) return;
+
+  toggle.addEventListener('click', () => {
+    const collapsed = item.classList.toggle('is-collapsed');
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.setAttribute('aria-label', collapsed ? 'Expand skeleton subsections' : 'Collapse skeleton subsections');
+  });
+});
+
+const searchBox = document.getElementById('searchBox');
+if (searchBox) {
+  searchBox.addEventListener('input', e => {
+    const q = e.target.value.toLowerCase().trim();
+    document.querySelectorAll('article section').forEach(sec => {
+      const text = sec.textContent.toLowerCase();
+      sec.style.display = (!q || text.includes(q)) ? '' : 'none';
+    });
+  });
+}
+</script>
+</body>
+</html>

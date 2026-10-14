@@ -1,0 +1,130 @@
+
+      <section id="skeleton">
+        <h2>The skeleton: one gradient estimator, three knobs</h2>
+
+        <p>The simplest useful map of RL post-training algorithms is not a list of names. It is the one quantity they all compute: a gradient estimate from a batch of sampled responses. Every method in this survey writes that estimate in the same form and differs only in what it puts into three slots. Reading a new paper therefore comes down to two questions: which slot did it change, and can that slot matter in the regime where the paper ran its experiments?</p>
+
+        <figure>
+          <img src="diagrams/01-estimator-pipeline.svg" alt="One update in seven steps — sample, score, baseline, weight and mask, aggregate, regularize, step — each labelled with its design axes, above the single gradient estimator whose three knobs they set.">
+          <figcaption><span class="fig-label">Figure 1.</span> One update of a policy-gradient method. Steps 1–2 decide what data the update sees, steps 3–6 decide how the loss reads it, and step 7 decides how long the data stays in use. Circled numbers are the design axes of this survey.</figcaption>
+        </figure>
+
+        <h3 id="skel-steps">One update, seven steps</h3>
+
+        <p>One update takes a batch of prompts and returns a parameter change. Each of its seven steps is a decision, and each decision is one of the design axes judged later in the survey.</p>
+
+        <table>
+          <thead>
+            <tr><th class="nowrap">Step</th><th>What is decided</th><th class="nowrap">Axis</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="nowrap">1 · Sample</td><td>Which policy generates the responses, how many per prompt (<code>G</code>), at what temperature. The generator is the inference engine's copy of the policy, π<sub>sampler</sub>, which need not match the trainer's copy numerically.</td><td class="nowrap">⑥ ⑦</td></tr>
+            <tr><td class="nowrap">2 · Score</td><td>Which reward <code>r(x, y)</code> each response receives: a rule-based verifier, a learned reward model, or a judge.</td><td class="nowrap">⑧</td></tr>
+            <tr><td class="nowrap">3 · Baseline</td><td>How the reward becomes an advantage <code>Â</code>: which baseline is subtracted and which scale divides it.</td><td class="nowrap">① ②</td></tr>
+            <tr><td class="nowrap">4 · Weight, mask</td><td>How each token's gradient is reweighted or zeroed, as a function of the probability ratio between the current policy and the policy at the start of the update.</td><td class="nowrap">④ ⑥</td></tr>
+            <tr><td class="nowrap">5 · Aggregate</td><td>How per-token terms are summed: per token, per sequence, per prompt, or with a constant.</td><td class="nowrap">③</td></tr>
+            <tr><td class="nowrap">6 · Regularize</td><td>Which KL or entropy terms are added.</td><td class="nowrap">⑤</td></tr>
+            <tr><td class="nowrap">7 · Step</td><td>How many optimizer steps the batch receives before new data is sampled.</td><td class="nowrap">⑥</td></tr>
+          </tbody>
+        </table>
+
+        <p>Steps 1 and 2 sit outside the loss function. That is why data and reward get their own axes (⑦, ⑧) rather than being treated as experimental setup: as <a href="#tension">the next section</a> and <a href="#what-rl-changes">the layer beneath the loss</a> show, they move results more than most loss changes do.</p>
+
+        <h3 id="skel-knobs">Three knobs</h3>
+
+        <p>Steps 3–5 fill the three slots of one expression. Every method in this survey computes</p>
+
+        <div class="formula-display">g = Σ<sub>i</sub> Σ<sub>t</sub> c<sub>i,t</sub> · w<sub>i,t</sub> · m<sub>i,t</sub> · Â<sub>i</sub> · ∇<sub>θ</sub> log π<sub>θ</sub>(y<sub>i,t</sub> | x, y<sub>i,&lt;t</sub>)</div>
+
+        <div class="primer-box">
+          <p><strong>Notation.</strong> <code>i</code> indexes the responses in the batch and <code>t</code> the tokens of response <code>y_i</code>. π<sub>θ</sub> is the policy being optimized. π<sub>old</sub> is the same network at the start of the update; its log-probabilities are computed once, before the first optimizer step. π<sub>sampler</sub> is the inference engine's copy that actually generated the tokens. The <strong>probability ratio</strong> is r<sub>i,t</sub> = π<sub>θ</sub>(y<sub>i,t</sub> | ·) / π<sub>old</sub>(y<sub>i,t</sub> | ·).</p>
+        </div>
+
+        <ul>
+          <li><strong>Â<sub>i</sub>, the advantage</strong> (step 3). With outcome rewards it is one scalar per response; a learned critic makes it per-token, Â<sub>i,t</sub>.</li>
+          <li><strong>w<sub>i,t</sub> · m<sub>i,t</sub>, the surrogate</strong> (step 4). The weight <code>w</code> rescales a token's gradient; the mask <code>m ∈ {0, 1}</code> removes it. This is the slot where PPO, DAPO, GSPO, CISPO and SAPO differ.</li>
+          <li><strong>c<sub>i,t</sub>, the normalizer</strong> (step 5). It fixes how much each token counts relative to the others: 1/(G·|y<sub>i</sub>|), 1/Σ<sub>j</sub>|y<sub>j</sub>|, or a constant.</li>
+        </ul>
+
+        <p>The surrogate slot is easiest to read off the gradient, not the loss. PPO's per-token objective is r<sub>i,t</sub>·Â<sub>i</sub>, and ∇r = r·∇log π, so an unclipped token contributes with weight w = r. Clipping does not shrink the weight; it sets the mask to zero once the ratio has moved far enough in the direction the advantage favours. The other surrogates change one of these two rules.</p>
+
+        <table>
+          <thead>
+            <tr><th>Surrogate</th><th>Weight w<sub>i,t</sub></th><th>Mask m<sub>i,t</sub> = 0 when</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PPO-clip</td><td>r<sub>i,t</sub></td><td>Â &gt; 0 and r &gt; 1+ε, or Â &lt; 0 and r &lt; 1−ε</td></tr>
+            <tr><td>DAPO (clip-higher)</td><td>r<sub>i,t</sub></td><td>Same rule with ε<sub>high</sub> &gt; ε<sub>low</sub> on the upper side</td></tr>
+            <tr><td>CISPO</td><td>sg(min(r<sub>i,t</sub>, 1+ε<sub>high</sub>)), a stop-gradient weight; MiniMax-M1 effectively disables the lower bound</td><td>Never; the clipped weight replaces the mask</td></tr>
+            <tr><td>GSPO</td><td>s<sub>i</sub> = exp((1/|y<sub>i</sub>|) Σ<sub>t</sub> log r<sub>i,t</sub>), shared by all tokens of the response</td><td>For the whole response, when s<sub>i</sub> leaves its band (1 − 3·10<sup>−4</sup>, 1 + 4·10<sup>−4</sup>) in the advantage's direction</td></tr>
+            <tr><td>SAPO</td><td>r<sub>i,t</sub> · 4p(1 − p) with p = σ(τ(r<sub>i,t</sub> − 1)), a smooth gate</td><td>Never hard-masked; the gate decays instead</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="skel-identity">The r ≡ 1 identity</h3>
+
+        <p>The surrogate slot only acts through the ratio. That makes one condition decisive.</p>
+
+        <div class="technique-card">
+          <p><strong>Identity.</strong> Suppose each rollout batch receives a single optimizer step and π<sub>old</sub> is computed by the trainer at the current parameters. Then r<sub>i,t</sub> = 1 for every token when the gradient is taken, and PPO-clip, DAPO, GSPO, GMPO, CISPO and SAPO all return</p>
+          <div class="formula-display">g = Σ<sub>i</sub> Σ<sub>t</sub> c<sub>i,t</sub> · Â<sub>i</sub> · ∇<sub>θ</sub> log π<sub>θ</sub>(y<sub>i,t</sub> | x, y<sub>i,&lt;t</sub>)</div>
+          <p>That is REINFORCE with a baseline. The six surrogates then differ only in <code>c</code> and <code>Â</code>, plus whatever regularizer step 6 adds — GRPO's KL term, for instance, still contributes β(π<sub>ref</sub>/π<sub>θ</sub> − 1) per token.</p>
+        </div>
+
+        <p>The check is one line per method:</p>
+        <ul>
+          <li><strong>PPO-clip, DAPO:</strong> 1 lies inside [1−ε<sub>low</sub>, 1+ε<sub>high</sub>], so no token is masked and w = r = 1.</li>
+          <li><strong>CISPO:</strong> min(1, 1+ε<sub>high</sub>) = 1, so w = 1.</li>
+          <li><strong>GSPO, GMPO:</strong> without clipping both optimize the geometric mean of the token ratios times Â; they differ only in where the clip acts (whole sequence vs per token in log space). At ratios equal to 1 the mean is 1, so w = 1, and the 1/|y<sub>i</sub>| from differentiating the mean moves into <code>c</code>.</li>
+          <li><strong>SAPO:</strong> p = σ(0) = ½, so 4p(1 − p) = 1 and w = 1, whatever the temperature τ.</li>
+        </ul>
+
+        <p>What remains is the normalizer. At r = 1 the table of differences is short:</p>
+
+        <table>
+          <thead>
+            <tr><th>Method</th><th>c<sub>i,t</sub> at r = 1</th><th>Consequence</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>GRPO, GSPO, GMPO, SAPO</td><td>1/(G·|y<sub>i</sub>|)</td><td>Each response counts equally; long responses get less weight per token</td></tr>
+            <tr><td>DAPO, CISPO</td><td>1/Σ<sub>j</sub>|y<sub>j</sub>|</td><td>Each token counts equally within the normalizing group</td></tr>
+            <tr><td>Dr. GRPO</td><td>A constant (1/G in the paper's formula; the released code divides by a fixed <code>MAX_TOKENS</code>)</td><td>No length dependence at all</td></tr>
+          </tbody>
+        </table>
+
+        <p>The ratio leaves 1 for exactly two reasons:</p>
+        <ol>
+          <li><strong>More than one optimizer step per batch.</strong> Minibatch <code>k</code> is evaluated at the parameters left by the previous <code>k − 1</code> steps. The step count is often a silent default: verl's stock configuration (<code>train_batch_size = 1024</code>, <code>ppo_mini_batch_size = 256</code>) takes four steps per batch. Asynchronous rollout adds whole policy versions of staleness on top (see <a href="https://chenggong-zhang.github.io/RL_infra/#async">the infra survey's async section</a>).</li>
+          <li><strong>π<sub>old</sub> taken from the sampler.</strong> If the loss uses the inference engine's log-probabilities instead of recomputing them on the trainer, then r = π<sub>θ</sub>/π<sub>sampler</sub> already on the first step, and the ratio carries the train–inference mismatch.</li>
+        </ol>
+
+        <p>The second point has a consequence that is easy to miss. When π<sub>old</sub> is recomputed on the trainer — the standard setup, and the one the infra survey recommends — the ratio starts at exactly 1 no matter what π<sub>sampler</sub> did. The train–inference mismatch is then invisible to every surrogate in the table: all six are biased by it in the same way. Only corrections that read π<sub>sampler</sub> explicitly, such as truncated or masked importance sampling, can see it (<a href="#off-policy">axis ⑥</a>).</p>
+
+        <div class="question-box">
+          <p><strong>Reading rule.</strong> A gap between two of these surrogates, measured with one optimizer step per batch and a recomputed π<sub>old</sub>, cannot come from the surrogate. It comes from the normalizer, the advantage, or noise. A gap measured with many steps per batch measures how each surrogate copes with that run's staleness. It is a property of the run, not of the loss alone.</p>
+          <p>None of the papers that introduced these surrogates trained at r ≡ 1 in its own experiments. DAPO takes 16 gradient updates per rollout step, MiniMax-M1 (CISPO) 16, GMPO 8, and GSPO and SAPO split each rollout batch into 4 minibatches. Their reported gains are therefore gains under staleness, and the reported rankings of these losses contradict each other across papers (<a href="#trust-region">axis ④</a>). That is what this rule predicts if the papers ran at different staleness levels. <a href="#experiments">Experiment 1</a> tests the prediction directly.</p>
+        </div>
+
+        <p>Two qualifications keep the identity honest. It holds up to the trainer's own numerical nondeterminism: recomputing log-probabilities twice with batch-dependent kernels can give ratios that differ from 1 in the last bits. And it says nothing about the optimizer: with Adam, the overall scale of <code>c</code> is largely absorbed, so normalizers matter mainly through the <em>relative</em> weight they give different responses (<a href="#aggregation">axis ③</a>).</p>
+
+        <h3 id="skel-names">Names as knob settings</h3>
+
+        <p>With the three slots fixed, a named algorithm becomes a row of settings. Most names change one or two cells.</p>
+
+        <table>
+          <thead>
+            <tr><th>Method</th><th>Â (step 3)</th><th>w, m (step 4)</th><th>c (step 5)</th><th>Regularizer (step 6)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PPO for RLHF</td><td>GAE from a learned critic, per token</td><td>PPO-clip, ε = 0.2</td><td>Token mean</td><td>KL to the SFT model, added to the reward</td></tr>
+            <tr><td>RLOO</td><td>r<sub>i</sub> − mean of the other G−1 rewards</td><td>None (one step per batch)</td><td>Whole sequence, no length division</td><td>KL in the reward</td></tr>
+            <tr><td>GRPO</td><td>(r − group mean) / group std</td><td>PPO-clip</td><td>1/(G·|y<sub>i</sub>|)</td><td>k3 KL estimator in the loss, β = 0.04</td></tr>
+            <tr><td>Dr. GRPO</td><td>r − group mean</td><td>PPO-clip</td><td>Constant</td><td>—</td></tr>
+            <tr><td>DAPO</td><td>(r − group mean) / group std</td><td>PPO-clip with ε<sub>low</sub> = 0.2, ε<sub>high</sub> = 0.28</td><td>1/Σ<sub>j</sub>|y<sub>j</sub>|</td><td>None</td></tr>
+            <tr><td>GSPO</td><td>(r − group mean) / group std</td><td>Sequence ratio s<sub>i</sub>, sequence mask</td><td>1/(G·|y<sub>i</sub>|)</td><td>—</td></tr>
+            <tr><td>CISPO</td><td>(r − group mean) / group std</td><td>Clipped stop-gradient weight, no mask</td><td>1/Σ<sub>j</sub>|y<sub>j</sub>|</td><td>—</td></tr>
+          </tbody>
+        </table>
+
+        <p>A dash means the paper does not make the choice part of the method. Dr. GRPO's advantage equals RLOO's times (G−1)/G, so the two rows differ only in the surrogate and the normalizer. Two things stand out. The advantage column has nearly converged: a group mean, with or without dividing by the group's standard deviation. The surrogate column holds most of the named innovations of 2025 — and by the identity above, that column only acts when the run is off-policy. <a href="#landscape">The algorithm landscape</a> extends this table to about twenty-five methods. The axis sections ask which cells can move results, and how strongly the evidence says so. Before that, one more ingredient is needed: <a href="#tension">a way to tell whether a change helped at all</a>.</p>
+      </section>

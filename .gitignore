@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs
+*.log
+*.claude
+# Local Claude Code settings (personal overrides — keep .claude/settings.json for team)
+.claude/settings.local.json
+
+# Jekyll cruft (in case someone runs jekyll locally on a fork)
+_site/
+.sass-cache/
+.jekyll-cache/
+.jekyll-metadata
+.bundle/
+vendor/
+
+# Misc
+Thumbs.db
+node_modules/
