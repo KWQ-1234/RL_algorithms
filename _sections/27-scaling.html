@@ -2,5 +2,29 @@
       <section id="scaling">
         <h2>The scaling chain</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> What moves the asymptote A versus the efficiency B.</aside>
+        <p>The infra survey's scaling chain walked up hardware tiers, from one node to a thousand GPUs, naming what breaks first at each. The algorithmic counterpart asks which choices still matter as compute grows, and in what way. ScaleRL's framing is the right starting point: separate what raises the asymptote from what reaches it faster, and be honest about which of the two a given experiment can see.</p>
+
+        <figure>
+          <img src="diagrams/07-sigmoid.svg" alt="Three illustrative sigmoid curves of pass rate against log compute: a baseline, an efficiency change that reaches the same asymptote sooner, and a ceiling change that reaches a higher asymptote later.">
+          <figcaption><span class="fig-label">Figure 7.</span> What A, B and C<sub>mid</sub> mean. An efficiency change steepens the curve and reaches the same asymptote sooner; a ceiling change raises the asymptote and can arrive later. Within the observed compute, a ceiling change can look worse than the baseline. Curves are illustrative, not fitted.</figcaption>
+        </figure>
+
+        <h3 id="scaling-links">The links of the chain</h3>
+
+        <ol>
+          <li><strong>Base model and mid-training</strong> set the coverage RL can reach (<a href="#base-model">base models</a>). Largest effect, upstream of RL.</li>
+          <li><strong>Generation length and batch size</strong> raise the asymptote within RL: in ScaleRL, 14k → 32k tokens and 512 → 2,048 prompts each moved A by about 0.035, beyond its noise band. Both cost efficiency: the longer budget needed 4.4× the compute to reach its midpoint (<a href="#data-sampling">axis ⑦</a>).</li>
+          <li><strong>Numerical consistency and routing</strong> decide whether a long run survives to its asymptote at all, especially on MoE models (<a href="#off-policy">axis ⑥</a>). An unstable run fits as a low ceiling.</li>
+          <li><strong>Loss, normalization, aggregation, filtering and the off-policy algorithm</strong> mostly move B: how quickly the asymptote is approached (<a href="#case-scalerl">ScaleRL case study</a>).</li>
+          <li><strong>Staleness</strong> is budgeted together with learning rate: the largest stable step size scales inversely with lag (<a href="#off-policy">axis ⑥</a>).</li>
+        </ol>
+
+        <h3 id="scaling-practice">What follows for running at scale</h3>
+
+        <ul>
+          <li><strong>Choose by B at small scale, by stability at large scale.</strong> Efficiency differences show up early and cheaply. Stability differences show up late, after thousands of GPU-hours, and are what decide whether the asymptote is reached.</li>
+          <li><strong>Watch the truncation rate.</strong> In ScaleRL, truncation rates around 10–15% preceded instability; it is a cheap early warning.</li>
+          <li><strong>Extrapolate cautiously.</strong> ScaleRL fitted the first half of a 100k GPU-hour run and the fit matched the second half — shown in a figure, without an error estimate. A log-linear curve with no asymptote often fits as well within the observed range (<a href="https://arxiv.org/abs/2610.04158">2610.04158</a>). Predicting the next factor of two in compute is reasonable; predicting a ceiling is not.</li>
+          <li><strong>Expect the ranking of recipes to change with compute.</strong> Figure 7's ceiling curve is below the baseline until late. A comparison made at a fixed small budget favours efficient recipes and can miss ones that would win with more compute.</li>
+        </ul>
       </section>

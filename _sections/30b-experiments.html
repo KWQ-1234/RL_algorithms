@@ -2,5 +2,29 @@
       <section id="experiments">
         <h2>Twelve small experiments — how to do this yourself</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Each experiment is chosen to change the evidence grade of one verdict.</aside>
+        <p>The infra survey closed with a reading plan for doing the analysis yourself. The algorithmic equivalent is a set of experiments, because most of the open verdicts in this survey are open for lack of a controlled run, not for lack of ideas. Each experiment below is chosen to change the evidence grade of one verdict, and each fits on one node or a few with models of 1.5B to 8B parameters.</p>
+
+        <p><strong>A shared protocol</strong> makes the results worth more than the sum of their parts: run on Qwen and on at least one other family (OLMo or Llama); use at least five training seeds; evaluate with many samples per problem on a benchmark released after the models; report compute in GPU-hours; include a random-reward control; and report final as well as best checkpoints.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>#</th><th>Question (verdict it would change)</th><th>Design</th><th>What would decide it</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>Does the r ≡ 1 identity hold in practice? (<a href="#trust-region">④</a>)</td><td>Remove mismatch (FP16 or batch-invariant kernels), one step per batch; compare GRPO, DAPO, GSPO, CISPO, SAPO with matched normalization; then repeat at 2, 4, 8 steps per batch</td><td>Differences within seed noise at one step, emerging as steps grow</td></tr>
+            <tr><td>2</td><td>Do recipe choices transfer across families? (②③④)</td><td>2×2×2 grid of std normalization, aggregation and clip-higher on Qwen base, Qwen instruct, OLMo and Llama, ≥ 1,000 steps</td><td>Which sign flips track base-vs-aligned and which track family</td></tr>
+            <tr><td>3</td><td>Is GRPO's easy-prompt up-weighting the harmful half? (②)</td><td>Weights 1/√(p(1−p)), the same only for p &lt; ½, and constant; on easy-heavy, mixed and hard-heavy data</td><td>Asymmetric weighting matches or beats both</td></tr>
+            <tr><td>4</td><td>Can the asymptote be identified? (<a href="#tension-ceiling">ceiling</a>)</td><td>Fit sigmoid and log-linear forms to the first half of long runs; test on the second half; bootstrap A and B</td><td>If A's interval is wider than 0.03, downgrade every "raises the ceiling" claim</td></tr>
+            <tr><td>5</td><td>How do truncation handling and length budget interact? (⑦)</td><td>Masking, soft penalty, interruption, nothing × budgets of 4k, 8k, 16k; log truncation rate</td><td>Helps at short budgets, hurts at long ones; truncation rate as early warning</td></tr>
+            <tr><td>6</td><td>Which mismatch corrections reduce bias? (⑥)</td><td>Inject known mismatch (e.g. low-precision rollout); estimate a reference gradient from many samples; compare TIS, sequence masks, geometric filters, IcePop by cosine similarity at several lengths</td><td>A direct bias–variance measurement that does not exist yet</td></tr>
+            <tr><td>7</td><td>Is staleness a staleness × LR budget? (⑥)</td><td>Staleness 1–16 × three learning rates; record steps to collapse</td><td>Collapse boundary along constant S·η</td></tr>
+            <tr><td>8</td><td>Does clip-higher's effect scale with staleness? (④)</td><td>ε<sub>high</sub> ∈ {0.2, 0.28, 0.35} × 1 or 4 steps per batch, base and instruct; log clip rate</td><td>Effect grows with clip rate, not with model type</td></tr>
+            <tr><td>9</td><td>Is dense credit worth its rollouts? (<a href="#prm-credit">PRM</a>)</td><td>Give GRPO the extra rollouts a tree or MC method uses (larger G or more steps); 4k and 16k context</td><td>Gap closes under matched compute</td></tr>
+            <tr><td>10</td><td>How much does preference data provenance outweigh the loss? (<a href="#preference">DPO</a>)</td><td>Loss (DPO, IPO, SimPO, LN-DPO) × data (offline, semi-online) × β grid, ≥ 3 seeds</td><td>Ratio of data effect to loss effect, with intervals</td></tr>
+            <tr><td>11</td><td>Do states recur in open environments? (<a href="#agentic">agentic</a>)</td><td>Count exact and near-duplicate states in SWE and web rollouts</td><td>If near zero, state-grouped credit reduces to GRPO there</td></tr>
+            <tr><td>12</td><td>Do framework KL defaults regularize? (⑤)</td><td>KL as k1-loss, k2-loss, k3-loss, k1-in-reward and none, at low and high KL (e.g. on-policy distillation)</td><td>k1-as-loss behaves like no KL; k3 diverges at high KL</td></tr>
+          </tbody>
+        </table>
+
+        <p>Experiments 1, 4 and 2 would move the most verdicts at once: the first tests the identity behind <a href="#trust-region">axis ④</a>, the second the identifiability behind every ceiling claim, the third the transfer behind most D grades. Each costs less than a typical paper proposing a new loss.</p>
       </section>
