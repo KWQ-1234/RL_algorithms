@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 510" font-family="system-ui, -apple-system, sans-serif">
+  <title>Where each surrogate zeroes, caps, or keeps a token's gradient</title>
+  <desc>A map with the probability ratio r on the horizontal axis and the sign of the advantage on the vertical axis. PPO-clip zeroes the gradient for positive-advantage tokens with r above 1 plus epsilon and for negative-advantage tokens with r below 1 minus epsilon. Clip-higher moves the upper edge to 1 plus epsilon-high. CISPO keeps both clipped regions with a capped weight. Negative-advantage tokens with large r keep an unbounded weight under PPO, which dual-clip caps.</desc>
+
+  <defs>
+    <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#7253ed" stroke-width="2.2" opacity="0.45"/>
+    </pattern>
+  </defs>
+
+  <rect width="760" height="510" fill="#ffffff"/>
+  <text x="380" y="30" text-anchor="middle" font-size="22.4" font-weight="600" fill="#27262b">Where each surrogate spends its permission to move</text>
+  <text x="380" y="53" text-anchor="middle" font-size="15.7" fill="#5c5962">r = π<tspan font-size="11.2" dy="4">θ</tspan><tspan dy="-4"> / π</tspan><tspan font-size="11.2" dy="4">old</tspan><tspan dy="-4"> for one token; ε = 0.2, ε</tspan><tspan font-size="11.2" dy="4">high</tspan><tspan dy="-4"> = 0.28. All regions coincide at r = 1.</tspan></text>
+
+  <!-- Plot frame: r in [0, 2], x = 80 + 310 r ; top half A>0 y 80-220, bottom half A<0 y 228-368 -->
+  <!-- Top half: A > 0 -->
+  <rect x="80" y="80" width="248" height="140" fill="#ffffff" stroke="#e6e1e8"/>
+  <rect x="328" y="80" width="124" height="140" fill="#f5f2ff" stroke="#e6e1e8"/>
+  <rect x="452" y="80" width="25" height="140" fill="url(#hatch)" stroke="#e6e1e8"/>
+  <rect x="477" y="80" width="223" height="140" fill="#fde8e8" stroke="#e6e1e8"/>
+
+  <!-- Bottom half: A < 0 -->
+  <rect x="80" y="228" width="248" height="140" fill="#fde8e8" stroke="#e6e1e8"/>
+  <rect x="328" y="228" width="124" height="140" fill="#f5f2ff" stroke="#e6e1e8"/>
+  <rect x="452" y="228" width="248" height="140" fill="#fff7e6" stroke="#e6e1e8"/>
+
+  <!-- Half labels -->
+  <g font-size="15.7" font-weight="600" fill="#27262b" text-anchor="end">
+    <text x="70" y="155">Â &gt; 0</text>
+    <text x="70" y="303">Â &lt; 0</text>
+  </g>
+
+  <!-- Region texts, top -->
+  <g font-size="14.6" fill="#5c5962" text-anchor="middle">
+    <text x="204" y="136">kept, weight r &lt; 1</text>
+    <text x="204" y="156" font-size="13.4" fill="#959396">probability is still falling</text>
+    <text x="421" y="137" fill="#5f3ceb">kept,</text><text x="421" y="155" fill="#5f3ceb">w = r</text>
+    <text x="588" y="116" font-weight="600" fill="#b42318">PPO: gradient zeroed</text>
+    <text x="588" y="136">token already pushed up by &gt; ε</text>
+    <text x="588" y="164" fill="#5f3ceb">CISPO: kept,</text>
+    <text x="588" y="182" fill="#5f3ceb">weight capped at 1 + ε<tspan font-size="10.6" dy="3">high</tspan></text>
+  </g>
+
+  <!-- Region texts, bottom -->
+  <g font-size="14.6" fill="#5c5962" text-anchor="middle">
+    <text x="204" y="264" font-weight="600" fill="#b42318">PPO: gradient zeroed</text>
+    <text x="204" y="284">token already pushed down by &gt; ε</text>
+    <text x="204" y="312" fill="#5f3ceb">CISPO: reopened, weight r;</text>
+    <text x="204" y="330" fill="#5f3ceb">a bad token keeps falling</text>
+    <text x="421" y="285" fill="#5f3ceb">kept,</text><text x="421" y="303" fill="#5f3ceb">w = r</text>
+    <text x="576" y="264" font-weight="600" fill="#b85c00">PPO: kept, weight r unbounded</text>
+    <text x="576" y="284">probability of a bad token rose</text>
+    <text x="576" y="312" fill="#5f3ceb">dual-clip: zeroed once r &gt; c</text>
+    <text x="576" y="330" fill="#5f3ceb">(c = 3, off this axis)</text>
+    <text x="576" y="352" fill="#5f3ceb">CISPO: weight capped at 1 + ε<tspan font-size="10.6" dy="3">high</tspan></text>
+  </g>
+
+  <!-- Edges -->
+  <g stroke="#5c5962" stroke-width="1.2" stroke-dasharray="4 3">
+    <line x1="328" y1="72" x2="328" y2="376"/>
+    <line x1="452" y1="72" x2="452" y2="376"/>
+  </g>
+  <line x1="390" y1="72" x2="390" y2="376" stroke="#27262b" stroke-width="1.6"/>
+  <line x1="477" y1="72" x2="477" y2="224" stroke="#7253ed" stroke-width="1.6"/>
+
+  <!-- Clip-higher callout -->
+  <text x="482" y="70" font-size="14.0" fill="#5f3ceb">clip-higher: edge moves to 1 + ε<tspan font-size="10.6" dy="3">high</tspan></text>
+
+  <!-- Axis -->
+  <line x1="80" y1="376" x2="700" y2="376" stroke="#5c5962" stroke-width="1"/>
+  <g font-size="14.6" fill="#5c5962" text-anchor="middle">
+    <text x="80" y="394">0</text>
+    <text x="328" y="394">1 − ε</text>
+    <text x="390" y="394" font-weight="600" fill="#27262b">1</text>
+    <text x="452" y="394">1 + ε</text>
+    <text x="700" y="394">2</text>
+    <text x="390" y="414">ratio r</text>
+  </g>
+
+  <!-- Notes on sequence-level and smooth variants -->
+  <g font-size="14.5" fill="#27262b">
+    <text x="20" y="446"><tspan font-weight="600">GSPO:</tspan> the same map for the sequence ratio s<tspan font-size="10.5" dy="3">i</tspan><tspan dy="-3">, in a band of (1 − 3·10</tspan><tspan font-size="10.5" dy="-5">−4</tspan><tspan dy="5">, 1 + 4·10</tspan><tspan font-size="10.5" dy="-5">−4</tspan><tspan dy="5">);</tspan></text>
+    <text x="20" y="466">one clip zeroes the whole response.</text>
+    <text x="20" y="494"><tspan font-weight="600">SAPO:</tspan> no hard edges; the weight decays smoothly as r moves away from 1.</text>
+  </g>
+</svg>

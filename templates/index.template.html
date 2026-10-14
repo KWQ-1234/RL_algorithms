@@ -894,6 +894,14 @@
   table.verdict td:first-child { font-weight: 600; color: var(--text); }
   table.verdict td.num, table.verdict th.num { text-align: right; font-variant-numeric: tabular-nums; }
   td.nowrap, th.nowrap { white-space: nowrap; }
+  .grade { white-space: nowrap; }
+  table.verdict { font-size: 12.5px; }
+  table.verdict th, table.verdict td { padding: 8px 9px; }
+  table.verdict td:first-child { width: 22%; }
+  @media (max-width: 720px) {
+    table.verdict { display: block; overflow-x: auto; }
+    table.verdict td, table.verdict th { min-width: 96px; }
+  }
   aside.note.draft { border-left-color: var(--text-muted); color: var(--text-muted); }
 </style>
 </head>

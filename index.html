@@ -894,6 +894,14 @@
   table.verdict td:first-child { font-weight: 600; color: var(--text); }
   table.verdict td.num, table.verdict th.num { text-align: right; font-variant-numeric: tabular-nums; }
   td.nowrap, th.nowrap { white-space: nowrap; }
+  .grade { white-space: nowrap; }
+  table.verdict { font-size: 12.5px; }
+  table.verdict th, table.verdict td { padding: 8px 9px; }
+  table.verdict td:first-child { width: 22%; }
+  @media (max-width: 720px) {
+    table.verdict { display: block; overflow-x: auto; }
+    table.verdict td, table.verdict th { min-width: 96px; }
+  }
   aside.note.draft { border-left-color: var(--text-muted); color: var(--text-muted); }
 </style>
 </head>
@@ -1273,7 +1281,65 @@
       <section id="trust-region">
         <h3>④ Clipping, trust regions, and ratio granularity</h3>
 
-        <aside class="note draft"><strong>Draft pending.</strong> The ratio × advantage quadrant map of PPO-clip, clip-higher, CISPO, GSPO, SAPO, IcePop.</aside>
+        <p>This axis has more named algorithms than any other: PPO-clip, dual-clip, clip-higher, CISPO, GSPO, GMPO, SAPO, and a long tail of 2025–2026 variants. By <a href="#skel-identity">the r ≡ 1 identity</a>, it is also the only axis whose effect vanishes entirely when the run is on-policy. So two questions organize this section: what does each variant do to the gradient once r ≠ 1, and does the evidence separate the variant from the staleness of the experiments that tested it?</p>
+
+        <figure>
+          <img src="diagrams/05-ratio-quadrants.svg" alt="Map of the probability ratio against the sign of the advantage, showing the regions where PPO-clip zeroes a token's gradient, where clip-higher moves the edge, where CISPO keeps a capped weight, and where dual-clip applies.">
+          <figcaption><span class="fig-label">Figure 5.</span> One token's fate under each surrogate. Red regions are where PPO-clip sets the mask to zero; purple text marks what the variants change. Every region meets at r = 1, which is why the variants coincide on-policy.</figcaption>
+        </figure>
+
+        <h4>What the clip actually does</h4>
+
+        <p>PPO's mask is one-sided by design. It zeroes a token's gradient once the ratio has moved <em>in the direction the advantage wants</em> by more than ε: up for good tokens, down for bad ones. It does nothing in the other two quadrants. A bad token whose probability has risen keeps a gradient with weight r, and nothing bounds that weight. Dual-clip exists to cap it, zeroing the gradient once r exceeds a constant <code>c</code> (verl's default is 3). No controlled LLM ablation of dual-clip on versus off was found.</p>
+
+        <p>The clip also has a built-in entropy bias, and it follows from the bound being relative. A good token with old probability p<sub>old</sub> may rise only to (1+ε)·p<sub>old</sub>, an absolute increase of ε·p<sub>old</sub>. For a rare token that is almost nothing. So positive updates on rare tokens are cut off early, while likely tokens absorb the probability mass, and entropy falls. The lower edge works the other way, protecting rare bad tokens from being pushed further down. A 2025 analysis finds that with the usual ε the upper edge dominates, so clipping lowers entropy even when the reward is random (<a href="https://arxiv.org/abs/2509.26114">2509.26114</a>). This is the same bias the spurious-rewards paper proposes to explain random-reward gains on Qwen2.5-Math; that explanation is contested (<a href="#case-spurious">case study</a>).</p>
+
+        <h4>The variants, by what they change</h4>
+
+        <ul>
+          <li><strong>Clip-higher</strong> (DAPO) raises only the upper edge for good tokens, from 1.2 to 1.28. It removes part of the entropy bias above.</li>
+          <li><strong>CISPO</strong> (MiniMax-M1) replaces the mask with a capped, stop-gradient weight, so no token is ever dropped. The motivation is specific: with 16 off-policy updates per batch, rare "reflection" tokens such as <em>However</em> and <em>Wait</em> were clipped after the first update and contributed nothing to the next fifteen (<a href="https://arxiv.org/abs/2506.13585">2506.13585</a>). The cost shows in Figure 5: CISPO also reopens the quadrant PPO closed on purpose, where a bad token that has already been pushed down keeps being pushed.</li>
+          <li><strong>GSPO</strong> (Qwen) clips a single sequence ratio, the geometric mean of the token ratios, inside a band almost three orders of magnitude narrower than PPO's. One clip removes the whole response. It reintroduces the 1/|y| length normalization that Dr. GRPO argued against (<a href="#aggregation">axis ③</a>). <strong>GMPO</strong> optimizes the same geometric mean but clips per token in log space.</li>
+          <li><strong>SAPO</strong> (Qwen) replaces the hard edges with a smooth gate that decays as r leaves 1.</li>
+          <li><strong>DCPO, CE-GPPO, ASPO, DPPO, DGPO</strong> and similar 2025–2026 proposals all reparametrize one complaint: a ratio clip permits too small an absolute step for rare tokens and too large a one for likely tokens. Each is supported by its originating paper only <span class="grade grade-c">C</span>, mostly on Qwen2.5-Math or R1-Distill-1.5B, under a thousand steps, without seeds. No study compares them in one controlled, multi-seed setting.</li>
+        </ul>
+
+        <h4>Evidence</h4>
+
+        <p><strong>Clip-higher.</strong> Its effect on entropy is reliable; its effect on scores is not.</p>
+        <ul>
+          <li>DAPO's own increment is +2 AIME points (36 → 38), inside the evaluation band of <a href="#tension-noise">Figure 2</a>.</li>
+          <li>On Qwen3-4B and 8B, Tricks or Traps finds the upper clip fires on about 0.3% of tokens in base models, where raising it changes little or hurts. In instruction-tuned models it slows entropy collapse and helps: for the 4B model scores rise steadily up to the largest value tried (0.32), while the 8B model peaks at 0.28 (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>). No seed variance is reported.</li>
+          <li>The Entropy Mechanism paper measures +0.2 (Qwen2.5-7B) and +1.4 (32B) average points, with instability later in training (<a href="https://arxiv.org/abs/2505.22617">2505.22617</a>).</li>
+          <li>ScaleRL finds the asymptote A rises and then falls as ε<sub>high</sub> grows (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>).</li>
+          <li>MiniMax-M1 found clip-higher less effective at 16 updates per batch, which is what led to CISPO.</li>
+        </ul>
+        <p>One reading reconciles these. Clip-higher can only act on tokens whose ratio reaches the edge. How many do depends on how far the policy moves within a batch, which is set by staleness and learning rate. "Which models it helps" is then a proxy for "at what staleness it was tested".</p>
+
+        <p><strong>CISPO.</strong> The rankings disagree. In ScaleRL's leave-one-out runs, swapping CISPO for the DAPO loss leaves the asymptote within noise and lowers the efficiency exponent B from 2.01 to 1.77; CISPO is also insensitive to its cap. On R1-Distill-Qwen-1.5B, CE-GPPO reports a five-benchmark average of 47.6 for CISPO against 54.3 for GSPO (<a href="https://arxiv.org/abs/2509.20712">2509.20712</a>). In ARLArena's agentic tasks, CISPO averages 34.0 against GRPO's 46.2 and collapses around step 130; adding sequence-level masking restores it (ALFWorld 54.4 → 78.9; <a href="https://arxiv.org/abs/2602.21534">2602.21534</a>). The paper's diagnosis, run on SAPO, which collapses the same way, traces the failure to negative-advantage sequences with low ratios — the quadrant both methods reopen. Implementations also disagree with the paper: verl's <code>cispo</code> clips the weight to [0.8, 1.2] by default, whereas MiniMax-M1 effectively disables the lower bound. A "CISPO" result therefore needs its configuration checked before it is compared.</p>
+
+        <p><strong>GSPO.</strong> The original experiments are on one MoE model, Qwen3-30B-A3B, where about 10% of activated experts change after a single update; there GSPO clips about 15% of tokens against GRPO's 0.13% and still trains more efficiently. A later controlled study from the same team, on the same model, neither tested GSPO nor needed it. On-policy, the most stable recipe was token-level policy gradient without length normalization plus a train–inference importance correction; off-policy, token-level clipping plus routing replay sufficed (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>). Elsewhere GSPO ranks first in ARLArena, diverges repeatedly in ScaleRL, and falls below the base model on Qwen1.5-MoE in a three-seed comparison (<a href="#off-policy">axis ⑥</a>). Its benefit is plausibly specific to high staleness on MoE without routing replay — the setting it was designed for.</p>
+
+        <p><strong>Clipping itself.</strong> Off-policy, removing clipping makes training collapse early (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>). On-policy it has nothing to clip. DeepSeek-R1's first RL stage set ε = 10, which effectively disables it; the paper's stated reason is that a lower value truncated the gradients of too many tokens (<a href="https://arxiv.org/abs/2501.12948">2501.12948</a>).</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Ratio clipping (when off-policy)</td><td>No evidence either way</td><td>Allows sample reuse</td><td>Required once N &gt; 1</td><td>Entropy-lowering bias</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Dual-clip</td><td>—</td><td>—</td><td>Sound mechanism, no LLM ablation</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
+            <tr><td>Clip-higher</td><td>Non-monotone in ε<sub>high</sub></td><td>Small</td><td>Mixed</td><td>Entropy rises</td><td><span class="grade grade-b">B</span> mechanism · <span class="grade grade-d">D</span> general gain</td></tr>
+            <tr><td>CISPO</td><td>Within noise in ScaleRL</td><td>Higher B in ScaleRL</td><td>Collapses in agentic RL without sequence masking</td><td>Reopens the Â &lt; 0, small-r quadrant</td><td><span class="grade grade-b">B</span> efficiency in large-batch RLVR · <span class="grade grade-d">D</span> general</td></tr>
+            <tr><td>GSPO</td><td>Contested</td><td>Better on MoE in its own paper</td><td>Better on MoE without routing replay; diverges elsewhere</td><td>Length normalization; ε rescaled by ~10<sup>3</sup></td><td><span class="grade grade-b">B</span> MoE without replay · <span class="grade grade-d">D</span> general</td></tr>
+            <tr><td>GMPO, SAPO</td><td>—</td><td>—</td><td>SAPO collapses in agentic RL without sequence masking</td><td>—</td><td><span class="grade grade-c">C</span></td></tr>
+            <tr><td>DCPO, CE-GPPO, ASPO, DPPO, DGPO</td><td>Own gains</td><td>—</td><td>—</td><td>Mostly Qwen2.5-Math or 1.5B, no seeds</td><td><span class="grade grade-c">C</span></td></tr>
+          </tbody>
+        </table>
+
+        <h4>What's mathematically interesting</h4>
+
+        <p>A ratio clip is a one-sample test of how far the policy has moved, applied token by token. That framing explains the whole axis. The edge is relative, so the test is loose for likely tokens and tight for rare ones: hence the entropy bias and the family of reparametrizations. The test reads only π<sub>old</sub>, so it is blind to train–inference mismatch (<a href="#skel-identity">r ≡ 1</a>). And the sequence-level test GSPO applies — the geometric mean exp(mean<sub>t</sub> log r<sub>t</sub>) — is a length-normalized log-likelihood ratio. The same statistic reappears in <a href="#off-policy">axis ⑥</a> as a filter for train–inference mismatch, under the name geometric rejection sampling. One quantity serves as a trust region in one literature and as a mismatch detector in the other, which suggests both are measuring the same thing: how far the data has drifted from the policy being trained.</p>
       </section>
 
       <section id="kl-entropy">
@@ -1285,7 +1351,82 @@
       <section id="off-policy">
         <h3>⑥ Off-policy data and train–inference mismatch</h3>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Four sources of off-policyness, the correction family (TIS, sequence IS, masks, routing replay), and staleness as an S·η budget.</aside>
+        <p><a href="#trust-region">Axis ④</a> asked how each surrogate behaves once the ratio leaves 1. This axis asks where that departure comes from, and what the corrections built for it actually estimate. The systems side — how rollouts go stale, how precision differs between engines — is covered in the infra survey's sections on <a href="https://chenggong-zhang.github.io/RL_infra/#async">async training</a> and <a href="https://chenggong-zhang.github.io/RL_infra/#quantization">quantization</a>. Here the object is the gradient estimator.</p>
+
+        <h4>Two gaps, two ratios</h4>
+
+        <p>Three policies are involved in every update. π<sub>sampler</sub> is the inference engine's copy at the behavior parameters, the one that generated the tokens. π<sub>old</sub> is the trainer's copy at the same parameters, recomputed before the update. π<sub>θ</sub> is the trainer's current policy. They define two gaps, and the two have different sources and different remedies.</p>
+
+        <figure>
+          <img src="diagrams/06-two-gaps.svg" alt="Three policies in one update — the sampler, the trainer at the behavior parameters, and the current trainer — with the gap between the first two caused by numerical mismatch and the gap between the last two caused by staleness.">
+          <figcaption><span class="fig-label">Figure 6.</span> The two sources of off-policy data. The PPO ratio measures only gap 2. Gap 1 is invisible to it, because π<sub>old</sub> is recomputed on the trainer and starts every update at exactly the trainer's own probabilities.</figcaption>
+        </figure>
+
+        <ul>
+          <li><strong>Gap 1, sampler vs trainer at the same weights.</strong> The engines use different kernels, reduction orders and sometimes precisions, and inference may truncate the vocabulary with top-p. In MoE models the router can also choose different experts. On Qwen3-30B-A3B, about 10% of routing decisions differ between training and inference, and 94% of tokens differ in at least one layer (<a href="https://arxiv.org/abs/2510.11370">R3, 2510.11370</a>).</li>
+          <li><strong>Gap 2, behavior vs current weights.</strong> More than one optimizer step per batch, asynchronous rollouts several versions behind, and in MoE models routing that drifts between updates.</li>
+        </ul>
+
+        <p>The hybrid frameworks therefore compute E<sub>y∼π<sub>sampler</sub></sub>[R · ∇log π<sub>θ</sub>], not the on-policy gradient. The PPO ratio π<sub>θ</sub>/π<sub>old</sub> never sees π<sub>sampler</sub>, so gap 1 goes uncorrected unless a correction reads the sampler's probabilities explicitly (<a href="https://fengyao.notion.site/off-policy-rl">Yao et al., 2025</a>). verl's documentation calls treating the recomputed π<sub>old</sub> as the behavior policy, when the two differ, a critical implementation mistake.</p>
+
+        <h4>The corrections, as estimators</h4>
+
+        <p><strong>Token-level truncated IS (TIS)</strong> multiplies each token's term by min(π<sub>old</sub>/π<sub>sampler</sub>, C). The cap bounds each token's variance amplification by C². The price is that it corrects the distribution of the action given the prefix, but not the distribution of the prefixes themselves, which were also generated by π<sub>sampler</sub>. The remaining bias grows with the horizon, quadratically in T times the largest per-token divergence in one analysis (<a href="https://yingru.notion.site/When-Speed-Kills-Stability-Demystifying-RL-Collapse-from-the-Training-Inference-Mismatch-271211a558b7808d8b12d403fd15edda">Liu &amp; Li, 2025</a>).</p>
+
+        <p><strong>Sequence-level IS</strong> weights the whole response by ρ(y) = Π<sub>t</sub> π(y<sub>t</sub>)/μ(y<sub>t</sub>). It is unbiased, but its variance grows exponentially in T. A back-of-envelope calculation shows how far that goes at reasoning lengths. If the per-token log-ratios are roughly independent with mean near 0 and standard deviation σ, then log ρ has standard deviation σ√T. For small divergences, KL ≈ ½σ², so R3's measured MoE mismatch of about 1.5·10<sup>−3</sup> per token gives σ ≈ 0.055. At T = 16k, the standard deviation of log ρ is about 7: one standard deviation spans a factor of e<sup>7</sup> ≈ 1,100 in either direction. Any cap then truncates most sequences, so a capped sequence weight is mostly a hard filter. This is our calculation, not a cited result.</p>
+
+        <p><strong>Length-normalized filters</strong> are what work in practice. Geometric rejection sampling accepts a sequence when exp(mean<sub>t</sub> log ρ<sub>t</sub>) lies in a narrow band; DeepSeek-V3.2's off-policy sequence masking applies a similar mean log-ratio test (<a href="https://arxiv.org/abs/2512.02556">2512.02556</a>). These are not importance corrections. They are length-invariant trust-region tests that discard data that has drifted too far, the same statistic GSPO clips in <a href="#trust-region">axis ④</a>.</p>
+
+        <p>Two further design choices cut across all of these:</p>
+        <ul>
+          <li><strong>Truncate or mask.</strong> Truncation (TIS, CISPO) keeps a bounded gradient from every token. Masking (IcePop, masked IS, M2PO) zeroes out-of-band tokens. The masked tokens are disproportionately rare and high-entropy, so masking has an exploration cost. One three-seed study found the lower side matters most: masking tokens whose ratio is small is harmless, but lifting their small weights upward collapsed held-out accuracy on Qwen1.5-MoE from a 28.9 base to 6.0 (<a href="https://arxiv.org/abs/2609.32444">CIS, 2609.32444</a>).</li>
+          <li><strong>Which tokens are dangerous.</strong> Several independent designs converge on the same asymmetry: negative-advantage tokens that are far off-policy. TOPR truncates importance weights only for negative samples (<a href="https://arxiv.org/abs/2503.14286">2503.14286</a>); DeepSeek-V3.2 masks only negative-advantage sequences that fail its test; M2PO constrains only tokens that clipping would act on (<a href="https://arxiv.org/abs/2510.01161">2510.01161</a>). The same quadrant is where CISPO collapsed in agentic training (<a href="#trust-region">axis ④</a>).</li>
+        </ul>
+
+        <p><strong>Routing replay</strong> fixes gap 1 and gap 2 for MoE by reusing recorded expert choices. R3 replays the inference engine's routing during training; R2 replays the trainer's own routing at the behavior parameters. Both change the objective slightly — the policy being trained becomes "π<sub>θ</sub> with routing frozen" — which is consistent with the finding that R3 gives no gain on-policy and that R2 beats R3 at low staleness (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>).</p>
+
+        <p><strong>Removing the mismatch at the source</strong> is the alternative to estimating around it: FP16 in both engines (<a href="https://arxiv.org/abs/2510.26788">2510.26788</a>), batch-invariant kernels that make sampler and trainer agree bitwise (<a href="https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/">Thinking Machines, 2025</a>; <a href="https://arxiv.org/abs/2605.14220">VeXact, 2605.14220</a>), and the narrower fix of computing the LM head in FP32 (<a href="https://arxiv.org/abs/2506.13585">MiniMax-M1</a>).</p>
+
+        <h4>When mismatch decides the run</h4>
+
+        <p>Mismatch-driven collapse is real, but how much it matters depends heavily on the setting.</p>
+        <ul>
+          <li><strong>Decisive for MoE, long horizons, multi-turn agents and low-precision rollouts.</strong> On Qwen3-30B-A3B, GRPO crashed between steps 60 and 120 in three configurations; adding TIS to the configuration that crashed first moved its crash from step 60 to 105; runs with R3 stayed stable for the 180 steps reported (R3, best checkpoints, no seeds). A Ring-mini-2.0 baseline collapsed after 180–200 steps while IcePop and TIS held (<a href="https://arxiv.org/abs/2510.18855">2510.18855</a>, appendix figure). With a zero-mismatch reference engine, MoE REINFORCE kept improving where the vLLM-based run degraded after about 280 steps (VeXact). Qwen's controlled study found that removing the train–inference correction on-policy causes rapid collapse with an entropy drop (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>).</li>
+          <li><strong>Second-order for dense, short-context math RL.</strong> TIS gave no gain on R1-Distill-1.5B in BF16 (Yao et al.). The one multi-seed comparison of corrections, on three MoE models trained on GSM8K, found five-benchmark averages within about 1.6 points of each other for no correction, TIS, sequence-level variants, IcePop, GSPO, FP16 and CIS on Qwen3-30B-A3B, with the authors conceding that their margins over IcePop on individual benchmarks are within seed spread (CIS).</li>
+          <li><strong>Often an implementation or hardware pathology.</strong> In one investigation, sampler–trainer KL varied by more than an order of magnitude across GPU types; a run that failed on one type recovered when resumed on another; and disabling a vLLM attention optimization on A100 cut the mismatch by about two orders of magnitude (Liu &amp; Li). Checking the mismatch metric is a cheaper first step than changing the estimator.</li>
+        </ul>
+
+        <h4>How much staleness is tolerable</h4>
+
+        <p>Gap 2 is a dial, and its safe range has been measured several ways.</p>
+        <ul>
+          <li><strong>Without correction, about one or two versions.</strong> Magistral reports degradation beyond two minibatches per batch and settled on one update per batch (<a href="https://arxiv.org/abs/2506.10910">2506.10910</a>). In AReaL's 1.5B study (one run per setting), AIME24 stays within two points of the on-policy 42.0 up to two versions of staleness (<a href="https://arxiv.org/abs/2505.24298">2505.24298</a>).</li>
+          <li><strong>With decoupled PPO or truncated IS, roughly four to eight.</strong> AReaL's decoupled objective recovers on-policy accuracy up to staleness 8; ScaleRL found off-policyness 4 and 8 equally good; PipelineRL reached the same reward about twice as fast. M2PO claims parity at staleness 256 with a second-moment mask; that is one group's best-checkpoint result <span class="grade grade-c">C</span>.</li>
+          <li><strong>A budget, not a count.</strong> A 2026 study on Llama-3.2-1B and 3B and Qwen3-8B finds that the largest stable learning rate scales inversely with the staleness S, so Sη is roughly constant at the stability boundary; its O(Sη) bias is an upper bound under regularity assumptions, and most of its sweeps use one seed per configuration (<a href="https://arxiv.org/abs/2607.01083">2607.01083</a>). If that holds, tolerances quoted without a learning rate are not comparable. By that law, a run at η = 10<sup>−6</sup> tolerates about three times the lag of one at 3·10<sup>−6</sup>.</li>
+        </ul>
+
+        <p>Staleness also hides inside "synchronous" training: verl's stock configuration takes four optimizer steps per batch (<a href="#skel-identity">the skeleton</a>), so the last minibatch is three updates stale. Every framework surveyed ships the gap-1 corrections, but as of their May 2026 releases all of them leave them off by default.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Change</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Fewer optimizer steps per batch</td><td>Similar peaks once stable</td><td>Lower per sample</td><td>Higher; avoids entropy collapse</td><td>—</td><td><span class="grade grade-a">A</span></td></tr>
+            <tr><td>Remove mismatch at source (batch-invariant kernels, FP16)</td><td>≥ every IS variant where compared</td><td>Slower inference with batch-invariant kernels</td><td>Mismatch zero or near zero</td><td>Engineering cost</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Routing replay (R2/R3) for MoE</td><td>Large gains where runs otherwise crash</td><td>Under 3% overhead</td><td>Prevents MoE collapse off-policy</td><td>Trains a frozen-routing surrogate; no on-policy gain</td><td><span class="grade grade-a">A</span> MoE, multi-step</td></tr>
+            <tr><td>Token-level TIS</td><td>0 to small</td><td>Neutral</td><td>Delays collapse; fails alone in long multi-turn runs</td><td>Prefix-distribution bias growing with T</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>Sequence or geometric masks</td><td>No gain on short tasks</td><td>Neutral</td><td>Highest peak among estimator fixes in long multi-turn runs, but unstable late</td><td>Discards long or rare samples</td><td><span class="grade grade-c">C</span> stability · <span class="grade grade-d">D</span> ceiling</td></tr>
+            <tr><td>IcePop</td><td>Among the best in the three-seed comparison</td><td>Neutral</td><td>Stable; too narrow a band destabilizes</td><td>Masks rare, high-entropy tokens</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>FP32 LM head</td><td>Large in one forward ablation, none in a full-recipe one</td><td>Cheap</td><td>Did not prevent collapse in two independent reports</td><td>Fixes only the head</td><td><span class="grade grade-d">D</span></td></tr>
+            <tr><td>Decoupled PPO with a staleness bound</td><td>On-policy level up to ~8 versions</td><td>Up to 2.8× wall-clock (1.5B)</td><td>Yes</td><td>One extra forward pass</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>In-flight weight updates (PipelineRL)</td><td>Unresolved; ScaleRL contradicts itself</td><td>About 2×</td><td>Fine up to lag 8</td><td>Mixed-policy sequences</td><td><span class="grade grade-b">B</span> efficiency</td></tr>
+          </tbody>
+        </table>
+
+        <h4>What's mathematically interesting</h4>
+
+        <p>Three things. First, the PPO ratio has a blind spot by construction: it is anchored to a recomputed π<sub>old</sub>, so it can see staleness but never the sampler. Every gap-1 correction is an attempt to put the sampler back into the estimator. Second, exact importance sampling is unusable at reasoning lengths for a quantitative reason, not a practical one: the log-weight's spread grows like √T. The corrections that survive are therefore length-normalized tests, which trade unbiasedness for a bounded, length-invariant filter. Nobody has yet measured that trade directly: no study compares the gradients these estimators produce against a high-sample reference gradient (<a href="#experiments">Experiment 6</a>). Third, if the Sη law holds, "staleness" is not a property of the data but of the data together with the step size. That is the form a theorist would expect from a first-order bias argument, and it suggests a tight bound is within reach (<a href="#open">open questions</a>).</p>
       </section>
 
       <section id="data-sampling">
@@ -1369,7 +1510,49 @@
       <section id="patterns">
         <h2>Recurring patterns — the algebraic view</h2>
 
-        <aside class="note draft"><strong>Draft pending.</strong> Six patterns: collapse to REINFORCE, prompt weighting as objective, sharpening, the dangerous quadrant, bounded proxies, data on-policyness.</aside>
+        <p>The axis sections judge design choices one at a time. Read together, they keep running into the same few pieces of algebra. Each pattern below is stated as a formula, followed by what it explains and where it shows up. Knowing them makes most new papers predictable before reading their experiments.</p>
+
+        <h3 id="pattern-reinforce">1. Every surrogate collapses to REINFORCE at r = 1</h3>
+
+        <div class="formula-display">r<sub>i,t</sub> ≡ 1  ⇒  w<sub>i,t</sub> · m<sub>i,t</sub> = 1  ⇒  g = Σ<sub>i,t</sub> c<sub>i,t</sub> Â<sub>i</sub> ∇log π<sub>θ</sub>(y<sub>i,t</sub>)</div>
+
+        <p>PPO-clip, clip-higher, CISPO, GSPO, GMPO and SAPO all have the same gradient when each batch gets one optimizer step and π<sub>old</sub> is recomputed (<a href="#skel-identity">the skeleton</a>). Their differences live entirely in how they treat ratios away from 1. <strong>Explains:</strong> why rankings of these losses contradict each other across papers, and why the papers that introduced them all trained with 4–16 updates per batch. <strong>Use:</strong> before crediting a loss with a gain, ask how far from 1 the ratios were in that run.</p>
+
+        <h3 id="pattern-weighting">2. Prompt weighting is an implicit objective</h3>
+
+        <p>With a binary reward, let p<sub>x</sub> be the success probability on prompt x, and suppose the advantage divides r − p<sub>x</sub> by some scale s(p<sub>x</sub>). Because E[r · ∇log π] = ∇p<sub>x</sub> and E[∇log π] = 0, the expected update is</p>
+
+        <div class="formula-display">E[g] = Σ<sub>x</sub> ∇p<sub>x</sub> / s(p<sub>x</sub>)  =  ∇ Σ<sub>x</sub> F(p<sub>x</sub>),   F′(p) = 1 / s(p)</div>
+
+        <p>So every normalization rule is gradient ascent on some concave transform of the per-prompt pass rate. With no scale (RLOO, Dr. GRPO) the objective is Σp, the expected pass rate. GRPO's group standard deviation, s = √(p(1−p)), gives Σ 2·arcsin√p. A scale proportional to p gives Σ log p, a maximum-likelihood objective. Pass@k training corresponds to Σ 1 − (1−p)<sup>k</sup>. These limits hold as the group grows; with small groups the estimated mean and scale add their own finite-G effects. <strong>Explains:</strong> the "std normalization" debate splits into two claims. Up-weighting hard prompts (small p) has support; up-weighting easy prompts (p near 1), which GRPO also does, has none and is a source of instability on easy data (<a href="#normalization">axis ②</a>). <strong>Use:</strong> ask of any new advantage rule which F it implies, and whether that F is the objective you want.</p>
+
+        <h3 id="pattern-sharpening">3. Sharpening helps whenever the mode beats the mean</h3>
+
+        <p>Let maj(x) be the probability that the model's most frequent answer on prompt x is correct. If an update concentrates each prompt's answer distribution on its current mode, pass@1 moves from Σ p<sub>x</sub> toward Σ maj(x), which is the base model's majority-vote accuracy. That limit is reached without any information about which answers are correct.</p>
+
+        <div class="formula-display">pass@1 after sharpening  →  majority-vote accuracy of the base model</div>
+
+        <p>Many updates sharpen: entropy minimization, majority-vote rewards, format rewards, and, on one account, the asymmetry of ratio clipping (<a href="#trust-region">axis ④</a>). <strong>Explains:</strong> why random, wrong, or absent rewards raise scores on models with a strong, partly contaminated prior such as Qwen2.5-Math, and why the same tricks fail on Llama and OLMo and on clean benchmarks, where the mode is not much better than the mean (<a href="#case-spurious">case study</a>). <strong>Use:</strong> the gap between a base model's majority-vote accuracy and its pass@1 is an upper bound on what a label-free or random-reward method can buy. A method's gain inside that gap is not yet evidence that it learned anything from the reward.</p>
+
+        <h3 id="pattern-quadrant">4. The dangerous quadrant is negative advantage, far off-policy</h3>
+
+        <p>A positive-advantage term Â · log π(y) is bounded above, because log π(y) ≤ 0. A negative-advantage term is not: −|Â| · log π(y) grows without limit as π(y) → 0. Pushing a bad sequence's probability toward zero can always increase the objective further, and the softmax pays for it by moving mass elsewhere. Off-policy data makes this worse, because the sequence being pushed down may already be improbable under the current policy.</p>
+
+        <p><strong>Explains:</strong> independent designs converge on treating exactly this region specially. TOPR truncates importance weights only for negative samples. DeepSeek-V3.2 masks only negative-advantage sequences that fail a drift test. M2PO constrains only the tokens clipping would act on. PPO's lower clip edge closes this region, and CISPO, which reopens it, collapsed in agentic training until negative low-ratio sequences were masked (<a href="#trust-region">axis ④</a>, <a href="#off-policy">axis ⑥</a>). <strong>Use:</strong> for any new surrogate, check what it does in the Â &lt; 0, r ≪ 1 corner.</p>
+
+        <h3 id="pattern-proxy">5. A learned proxy must be bounded or non-accumulating</h3>
+
+        <div class="formula-display">R′ = R + Σ<sub>t</sub> φ<sub>t</sub> is safe if  φ<sub>t</sub> = Φ(s<sub>t+1</sub>) − Φ(s<sub>t</sub>)  (telescopes);  hacked if φ<sub>t</sub> is a free learned score</div>
+
+        <p>When a learned score is summed into the return, the optimizer maximizes the sum, and a sum of per-step scores can be inflated by adding steps, repeating confident-looking content, or exploiting the scorer's errors. Potential-based shaping, where the terms telescope, leaves the optimal policy unchanged (Ng, Harada and Russell, 1999); bounded forms such as taking a minimum, or using the scorer only to filter samples, cap the damage. <strong>Explains:</strong> every independent attempt to sum a learned process reward model into the RL return was hacked, and the variants that survive are exactly the bounded, telescoping or filter-only ones, which is also why their gains are small (<a href="#prm-credit">process rewards</a>). The same logic covers learned verifiers that can be fooled by degenerate outputs (<a href="#reward">axis ⑧</a>). <strong>Use:</strong> before adding any learned signal to a reward, ask what the policy gains by producing more of whatever the signal likes.</p>
+
+        <h3 id="pattern-onpolicy">6. Where the data comes from matters more than the loss</h3>
+
+        <p>In preference learning, the loss variants of the DPO family tie once their temperature β is tuned, while moving the training pairs from another model's outputs to the policy's own outputs closes most of the gap to online RL. In WPO's own table, rebuilding DPO's training pairs mostly from the SFT model's own samples adds 16–17 AlpacaEval LC points, while switching the loss from DPO to WPO on fixed data adds 1.6–5.6 (<a href="https://arxiv.org/abs/2406.11827">WPO, 2406.11827</a>, Table 1). The data change also swaps the preference labeler, so the comparison is not perfectly clean. On Llama-3.1-8B-Instruct, semi-online and online DPO match GRPO on Math500 (58.9 and 58.7 against 58.1) and beat it on AlpacaEval LC, while offline DPO trails all three, by 4–5 points on math and more than 20 on chat (<a href="https://arxiv.org/abs/2506.21495">2506.21495</a>; one training run per method). <strong>Explains:</strong> why "PPO beats DPO" and "DPO beats PPO" can both be true — they compare different data regimes — and why on-policyness is a property worth tracking in every method, not only in RL (<a href="#preference">preference optimization</a>). <strong>Use:</strong> when two methods differ in both data source and loss, attribute the gain to the data until shown otherwise.</p>
+
+        <h3 id="pattern-synthesis">The synthesis</h3>
+
+        <p>Patterns 1 and 4 say the surrogate matters only off-policy, and then mainly in one quadrant. Pattern 2 says normalization chooses an objective rather than improving an estimator. Patterns 3 and 5 say a large share of reported gains comes from signals that do not carry information about correctness: the prior's mode, or a proxy the policy can game. Pattern 6 says the data's provenance outweighs the loss. Together they move the question from "which algorithm" to "is the gradient estimator what it claims to be, on data that came from where it claims to come from". That is the same conclusion Engstrom et al. reached for deep RL in 2020, that implementation details outweighed the choice of algorithm (<a href="https://arxiv.org/abs/2005.12729">2005.12729</a>). The LLM literature has rediscovered it at greater cost.</p>
       </section>
 
       <section id="code">

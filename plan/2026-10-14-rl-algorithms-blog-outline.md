@@ -487,3 +487,10 @@
 - **Sober Look "5–15 点 seed std"：** 是跨全部模型和 benchmark 的范围；AIME24 单独是"最高 15%"。另外，它是评测 seed 的方差，不是训练 seed 的方差，正文已分开写成三层噪声。
 - **2610.04158：** "R² > 0.99" 是平均值（Fig. 5 图注），逐 benchmark 为 0.845–0.987。
 - **新增事实（用于 03）：** 提出这些 surrogate 的论文自己的实验都不是 r ≡ 1：DAPO 每个 rollout step 16 次更新，MiniMax-M1 16 次，GMPO 8 次，GSPO 和 SAPO 每批 4 个 minibatch。
+- **Gao et al. 2410.15115（写 16 PRM 节时用）：** 30.58 是 SR-only 训 5 epoch，11.16 是 SR+PR 训 1 epoch，base 是 24.90；不是同一次运行里"从 30.58 掉到 11.16"。"The answer is" 只出现在附录的人工构造探针里，不是观察到的 hacking 行为。Clip/Delta 修复后最好 31.44，只比 SR-only 高 0.86，单次运行。
+- **WPO 的 "hybrid" 数据不是 on-policy：** 5 条 SFT 样本 + 1 条 gpt-4-turbo 输出，并由 gpt-4-turbo 重新标注；数据效应 +16–17，loss 效应 +1.6–5.6。
+- **Tricks or Traps 的 ε_high：** 只有 aligned 8B 非单调（0.28 最好）；aligned 4B 在 0.32（网格上限）之前单调上升。
+- **ARLArena：** 崩溃原因诊断做在 SAPO 上，不是 CISPO；sequence masking 的修复对两者都有效。
+- **AceReason：** 是"每批 2 或 4 次梯度更新"导致约第 100 步 entropy collapse，不是 22 或 44 次；每批 1 次避免 collapse。
+- **AReaL 速度：** 正文只给 2.77×（1.5B）；1.64× 是由 32B 编码模型的表格训练时长算出来的，不是论文原话。
+- **R3：** "ratio>2 的 token 比例超过 0.1 即崩溃"只是单次运行的描述，不是论文给出的阈值。
