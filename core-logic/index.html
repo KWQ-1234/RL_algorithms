@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="RL post-training 的核心逻辑、五轴分类法，以及哪些算法改动真正有用。">
+<title>RL 算法的核心逻辑</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of lecture notes, with a single interactive figure (the tilted distribution) as the page's one bold moment. */
+:root {
+  --paper: #f5f6f9;
+  --sheet: #ffffff;
+  --ink: #1a2030;
+  --muted: #5b6273;
+  --rule: #dcdfe7;
+  --accent: #3f3a92;
+  --accent-soft: #ecebf8;
+  --good: #2c6a4c;
+  --warn: #9c5612;
+  --bad: #9aa0ad;
+  --warn-soft: #f8eee2;
+  --good-soft: #e6f1eb;
+  --font-display: "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #11141b; --sheet: #181c25; --ink: #e4e7ef; --muted: #9aa1b2; --rule: #2c3240;
+    --accent: #aaa5f2; --accent-soft: #24233d; --good: #6cc39a; --warn: #e2a560; --bad: #5d6474;
+    --warn-soft: #2f2518; --good-soft: #17291f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #11141b; --sheet: #181c25; --ink: #e4e7ef; --muted: #9aa1b2; --rule: #2c3240;
+  --accent: #aaa5f2; --accent-soft: #24233d; --good: #6cc39a; --warn: #e2a560; --bad: #5d6474;
+  --warn-soft: #2f2518; --good-soft: #17291f; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { color-scheme: light; }
+@media (prefers-color-scheme: dark) { html { color-scheme: dark; } }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16.5px;
+  line-height: 1.85;
+  padding-inline: 16px;
+  padding-block: 0 64px;
+}
+.wrap { max-width: 46rem; margin-inline: auto; }
+a { color: var(--accent); }
+a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Masthead */
+.mast { padding-block: 56px 28px; border-bottom: 1px solid var(--rule); display: grid; gap: 14px; }
+.kicker { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 6vw, 42px); line-height: 1.25; margin: 0; text-wrap: balance; }
+.thesis { font-family: var(--font-display); font-weight: 500; font-size: clamp(19px, 3.4vw, 23px); line-height: 1.6; margin: 0; color: var(--accent); text-wrap: balance; }
+.basis { font-size: 14px; color: var(--muted); margin: 0; }
+
+.toc { display: grid; gap: 6px; padding-block: 20px; border-bottom: 1px solid var(--rule); margin: 0; list-style: none; padding-inline: 0; }
+.toc a { text-decoration: none; color: var(--ink); display: flex; gap: 12px; align-items: baseline; }
+.toc a:hover span:last-child { text-decoration: underline; }
+.toc .q { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); min-width: 3.2em; }
+
+/* Parts */
+.part { padding-block: 44px 8px; }
+.part > header { display: grid; gap: 6px; margin-bottom: 18px; }
+.ask { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: .04em; color: var(--muted); }
+.ask b { color: var(--accent); font-weight: 500; }
+h2 { font-family: var(--font-display); font-size: clamp(24px, 4.4vw, 30px); line-height: 1.35; margin: 0; text-wrap: balance; }
+h3 { font-family: var(--font-display); font-size: 20px; line-height: 1.45; margin: 34px 0 6px; text-wrap: balance; }
+h3 .lv { font-family: var(--font-mono); font-size: 12.5px; font-weight: 400; color: var(--muted); letter-spacing: .05em; margin-right: 10px; vertical-align: 2px; }
+p { margin: 10px 0; }
+ul, ol { margin: 10px 0; padding-left: 1.4em; }
+li { margin: 6px 0; }
+strong { font-weight: 700; }
+.eq { overflow-x: auto; padding-block: 6px; margin: 8px 0; }
+mjx-container[display="true"] { margin: .4em 0 !important; }
+
+/* Tables */
+.table-box { overflow-x: auto; margin: 14px 0; border-top: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; line-height: 1.6; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 13px; letter-spacing: .04em; padding: 8px 12px 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+td { padding: 8px 12px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; font-weight: 500; }
+.axis-tag { font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 3px; white-space: nowrap; }
+
+/* Axis list */
+.axes { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.axes li { display: grid; grid-template-columns: 9.5rem 1fr; gap: 4px 16px; padding-block: 12px; border-bottom: 1px solid var(--rule); margin: 0; }
+.axes .name { font-family: var(--font-display); font-weight: 700; }
+.axes .name small { display: block; font-family: var(--font-mono); font-weight: 400; font-size: 12px; color: var(--muted); }
+.axes .def { min-width: 0; }
+@media (max-width: 560px) { .axes li { grid-template-columns: 1fr; } }
+
+/* Interactive tilt figure */
+.fig { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 18px 18px 14px; margin: 22px 0; display: grid; gap: 14px; }
+.fig-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; align-items: baseline; }
+.fig-title { font-family: var(--font-display); font-weight: 700; font-size: 17px; }
+.fig-note { font-size: 13px; color: var(--muted); }
+.ctrl { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+.ctrl input { width: 100%; accent-color: var(--accent); }
+.ctrl output { color: var(--ink); font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: right; }
+.bars { position: relative; height: 190px; display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; align-items: end; padding-left: 30px; border-bottom: 1px solid var(--ink); }
+.grid-line { position: absolute; left: 30px; right: 0; border-top: 1px dashed var(--rule); font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.grid-line span { position: absolute; left: -30px; top: -9px; width: 26px; text-align: right; }
+.col { position: relative; height: 100%; }
+.col .ref, .col .tilt { position: absolute; left: 12%; right: 12%; bottom: 0; }
+.col .tilt { transition: height .18s ease-out; }
+.col .ref { border: 1.5px dashed var(--muted); border-bottom: 0; z-index: 2; }
+.col.ok .tilt, .col.unseen .tilt { background: var(--good); }
+.col.bad .tilt { background: var(--bad); }
+.col.hack .tilt { background: var(--warn); }
+.col .zero { position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; font-family: var(--font-mono); font-size: 11px; color: var(--good); }
+.labels { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; padding-left: 30px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-align: center; margin-top: -8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-right: 6px; }
+.legend .l-ref { border: 1.5px dashed var(--muted); }
+.readouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ro { border-top: 2px solid var(--rule); padding-top: 6px; }
+.ro .k { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.ro .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+.ro.proxy { border-color: var(--accent); }
+.ro.true { border-color: var(--good); }
+.ro.hackm { border-color: var(--warn); }
+@media (max-width: 560px) { .readouts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.curve { position: relative; height: 150px; margin: 4px 0 26px 30px; border-left: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.curve svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.curve .c-proxy { stroke: var(--accent); fill: none; stroke-width: 2; }
+.curve .c-true { stroke: var(--good); fill: none; stroke-width: 2; }
+.curve .c-now { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; }
+.curve .tick { position: absolute; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.curve .ty { left: -30px; width: 26px; text-align: right; transform: translateY(-50%); }
+.curve .tx { top: calc(100% + 4px); transform: translateX(-50%); white-space: nowrap; }
+.fig-caption { font-size: 14px; color: var(--muted); line-height: 1.7; margin: 0; }
+.fig-caption b { color: var(--ink); font-weight: 500; }
+
+/* Verdict classes */
+.verdicts { display: grid; gap: 12px; margin: 16px 0; }
+.verdict { padding: 14px 16px; border-radius: 6px; background: var(--sheet); border: 1px solid var(--rule); display: grid; gap: 4px; }
+.verdict .chip { justify-self: start; font-family: var(--font-mono); font-size: 12px; padding: 1px 8px; border-radius: 3px; }
+.verdict.must .chip { background: var(--good-soft); color: var(--good); }
+.verdict.cond .chip { background: var(--accent-soft); color: var(--accent); }
+.verdict.noise .chip { background: var(--warn-soft); color: var(--warn); }
+.verdict h4 { font-family: var(--font-display); font-size: 17.5px; margin: 0; line-height: 1.5; }
+.verdict p { margin: 0; font-size: 15.5px; }
+
+.callout { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; margin: 18px 0; font-family: var(--font-display); font-size: 18px; line-height: 1.7; }
+.foot { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 13px; color: var(--muted); }
+code, .mono { font-family: var(--font-mono); font-size: .9em; }
+@media (prefers-reduced-motion: reduce) { .col .tilt { transition: none; } }
+</style>
+
+<script>
+window.MathJax = {
+  tex: { inlineMath: [["$", "$"]], displayMath: [["$$", "$$"]] },
+  svg: { fontCache: "global" },
+  options: { enableMenu: false }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg-full.js" async></script>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="kicker">LLM post-training · 讨论笔记 · 2026 年 10 月</div>
+    <h1>RL 算法的核心逻辑</h1>
+    <p class="thesis">在模型自己的输出上，按奖励重新加权，每次只挪一小步。</p>
+    <p class="basis">依据：核对过的约 100 篇论文与技术报告，加上推导。我没有跑过大规模 RL 训练，下面的判断不是一手实验经验。</p>
+  </header>
+
+  <ol class="toc" aria-label="目录">
+    <li><a href="#logic"><span class="q">问 1</span><span>RL 算法的核心逻辑是什么</span></a></li>
+    <li><a href="#taxonomy"><span class="q">问 2</span><span>这个视角能给成千上万的算法分类吗</span></a></li>
+    <li><a href="#useful"><span class="q">问 3</span><span>从第一性原理看，这些算法真的有用吗</span></a></li>
+  </ol>
+
+  <!-- ============ Part 1 ============ -->
+  <section class="part" id="logic">
+    <header>
+      <div class="ask"><b>问 1</b> · RL 算法的核心逻辑是什么</div>
+      <h2>三层：目标、目标解、逼近方式</h2>
+    </header>
+
+    <h3><span class="lv">第一层</span>在优化什么</h3>
+    <div class="eq">$$J(\theta)=\mathbb{E}_{x\sim D,\;y\sim\pi_\theta(\cdot|x)}\big[R(x,y)\big]$$</div>
+    <p>它和监督学习有两个本质区别：</p>
+    <ol>
+      <li><strong>数据分布依赖于参数本身。</strong>样本 $y$ 由 $\pi_\theta$ 生成，参数一变，数据也变。</li>
+      <li><strong>奖励是黑箱。</strong>$R$ 对 $y$ 不可导，梯度只能借助 log-derivative trick 求：</li>
+    </ol>
+    <div class="eq">$$\nabla J=\mathbb{E}\big[R(x,y)\,\nabla\log\pi_\theta(y|x)\big]$$</div>
+    <p>这就是 REINFORCE。换个角度看，它是<strong>在自己采出的样本上做加权 SFT，权重是奖励</strong>。所有 RL 算法都从这个式子出发。</p>
+
+    <h3><span class="lv">第二层</span>目标解是什么样</h3>
+    <p>加上“不要偏离参考模型太远”的约束：</p>
+    <div class="eq">$$\max_\pi\;\mathbb{E}_\pi[R]-\beta\,\mathrm{KL}(\pi\,\|\,\pi_{\text{ref}})$$</div>
+    <p>它有闭式解：</p>
+    <div class="eq">$$\pi^*(y|x)\;\propto\;\pi_{\text{ref}}(y|x)\,\exp\!\big(R(x,y)/\beta\big)$$</div>
+    <p>也就是<strong>把参考分布按奖励做指数倾斜</strong>。这个式子决定了 RL 能做什么、不能做什么：</p>
+    <ul>
+      <li><strong>它只能重新分配已有的概率质量。</strong>$\pi_{\text{ref}}$ 给零概率的回答，乘以多大的系数仍然是零。所以 RL 主要是在 base model 的支撑集内锐化，覆盖率主要由预训练决定。</li>
+      <li><strong>$\beta\to 0$ 时，质量全部集中到奖励最高的回答上。</strong>这就是 sharpening：pass@1 上升，多样性和大 k 下的覆盖率下降。</li>
+      <li><strong>$R$ 只是代理目标。</strong>倾斜得越狠，越会放大 $R$ 本身的错误，也就是 reward hacking。KL 项的作用就是限制倾斜的程度。</li>
+    </ul>
+
+    <figure class="fig" id="tilt-fig" aria-label="指数倾斜演示">
+      <div class="fig-head">
+        <span class="fig-title">拖动 β，看 π* 怎么变</span>
+        <span class="fig-note">玩具例子：一个 prompt 的 9 个候选回答，数字为虚构</span>
+      </div>
+      <div class="ctrl">
+        <label for="beta">β 大→小</label>
+        <input id="beta" type="range" min="0" max="1000" value="500" aria-describedby="beta-out">
+        <output id="beta-out" for="beta">β = 0.25</output>
+      </div>
+      <div class="bars" id="bars" aria-hidden="true"></div>
+      <div class="labels" id="labels" aria-hidden="true"></div>
+      <div class="legend">
+        <span><i class="l-ref"></i>π_ref（虚线框）</span>
+        <span><i style="background: var(--good)"></i>正确</span>
+        <span><i style="background: var(--bad)"></i>错误</span>
+        <span><i style="background: var(--warn)"></i>y7：错误，但奖励模型给了最高分</span>
+        <span><i style="border: 1.5px solid var(--good)"></i>y9：正确，但 π_ref = 0</span>
+      </div>
+      <div class="readouts">
+        <div class="ro proxy"><div class="k">代理奖励 E<sub>π*</sub>[R]</div><div class="v" id="ro-proxy">–</div></div>
+        <div class="ro true"><div class="k">真实正确率</div><div class="v" id="ro-true">–</div></div>
+        <div class="ro hackm"><div class="k">y7 占的质量</div><div class="v" id="ro-hack">–</div></div>
+        <div class="ro"><div class="k">y9 占的质量</div><div class="v" id="ro-unseen">0%</div></div>
+      </div>
+      <div class="curve" id="curve">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <polyline id="pl-proxy" class="c-proxy" vector-effect="non-scaling-stroke" points=""></polyline>
+          <polyline id="pl-true" class="c-true" vector-effect="non-scaling-stroke" points=""></polyline>
+          <line id="ln-now" class="c-now" vector-effect="non-scaling-stroke" x1="50" x2="50" y1="0" y2="100"></line>
+        </svg>
+      </div>
+      <p class="fig-caption">横轴从左到右 β 由 10 降到 0.02（倾斜越来越狠）。<b style="color: var(--accent)">紫线</b>是代理奖励，单调上升；<b style="color: var(--good)">绿线</b>是真实正确率，<span id="peak-text">先升后降</span>。y9 始终为 0：π_ref 采不到的正确答案，RL 永远学不会。</p>
+    </figure>
+
+    <p>不同算法只是逼近 $\pi^*$ 的不同方式：</p>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>方式</th><th>代表</th></tr></thead>
+        <tbody>
+          <tr><td>迭代地采样、打分、做梯度步</td><td>PPO、GRPO</td></tr>
+          <tr><td>用偏好对直接拟合闭式解</td><td>DPO</td></tr>
+          <tr><td>采 n 个只留好的，再做 SFT</td><td>rejection sampling、RAFT</td></tr>
+          <tr><td>让老师直接给出目标分布</td><td>on-policy distillation</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3><span class="lv">第三层</span>怎么用有限样本逼近</h3>
+    <p>$\pi^*$ 没法直接采样，于是只能迭代：</p>
+    <div class="eq">$$\pi_{k+1}\;\propto\;\pi_k\,\exp\!\big(\hat A/\tau\big)$$</div>
+    <p>每一轮从当前策略采样，估计每个回答比平均好多少（advantage），据此把概率往好的方向挪一小步。这就是 mirror descent，Kimi k1.5 就是按这个框架写的。PPO 的 clip 和 TRPO 的 KL 约束都是在近似“挪一小步”。</p>
+    <p>照着这个式子实际去做，只会遇到三个根本困难，几乎每个算法改动都是在处理其中之一：</p>
+    <ol>
+      <li><strong>方差大（credit assignment）。</strong>一条几千 token 的回答只有一个标量奖励，估计非常吵。对策是减去 baseline，引入 critic 或 group mean，再做归一化。减 baseline 不引入偏差，因为 $\mathbb{E}[\nabla\log\pi]=0$。</li>
+      <li><strong>数据不是当前策略采的（off-policy）。</strong>原因包括同一批数据更新多步、异步 rollout、推理引擎和训练引擎的数值不一致。要用这些数据就得乘 importance ratio，而 ratio 的方差会爆炸，所以才需要 clip、截断、masking，也就是 trust region。</li>
+      <li><strong>奖励不可信，或者探索不够。</strong>代理奖励会被钻空子，所以需要 KL 约束、可靠的 verifier，以及不能被优化器利用的奖励形式。另外，策略只能强化自己采得到的东西，没采到的永远学不会。</li>
+    </ol>
+
+    <h3>小结：三个选择</h3>
+    <ul>
+      <li><strong>数据从哪来：</strong>on-policy 的程度有多高。</li>
+      <li><strong>每个样本给多大权重：</strong>奖励和 advantage 怎么算。</li>
+      <li><strong>每步走多远：</strong>trust region 怎么设。</li>
+    </ul>
+    <p class="callout">上限由 base model 和奖励质量决定，算法主要决定能否稳定、高效地逼近这个上限。</p>
+  </section>
+
+  <!-- ============ Part 2 ============ -->
+  <section class="part" id="taxonomy">
+    <header>
+      <div class="ask"><b>问 2</b> · 这个视角能给成千上万的算法分类吗</div>
+      <h2>三个选择不够，要扩成五个轴</h2>
+    </header>
+    <p>不完全能。上面的三个选择只覆盖一大类算法：<strong>单轮生成、标量奖励、用 policy gradient 优化期望奖励</strong>。PPO、GRPO、DAPO、GSPO、CISPO、RLOO、REINFORCE++ 和各种 off-policy 修正都在这个框里，2025 年以来的大部分命名算法也属于这一类。</p>
+    <p>有五类放不进去，原因各不相同：</p>
+    <ol>
+      <li><strong>目标本身不是“期望奖励 + KL”。</strong>pass@k 训练优化的是 $\sum_x 1-(1-p_x)^k$，MaxRL 近似优化 $\sum_x\log p_x$，两者都不是期望奖励的指数倾斜。SPPO、Nash-MD 处理可能不传递的偏好，目标是一个博弈的 Nash 均衡。</li>
+      <li><strong>奖励从哪来，本身是一个独立的设计轴。</strong>PRM、rubric/judge、self-certainty、熵最小化、TTRL 的多数投票、on-policy distillation 里老师的 log 概率，改的都是信号，不是估计量。把它塞进“怎么加权”粒度太粗。</li>
+      <li><strong>不走 policy gradient 的估计路线。</strong>ILQL、soft Q-learning 这类 value-based 方法先学 Q 再导出策略；DPO 系直接拟合闭式解；RAFT、ReST 用过滤后的 SFT。它们和 PPO 逼近的可能是同一个目标分布，但估计方式完全不同。</li>
+      <li><strong>多轮、有状态的 credit assignment。</strong>agent 任务里有环境状态和工具输出，turn-level advantage、GiGPO 的状态分组、环境 token 屏蔽，都是单轮 bandit 视角里不存在的维度。</li>
+      <li><strong>采样分布的设计远不止 on/off-policy。</strong>选哪些 prompt（难度过滤、课程）、从哪个前缀分叉（TreeRL、在 entropy 高的位置分支）、用什么温度。</li>
+    </ol>
+
+    <h3>修正后的框架</h3>
+    <ul class="axes">
+      <li><span class="name">目标<small>Objective</small></span><span class="def">逼近哪个分布或解。期望奖励、pass@k、log-likelihood、风险敏感目标；正则项（KL 方向、强度、参考策略固定还是滚动更新）；或者一个博弈均衡、一个老师分布。</span></li>
+      <li><span class="name">信号<small>Signal</small></span><span class="def">奖励从哪来。规则 verifier、学习得到的 RM、PRM、judge/rubric、偏好对、内在信号、老师的 log 概率。</span></li>
+      <li><span class="name">数据<small>Sampling</small></span><span class="def">样本怎么来。离线、在线或延迟；选哪些 prompt、怎么分叉、温度、过滤。</span></li>
+      <li><span class="name">估计量<small>Estimator</small></span><span class="def">怎么把信号变成更新。policy gradient（baseline、归一化、credit 粒度、聚合方式）、闭式拟合（DPO 系）、过滤 SFT、value-based。</span></li>
+      <li><span class="name">更新控制<small>Update control</small></span><span class="def">每步走多远。clip、IS 截断或屏蔽、近端 KL、每批数据更新几步。</span></li>
+    </ul>
+
+    <p>拿代表性方法检验：</p>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>方法</th><th>改了哪一轴</th></tr></thead>
+        <tbody>
+          <tr><td>GRPO</td><td><span class="axis-tag">估计量</span> group mean baseline 加 std 归一化</td></tr>
+          <tr><td>DAPO</td><td><span class="axis-tag">更新控制</span> clip-higher；<span class="axis-tag">数据</span> dynamic sampling；<span class="axis-tag">估计量</span> token 级聚合</td></tr>
+          <tr><td>GSPO / CISPO / TIS</td><td><span class="axis-tag">更新控制</span></td></tr>
+          <tr><td>DPO / SimPO</td><td><span class="axis-tag">估计量</span> 闭式拟合；SimPO 还改了 <span class="axis-tag">目标</span> 的正则形式</td></tr>
+          <tr><td>SPPO / Nash-MD</td><td><span class="axis-tag">目标</span> 从标量奖励换成博弈均衡</td></tr>
+          <tr><td>RAFT / ReST</td><td><span class="axis-tag">估计量</span> 过滤后 SFT</td></tr>
+          <tr><td>PRIME / PURE</td><td><span class="axis-tag">信号</span> 过程奖励</td></tr>
+          <tr><td>TTRL / 熵最小化</td><td><span class="axis-tag">信号</span> 内在信号</td></tr>
+          <tr><td>VinePPO / TreeRL</td><td><span class="axis-tag">数据</span> 分叉采样；<span class="axis-tag">估计量</span> MC credit</td></tr>
+          <tr><td>GiGPO</td><td><span class="axis-tag">估计量</span> 多轮下的状态级 credit</td></tr>
+          <tr><td>pass@k 训练 / MaxRL</td><td><span class="axis-tag">目标</span></td></tr>
+          <tr><td>On-policy distillation</td><td><span class="axis-tag">信号</span> 老师 log 概率；<span class="axis-tag">数据</span> on-policy</td></tr>
+          <tr><td>ILQL</td><td><span class="axis-tag">估计量</span> value-based</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>判断</h3>
+    <ul>
+      <li><strong>作为分类器，五个轴大概能覆盖绝大多数方法。</strong>大部分论文只改一两个轴上的一个取值。真正新的工作是给某个轴增加一个新取值，比如把目标从标量奖励换成 Nash 均衡，或者把老师当作奖励来源。</li>
+      <li><strong>分类和“判断哪个改动重要”是两件事。</strong>分类告诉你一篇论文动了哪里；它重不重要，要看那一轴在实验条件下是否真的起作用。比如完全 on-policy 时，更新控制这一轴根本不生效（见问 3）。</li>
+      <li><strong>“成千上万”这个说法我没有实证。</strong>要验证覆盖率，可以抽 100 篇左右近两年的 RL 论文逐一归类，看有多少放不进去、卡在哪一轴。这比凭印象下结论可靠。</li>
+    </ul>
+  </section>
+
+  <!-- ============ Part 3 ============ -->
+  <section class="part" id="useful">
+    <header>
+      <div class="ask"><b>问 3</b> · 从第一性原理看，这些算法真的有用吗</div>
+      <h2>大部分改动决定不了结果，有用的多半是修正确性</h2>
+    </header>
+
+    <h3>一个算法到底能改变什么</h3>
+    <p>base model、奖励、数据、算力都固定时，RL 算法能影响的只有梯度估计的<strong>偏差</strong>、<strong>方差</strong>和训练的<strong>稳定性</strong>。逐项看：</p>
+    <ul>
+      <li><strong>大多数 clip 变体在 on-policy 时完全不起作用。</strong>每批数据只更新一步、并且 $\pi_{\text{old}}$ 在训练端重算时，$r=\pi_\theta/\pi_{\text{old}}\equiv 1$，clip 不会被触发：
+        <div class="eq">$$\nabla_\theta\,\min\!\big(r\hat A,\ \mathrm{clip}(r,1\!-\!\epsilon,1\!+\!\epsilon)\,\hat A\big)\Big|_{r=1}=\hat A\,\nabla_\theta\log\pi_\theta$$</div>
+        这时 PPO-clip、DAPO、GSPO、CISPO、SAPO 的梯度完全一样，都是 REINFORCE，区别只剩归一化方式。它们只在数据被复用、或数据来自旧策略时才有区别。</li>
+      <li><strong>baseline 只降方差，不改变期望梯度。</strong>group mean、leave-one-out、critic 的差别在 $O(1/G)$ 量级，group 一大就基本消失。critic 只有在 $\lambda&lt;1$、真正参与 credit assignment 时才会改变结果，而这时它也会引入偏差。</li>
+      <li><strong>归一化改的是目标，不是估计质量。</strong>对一个通过率为 $p$ 的 prompt，除以组内 std 相当于把目标从 $\sum_x p_x$ 换成 $\sum_x F(p_x)$，其中
+        <div class="eq">$$F'(p)=\frac{1}{\sqrt{p(1-p)}},\qquad F(p)=2\arcsin\sqrt{p}$$</div>
+        它给 $p$ 接近 0 或 1 的题更大的权重。这会影响 pass@k 和哪些题能被学会，但对 pass@1 的上限影响有限。</li>
+      <li><strong>任何算法都创造不出 base model 没有的概率质量。</strong>最优解是对参考分布的指数倾斜，上限从根上就不在算法里（见上面演示中的 y9）。</li>
+    </ul>
+    <p>受控实验的结论和这几条推导一致：</p>
+    <ul>
+      <li>ScaleRL 的 leave-one-out：从完整 recipe 里去掉任何一个组件，渐近上限都在噪声范围内。</li>
+      <li>GenAC 只换 advantage 估计量，GRPO、RLOO、PPO 的差距约 1 分。</li>
+      <li>DPO 系的各种 loss 在 β 调好之后打平。</li>
+      <li>PRM 加进奖励之后会被模型钻空子。</li>
+    </ul>
+
+    <h3>所以这些算法分三类</h3>
+    <div class="verdicts">
+      <div class="verdict must">
+        <span class="chip">有用，而且必须</span>
+        <h4>修正确性的</h4>
+        <p>长 CoT 下用 $\lambda=1$、MoE 用 routing replay、消除训练与推理的数值不一致、多轮任务里屏蔽环境 token、限制同一批数据的复用次数。它们不提高上限，但不做的话训练会悄悄偏掉，或者直接崩溃。</p>
+      </div>
+      <div class="verdict cond">
+        <span class="chip">有条件地有用</span>
+        <h4>在系统约束下换效率和稳定性的</h4>
+        <p>CISPO、GSPO、TIS、IcePop 只有在系统逼你 off-policy 时才起作用：异步 rollout、MoE、低精度推理、一批数据更新十几步。<strong>很多算法创新其实是对 infra 约束的回应</strong>，这是算法和 infra 之间最实质的联系。</p>
+      </div>
+      <div class="verdict noise">
+        <span class="chip">大多是噪声</span>
+        <h4>“新 loss 带来更高分数”的</h4>
+        <p>增益通常是单 seed、只在 Qwen 上测的 1 到 3 分，落在评测噪声以内。不少是拿没调好的 baseline 比出来的。</p>
+      </div>
+    </div>
+
+    <h3>真正的杠杆在哪</h3>
+    <p>能显著改变结果的都在估计量之外：</p>
+    <ul>
+      <li><strong>信号质量：</strong>verifier 的精度、奖励能不能被钻空子。奖励有偏差，目标分布就跟着偏。</li>
+      <li><strong>base model 和数据：</strong>它们决定支撑集，也就是 RL 最多能锐化出什么。</li>
+      <li><strong>算力怎么花：</strong>batch size 和生成长度是少数在受控实验里明确抬高上限的因素。</li>
+      <li><strong>还没被证明、但原理上可能变得重要的两件事：</strong>长程 agent 的 credit assignment（horizon 越长，只靠最终结果的奖励越不够用）；探索（怎么让模型采到原本采不到的正确答案）。</li>
+    </ul>
+
+    <h3>两处需要打折</h3>
+    <ul>
+      <li><strong>现有证据很薄。</strong>多数是单 seed、单一模型族、1.5B 到 8B 规模。有些效应可能只在前沿规模才显现，而前沿实验室的内部消融不公开。比如 DeepSeek 说 Keep Routing “至关重要”，但没给数据。</li>
+      <li><strong>“没用”指的是不决定上限，不是不值得做。</strong>第一、二类在工程上往往是必要的。</li>
+    </ul>
+
+    <h3>对 blog 的含义</h3>
+    <p>与其逐轴给每个算法打分，不如直接论证<strong>上限在哪里决定、算法负责什么</strong>，再用上面三类改动作为骨架。</p>
+  </section>
+
+  <p class="foot">相关：完整的逐轴综述草稿见 <a href="https://kwq-1234.github.io/RL_algorithms/">RL Algorithms for the Mathematically Inclined</a>。演示中的 9 个候选回答和奖励值是为说明 π* 的形状而虚构的。</p>
+</div>
+
+<script>
+(function () {
+  // Toy example: one prompt, nine candidate responses. Values are illustrative only.
+  var C = [
+    { id: "y1", kind: "ok", p: 0.22, r: 1 },
+    { id: "y2", kind: "ok", p: 0.10, r: 1 },
+    { id: "y3", kind: "bad", p: 0.25, r: 0 },
+    { id: "y4", kind: "bad", p: 0.18, r: 0 },
+    { id: "y5", kind: "bad", p: 0.12, r: 0 },
+    { id: "y6", kind: "ok", p: 0.04, r: 1 },
+    { id: "y7", kind: "hack", p: 0.03, r: 1.15 },
+    { id: "y8", kind: "bad", p: 0.06, r: 0 },
+    { id: "y9", kind: "unseen", p: 0, r: 1 }
+  ];
+  var B_MAX = 10, B_MIN = 0.02, YMAX = 1.2;
+  var L0 = Math.log(B_MAX), L1 = Math.log(B_MIN);
+
+  function betaAt(t) { return Math.exp(L0 + (L1 - L0) * t); }  // t in [0,1], left = large beta
+  function tilt(beta) {
+    var rmax = -Infinity;
+    C.forEach(function (c) { if (c.p > 0 && c.r > rmax) rmax = c.r; });
+    var w = C.map(function (c) { return c.p * Math.exp((c.r - rmax) / beta); });
+    var z = w.reduce(function (a, b) { return a + b; }, 0);
+    return w.map(function (x) { return x / z; });
+  }
+  function stats(pi) {
+    var proxy = 0, acc = 0, hack = 0, unseen = 0;
+    C.forEach(function (c, i) {
+      proxy += pi[i] * c.r;
+      if (c.kind === "ok" || c.kind === "unseen") acc += pi[i];
+      if (c.kind === "hack") hack += pi[i];
+      if (c.kind === "unseen") unseen += pi[i];
+    });
+    return { proxy: proxy, acc: acc, hack: hack, unseen: unseen };
+  }
+
+  var bars = document.getElementById("bars");
+  var labels = document.getElementById("labels");
+  [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+    var g = document.createElement("div");
+    g.className = "grid-line";
+    g.style.bottom = (v * 100) + "%";
+    g.innerHTML = "<span>" + v + "</span>";
+    bars.appendChild(g);
+  });
+  var tiltEls = C.map(function (c) {
+    var col = document.createElement("div");
+    col.className = "col " + c.kind;
+    var ref = document.createElement("div");
+    ref.className = "ref";
+    ref.style.height = (c.p * 100) + "%";
+    var t = document.createElement("div");
+    t.className = "tilt";
+    col.appendChild(t);
+    col.appendChild(ref);
+    if (c.kind === "unseen") {
+      var z = document.createElement("div");
+      z.className = "zero";
+      z.textContent = "0";
+      col.appendChild(z);
+    }
+    bars.appendChild(col);
+    var lab = document.createElement("div");
+    lab.textContent = c.id;
+    labels.appendChild(lab);
+    return t;
+  });
+
+  // Curves over the whole beta range
+  var N = 160, ptsP = [], ptsT = [], peak = { acc: 0, beta: 0 };
+  for (var k = 0; k <= N; k++) {
+    var tt = k / N, b = betaAt(tt), s = stats(tilt(b));
+    var x = (tt * 100).toFixed(2);
+    ptsP.push(x + "," + (100 - s.proxy / YMAX * 100).toFixed(2));
+    ptsT.push(x + "," + (100 - s.acc / YMAX * 100).toFixed(2));
+    if (s.acc > peak.acc) peak = { acc: s.acc, beta: b };
+  }
+  document.getElementById("pl-proxy").setAttribute("points", ptsP.join(" "));
+  document.getElementById("pl-true").setAttribute("points", ptsT.join(" "));
+  var curve = document.getElementById("curve");
+  [0, 0.4, 0.8, 1.2].forEach(function (v) {
+    var d = document.createElement("div");
+    d.className = "tick ty";
+    d.style.top = (100 - v / YMAX * 100) + "%";
+    d.textContent = v.toFixed(1);
+    curve.appendChild(d);
+  });
+  [10, 1, 0.1, 0.02].forEach(function (b) {
+    var d = document.createElement("div");
+    d.className = "tick tx";
+    d.style.left = ((Math.log(b) - L0) / (L1 - L0) * 100) + "%";
+    d.textContent = "β=" + b;
+    curve.appendChild(d);
+  });
+  document.getElementById("peak-text").textContent =
+    "先升后降：在 β≈" + peak.beta.toFixed(2) + " 达到最高的 " + Math.round(peak.acc * 100) +
+    "%，再往右代理奖励继续涨，正确率却被 y7 拖下去";
+
+  var input = document.getElementById("beta");
+  var out = document.getElementById("beta-out");
+  var now = document.getElementById("ln-now");
+  function pct(v) { return (v * 100).toFixed(1) + "%"; }
+  function render() {
+    var t = input.value / 1000, b = betaAt(t), pi = tilt(b), s = stats(pi);
+    out.textContent = "β = " + (b < 0.1 ? b.toFixed(3) : b.toFixed(2));
+    tiltEls.forEach(function (el, i) { el.style.height = (pi[i] * 100) + "%"; });
+    document.getElementById("ro-proxy").textContent = s.proxy.toFixed(3);
+    document.getElementById("ro-true").textContent = pct(s.acc);
+    document.getElementById("ro-hack").textContent = pct(s.hack);
+    document.getElementById("ro-unseen").textContent = pct(s.unseen);
+    var x = (t * 100).toFixed(2);
+    now.setAttribute("x1", x); now.setAttribute("x2", x);
+  }
+  // Start near the accuracy peak
+  input.value = Math.round((Math.log(peak.beta) - L0) / (L1 - L0) * 1000);
+  input.addEventListener("input", render);
+  render();
+})();
+</script>
+</body>
+</html>
