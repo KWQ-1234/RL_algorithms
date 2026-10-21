@@ -1,0 +1,178 @@
+      <section id="case-frontier">
+        <h2>9. Frontier Recipes, Code Reality &amp; Algorithmic Pitfalls</h2>
+
+        <p>We have organized the algorithm landscape into Category I (estimator correctness), Category II (off-policy stability &amp; throughput), and Category III (implicit objectives &amp; reward signals). This chapter checks that synthesis against three empirical realities: what thirteen frontier technical reports actually deploy, how the twenty-five named methods map onto the unified estimator's slots, and how production codebases (specifically <code>verl</code>, <code>OpenRLHF</code>, <code>slime</code>, and <code>SkyRL</code>) implement—or silently alter—those equations.</p>
+
+        <div class="case-box">
+          <div class="case-kicker">Case Study 5 · Empirical Convergence Across 13 Frontier Technical Reports</div>
+          <h4 id="frontier-table">What frontier reports actually do, axis by axis</h4>
+
+          <p>The previous case studies examined individual papers. This one reads the technical reports of thirteen frontier and open models across our taxonomy and asks two questions: What do they agree on? And how much of what they do is backed by an ablation in the report itself, rather than declared? The answers line up closely with the Category I–III verdict map (<a href="#axes">Figure 3</a>). Entries are taken from the reports' own text; "—" means the report does not say.</p>
+
+          <table class="verdict">
+            <thead>
+              <tr><th>Report</th><th>Baseline ($\div$ group std?)</th><th>Clip / surrogate</th><th>KL to SFT model</th><th>Off-policy handling</th><th>Ablates its RL choices?</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>DeepSeek-R1</td><td>Group mean; $\div\;\text{std}$</td><td>PPO clip, $\varepsilon = 10$ in stage 1</td><td>$\beta = 0.001$, reference reset every 400 steps</td><td>16 minibatch updates per rollout</td><td>Yes: PPO vs. GRPO on a smaller model</td></tr>
+              <tr><td>DeepSeek-V3.2</td><td>Group mean; no std</td><td>PPO clip</td><td>IS-corrected $k_3$, near zero for math</td><td>Off-policy sequence masking, Keep Routing, Keep Sampling Mask</td><td>No</td></tr>
+              <tr><td>DeepSeek-V4</td><td>Group mean (specialists)</td><td>—</td><td>Final stage is on-policy distillation, not RL</td><td>FP4 rollout</td><td>No</td></tr>
+              <tr><td>Kimi k1.5</td><td>Group mean; no std</td><td>None; squared log-ratio term</td><td>No; regularizes toward previous iterate</td><td>Partial rollouts</td><td>Yes: negative gradients, curriculum</td></tr>
+              <tr><td>Kimi K2</td><td>Group mean; no std</td><td>None; squared log-ratio term</td><td>No; previous iterate</td><td>Synchronous, partial rollouts</td><td>No</td></tr>
+              <tr><td>Kimi K2.5</td><td>Group mean; no std</td><td>Token log-ratio mask</td><td>No; previous iterate</td><td>Recorded inference log-probabilities</td><td>Partial: length heuristic only</td></tr>
+              <tr><td>MiniMax-M1</td><td>Group mean; $\div\;\text{std}$</td><td>CISPO, upper bound only</td><td>None</td><td>16 updates per batch; FP32 LM head</td><td>Yes: CISPO vs. DAPO vs. GRPO</td></tr>
+              <tr><td>MiniMax-M2</td><td>—</td><td>CISPO</td><td>—</td><td>Asynchronous pool</td><td>No</td></tr>
+              <tr><td>Magistral</td><td>Group mean; minibatch normalization, no group std</td><td>Clip-higher, $0.26\text{–}0.3$</td><td>None</td><td>Asynchronous, in-flight updates, $\le 2$ batches of lag</td><td>Yes: several</td></tr>
+              <tr><td>Qwen3</td><td>Group mean (GRPO)</td><td>—</td><td>—</td><td>"Off-policy training", no details</td><td>Partial: distillation vs. RL only</td></tr>
+              <tr><td>GLM-4.5</td><td>Group mean</td><td>—</td><td>None</td><td>FP8 rollout; async for agents</td><td>Yes, on a smaller proxy model</td></tr>
+              <tr><td>OLMo 3</td><td>Group mean; no std</td><td>Clip-higher, $0.2 / 0.272$</td><td>None</td><td>Async, $\le 8$ steps of lag, truncated IS (cap $C=2$)</td><td>Partial: active sampling</td></tr>
+              <tr><td>Seed1.5-Thinking</td><td><strong>Learned critic</strong></td><td>Clip-higher</td><td>—</td><td>Streaming rollout; FP8 rollout</td><td>Yes: VAPO vs. DAPO</td></tr>
+            </tbody>
+          </table>
+          <p style="font-size:13px;color:var(--text-muted)">Source: each report's own text (<a href="https://arxiv.org/abs/2501.12948v2">R1 v2</a>, <a href="https://arxiv.org/abs/2512.02556">V3.2</a>, <a href="https://arxiv.org/abs/2606.19348">V4</a>, <a href="https://arxiv.org/abs/2501.12599">k1.5</a>, <a href="https://arxiv.org/abs/2507.20534">K2</a>, <a href="https://arxiv.org/abs/2602.02276">K2.5</a>, <a href="https://arxiv.org/abs/2506.13585">M1</a>, <a href="https://arxiv.org/abs/2605.26494">M2</a>, <a href="https://arxiv.org/abs/2506.10910">Magistral</a>, <a href="https://arxiv.org/abs/2505.09388">Qwen3</a>, <a href="https://arxiv.org/abs/2508.06471">GLM-4.5</a>, <a href="https://arxiv.org/abs/2512.13961">OLMo 3</a>, <a href="https://arxiv.org/abs/2504.13914">Seed1.5</a>). DeepSeek-V4's arXiv identifier (2606.19348) is confirmed by the official model cards; R1 v2 writes GRPO with sequence-level ratios and does not specify loss normalization.</p>
+
+          <h4 id="frontier-agree">What they agree on</h4>
+          <ul>
+            <li><strong>No critic (11 of 13).</strong> Eleven of thirteen use a critic-free group baseline; Seed1.5-Thinking is the only one with an explicit value model. This matches <a href="#advantage">Chapter 4.1</a>: a critic costs extra memory and compute and does not raise the ceiling in independent tests.</li>
+            <li><strong>No standard-deviation division by default.</strong> Only R1 and MiniMax-M1 keep $\div\;\text{std}_G$; the Kimi line never had it; V3.2, Magistral, and OLMo 3 removed it. This matches <a href="#normalization">Chapter 6.1</a>.</li>
+            <li><strong>No static KL anchor to the starting model on verifiable tasks.</strong> Removed in MiniMax-M1, Magistral, GLM-4.5, and OLMo 3; replaced by a proximal term toward the previous iterate $\pi_{\text{old}}$ in the Kimi line; kept small ($\beta = 0.001$) and periodically reset in R1; weakened to near zero for math in V3.2. This matches <a href="#kl-entropy">Chapter 7.3</a>.</li>
+            <li><strong>Default symmetric PPO clipping loosened or replaced</strong>—clip-higher, CISPO, a log-ratio mask, no clip at all, or R1's $\varepsilon = 10$. The variety is itself informative: on <a href="#trust-region">Chapter 5.1</a> the labs agree only that the default symmetric $[0.8, 1.2]$ clip is too restrictive on rare positive tokens, not on which specific functional form replaces it.</li>
+            <li><strong>Explicit handling of train–inference mismatch (Gap 1)</strong> has become standard since the second half of 2025: routing replay and masks (V3.2), an FP32 LM head (M1), recorded inference probabilities (K2.5), truncated importance sampling (OLMo 3), low-precision rollout designed in (V4). This matches <a href="#correctness-gaps">Chapter 4.2</a>.</li>
+            <li><strong>Difficulty filtering or removal of zero-variance groups</strong> ($p_G \in \{0, 1\}$) in essentially every report that describes its data, and <strong>length control</strong> in the reward or budget in most.</li>
+          </ul>
+
+          <h4 id="frontier-ablated">What is ablated vs. what is declared</h4>
+          <p>Six reports ablate some of their RL algorithm choices: Magistral most thoroughly (batch and minibatch size, advantage normalization, reward granularity, entropy bonus against clip-higher), MiniMax-M1 (its loss against DAPO's and GRPO's), GLM-4.5 (aggregation, length schedule, and curriculum on a smaller proxy model), Kimi k1.5 (negative gradients, curriculum), Seed1.5-Thinking (VAPO against DAPO), and DeepSeek-R1 (PPO against GRPO on a smaller model). Three ablate one component or only systems choices. Four—DeepSeek-V3.2 and V4, Kimi K2, MiniMax-M2—ablate none of their RL algorithm choices; V3.2's stability fixes in particular rest on qualitative statements. The shared choices are mostly the ones with good independent evidence; the contested choices are mostly the ones each lab makes differently without publishing controlled ablations.</p>
+
+          <h4 id="frontier-distill">The drift toward on-policy distillation</h4>
+          <p id="frontier-caveats">One architectural trend cuts across the table. DeepSeek-V4's final stage replaces mixed RL entirely with on-policy distillation from more than ten domain specialists, each trained with SFT and then GRPO. Qwen3 trains its smaller models by on-policy distillation from larger ones, GLM-4.5 finishes with self-distillation from expert RL models, and V3.2 distills specialists before its final mixed RL stage. RL still produces the domain specialists, but consolidating many skills into one generalist model is increasingly done by <a href="#beyond-opd">on-policy distillation (Chapter 8.4)</a>. That fits <a href="#what-rl-changes">Chapter 1</a>: RL sharpens within a specialist's support, while distillation transfers support across models with dense per-token supervision.</p>
+        </div>
+
+        <h3 id="landscape">9.1 The 25-Method Algorithm Landscape</h3>
+
+        <p>Mapping twenty-five named methods onto the unified estimator's three slots ($\hat{A}_{i,t}$, $f(r_{i,t}, \hat{A}_{i,t})$, $Z$) shows at a glance which slot each method modified and how strong the evidence for its core claim is:</p>
+
+        <figure>
+          <img src="diagrams/07-timeline.svg" alt="Timeline in two bands from 2017 to 2026: advantage estimators simplify from a learned critic to group and mean-only baselines, while trust-region, importance-sampling and numerical methods multiply from 2025 onward.">
+          <figcaption><span class="fig-label">Figure 9.</span> Two bands of development (2017–2026). The advantage estimator became simpler—learned critic $\to$ group baseline $\to$ mean-only subtraction—while the trust-region, importance-sampling, and numerical-mismatch layer absorbed nearly all of the new method names from 2025 onward. By the $r \equiv 1$ identity, the second band only acts when training is off-policy or numerically mismatched.</figcaption>
+        </figure>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Method (first arXiv)</th><th>Advantage, normalization</th><th>Surrogate</th><th>Regularizer, off-policy</th><th>Core claim &amp; Verdict</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PPO for RLHF (2017; InstructGPT 2022)</td><td>Critic + GAE, per token</td><td>PPO clip</td><td>KL to SFT in reward</td><td>Tuned PPO $\ge$ offline DPO <span class="grade grade-a">A</span></td></tr>
+            <tr><td>DPO (2023-05)</td><td>Implicit log-ratio</td><td>—</td><td>Implicit KL via $\beta$; offline</td><td>Loss shapes tie once tuned <span class="grade grade-a">A</span></td></tr>
+            <tr><td>ReMax (2023-10)</td><td>Greedy-response baseline</td><td>None</td><td>KL in reward</td><td>Variance reduction via argmax rollout <span class="grade grade-c">C</span></td></tr>
+            <tr><td>GRPO (2024-02)</td><td>Group mean $\div$ group std</td><td>PPO clip</td><td>$k_3$ KL in loss</td><td>Std and $1/|y_i|$ change the objective <span class="grade grade-b">B</span></td></tr>
+            <tr><td>RLOO (2024-02)</td><td>Leave-one-out mean</td><td>None</td><td>KL in reward</td><td>Equals Dr. GRPO $\times \frac{G}{G-1}$, exactly</td></tr>
+            <tr><td>REINFORCE++ (2025-01)</td><td>Batch-normalized</td><td>PPO clip</td><td>KL in reward</td><td>Batch std vs. group std <span class="grade grade-c">C</span></td></tr>
+            <tr><td>Kimi k1.5 (2025-01)</td><td>Group mean</td><td>None; squared log-ratio</td><td>Toward previous iterate; partial rollouts</td><td>Online mirror descent <span class="grade grade-c">C</span></td></tr>
+            <tr><td>DAPO (2025-03)</td><td>Group mean $\div$ std</td><td>Clip-higher ($0.2 / 0.28$)</td><td>No KL; dynamic sampling; overlong handling</td><td>Per component <span class="grade grade-c">C</span>–<span class="grade grade-d">D</span> (<a href="#case-dapo-table">Case Study 2</a>)</td></tr>
+            <tr><td>Dr. GRPO (2025-03)</td><td>Group mean, no std</td><td>PPO clip</td><td>Constant normalizer $M$</td><td>Removes length &amp; std biases <span class="grade grade-b">B</span></td></tr>
+            <tr><td>VC-PPO, VAPO (2025-03, -04)</td><td>Pre-trained critic; decoupled, length-adaptive GAE</td><td>Clip-higher</td><td>—</td><td>Critic beats critic-free <span class="grade grade-d">D</span> (<a href="#case-weak-baseline">Case Study 4</a>)</td></tr>
+            <tr><td>TOPR (2025-03)</td><td>Reward sign</td><td>Truncated IS on negatives only</td><td>Off-policy by design</td><td>Asymmetric off-policy updates <span class="grade grade-c">C</span></td></tr>
+            <tr><td>AReaL decoupled PPO (2025-05)</td><td>—</td><td>Clip around a proximal policy $\pi_{\text{prox}}$</td><td>Behaviour-to-proximal weight; staleness bound</td><td>On-policy level up to $\sim 8$ versions <span class="grade grade-b">B</span></td></tr>
+            <tr><td>MiniMax-M1 / CISPO (2025-06)</td><td>Group mean $\div$ std</td><td>Clipped stop-gradient IS weight</td><td>No KL; FP32 LM head; 16 updates per batch</td><td><span class="grade grade-b">B</span> efficiency · <span class="grade grade-d">D</span> general</td></tr>
+            <tr><td>Magistral (2025-06)</td><td>Group mean, minibatch-normalized</td><td>Clip-higher</td><td>No KL; async, $\le 2$ batches lag</td><td>Normalization has no effect <span class="grade grade-b">B</span></td></tr>
+            <tr><td>GSPO (2025-07)</td><td>Group mean $\div$ std</td><td>Sequence geometric-mean ratio</td><td>—</td><td><span class="grade grade-b">B</span> MoE without replay · <span class="grade grade-d">D</span> general</td></tr>
+            <tr><td>GMPO (2025-07)</td><td>Group mean $\div$ std</td><td>Geometric mean, per-token log clip</td><td>—</td><td>Smooth sequence ratio <span class="grade grade-c">C</span></td></tr>
+            <tr><td>Truncated IS (2025-08, blog)</td><td>—</td><td>$\times \min(\pi_{\text{old}}/\pi_{\text{sampler}}, C)$</td><td>Train–inference mismatch</td><td>Insufficient alone at scale <span class="grade grade-d">D</span></td></tr>
+            <tr><td>PipelineRL (2025-09)</td><td>—</td><td>Truncated IS</td><td>In-flight weight updates</td><td>$\sim 2\times$ throughput efficiency <span class="grade grade-b">B</span></td></tr>
+            <tr><td>ScaleRL (2025-10)</td><td>Batch-level std</td><td>CISPO</td><td>Prompt-level averaging; PipelineRL-8; FP32 head; filtering</td><td>Components move $B$, not ceiling $A$ <span class="grade grade-b">B</span></td></tr>
+            <tr><td>R3 routing replay (2025-10)</td><td>—</td><td>—</td><td>Replay inference routing in training</td><td>Prevents MoE collapse <span class="grade grade-a">A</span></td></tr>
+            <tr><td>IcePop (2025-10)</td><td>—</td><td>Mask tokens with train/infer ratio outside $[0.5, 5]$</td><td>Train–inference mismatch</td><td>Two-sided mismatch filter <span class="grade grade-b">B</span></td></tr>
+            <tr><td>SAPO (2025-11)</td><td>Group mean</td><td>Smooth sigmoid gate</td><td>—</td><td>Soft trust region <span class="grade grade-c">C</span></td></tr>
+            <tr><td>DeepSeek-V3.2 (2025-12)</td><td>Group mean, no std</td><td>PPO clip + off-policy sequence masking</td><td>IS-corrected $k_3$; Keep Routing; Keep Sampling Mask</td><td>Unablated recipe <span class="grade grade-c">C</span></td></tr>
+            <tr><td>Qwen "stabilizing RL" (2025-12)</td><td>Group mean</td><td>Token-level, no length normalization</td><td>Train–inference IS; R2/R3 when off-policy</td><td>Controlled study <span class="grade grade-b">B</span></td></tr>
+            <tr><td>OLMo 3 / OlmoRL (2025-12)</td><td>Group mean, no std</td><td>Clip-higher ($0.2 / 0.272$)</td><td>No KL; truncated IS; async $\le 8$</td><td>Open recipe; random-reward control negative</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="code">9.2 Reading Real Code: One Loss Function, Nine Config Flags</h3>
+
+        <p>The unified estimator's three slots exist in production code as two short functions and a handful of configuration flags. Reading them is the fastest way to verify what an experiment actually computed, because framework defaults often depart silently from the paper a user intends to run. Here we read <code>verl</code>'s policy loss at commit <code>7dc39fe</code> (May 2026) against our taxonomy.</p>
+
+        <h4 id="code-loss">The surrogate slot $f(r_{i,t}, \hat{A}_{i,t})$: one function, four quadrants</h4>
+
+<a class="source-badge" href="https://github.com/verl-project/verl/blob/7dc39fe/verl/trainer/ppo/core_algos.py#L1329-L1361" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· compute_policy_loss_vanilla, lines 1329–1361</span></a>
+<pre class="with-source"><code class="language-python">negative_approx_kl = log_prob - old_log_prob
+negative_approx_kl = torch.clamp(negative_approx_kl, min=-20.0, max=20.0)
+ratio = torch.exp(negative_approx_kl)                               # r = π_θ / π_old
+pg_losses1 = -advantages * ratio
+pg_losses2 = -advantages * torch.clamp(ratio, 1 - cliprange_low, 1 + cliprange_high)
+clip_pg_losses1 = <span class="code-hl">torch.maximum(pg_losses1, pg_losses2)</span>            # PPO-clip
+pg_losses3 = -advantages * clip_ratio_c
+clip_pg_losses2 = torch.min(pg_losses3, clip_pg_losses1)
+pg_losses = <span class="code-hl">torch.where(advantages &lt; 0, clip_pg_losses2, clip_pg_losses1)</span>  # dual-clip
+if rollout_is_weights is not None:
+    pg_losses = pg_losses * rollout_is_weights                       # gap-1 correction
+pg_loss = agg_loss(loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode, ...)</code></pre>
+
+        <p>Every mechanism from <a href="#trust-region">Chapter 5</a> is visible here in twelve lines:</p>
+        <ul>
+          <li><strong>Lines 13–15 (PPO-clip &amp; Clip-higher):</strong> Computes $-\min(r\hat{A}, \text{clip}(r, 1-\varepsilon_{\text{low}}, 1+\varepsilon_{\text{high}})\hat{A})$ as a maximum of negatives. Once the clipped branch wins, its gradient with respect to $\theta$ is zero (producing the hard zero-gradient masks in Quadrants I and IV of <a href="#pattern-quadrant">Figure 7a/7b</a>). Separate <code>cliprange_low</code> and <code>cliprange_high</code> parameters implement DAPO's asymmetric clip-higher.</li>
+          <li><strong>Lines 16–18 (Dual-clip in Quadrant III):</strong> Applies an upper cap $c$ on the negative-advantage loss only where $\hat{A} &lt; 0$ and $r &gt; c$, preventing unbounded gradient explosions when a bad token's probability has risen sharply since rollout.</li>
+          <li><strong>Lines 19–20 (Gap 1 engine-mismatch correction):</strong> Multiplies by <code>rollout_is_weights</code> ($\rho^{\text{roll}} = \pi_{\text{old}}^{\text{train}} / \pi_{\text{old}}^{\text{roll}}$)—the only line in the function that can see <a href="#correctness-gaps">Gap 1</a>.</li>
+          <li><strong>The $r \equiv 1$ check:</strong> If <code>old_log_prob</code> is recomputed on the trainer and only one optimizer step is taken per batch ($\mu = 1$), then <code>ratio == 1.0</code> everywhere, neither clip branch activates, and the loss reduces identically to vanilla REINFORCE ($-\hat{A}\nabla_\theta\log\pi_\theta$).</li>
+        </ul>
+
+        <h4 id="code-agg">The normalizer slot $Z$: four aggregation modes</h4>
+
+<a class="source-badge" href="https://github.com/verl-project/verl/blob/7dc39fe/verl/trainer/ppo/core_algos.py#L1168-L1195" target="_blank"><span class="file-path">verl: verl/trainer/ppo/core_algos.py</span><span class="file-meta">· agg_loss, lines 1168–1195</span></a>
+<pre class="with-source"><code class="language-python">if loss_agg_mode == "token-mean":
+    loss = <span class="code-hl">verl_F.masked_sum(loss_mat, loss_mask) / batch_num_tokens</span> * dp_size
+elif loss_agg_mode in ["seq-mean-token-sum", "seq-mean-token-sum-norm"]:
+    seq_losses = torch.sum(loss_mat * loss_mask, dim=-1)              # sum over a response
+    loss = verl_F.masked_sum(seq_losses, seq_mask) / global_batch_size * dp_size
+    if loss_agg_mode == "seq-mean-token-sum-norm":
+        if loss_scale_factor is None:
+            loss_scale_factor = <span class="code-hl">loss_mask.shape[-1]</span>                   # "constant" divisor
+        loss /= loss_scale_factor
+elif loss_agg_mode == "seq-mean-token-mean":
+    seq_losses = <span class="code-hl">torch.sum(loss_mat * loss_mask, dim=-1) / (seq_mask + 1e-8)</span>   # ÷ |y_i|
+    loss = verl_F.masked_sum(seq_losses, seq_mask) / global_batch_size * dp_size</code></pre>
+
+        <p>These four branches implement the rows of <a href="#aggregation">Chapter 6.2</a>'s aggregation table. Notice the subtle differences between paper equations and code: <code>token-mean</code> divides by the total valid tokens in the mini-batch across data-parallel workers (not per prompt group as written in DAPO's equation), while <code>seq-mean-token-sum-norm</code> (Dr. GRPO's constant normalizer $M$) defaults to <code>loss_mask.shape[-1]</code> when <code>loss_scale_factor</code> is unset, which on dynamic-padding code paths can equal the padded width of the current micro-batch rather than a fixed global constant.</p>
+
+        <h4 id="code-flags">Stock configuration flags vs. recommended defaults</h4>
+
+        <table>
+          <thead>
+            <tr><th>Two-Layer Coordinate</th><th><code>verl</code> flag</th><th>Stock Default</th><th>Note</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>C2</code> · Baseline</td><td><code>algorithm.adv_estimator</code></td><td><code>gae</code></td><td>14 estimators registered (<code>grpo</code>, <code>rloo</code>, <code>reinforce_plus_plus</code>, <code>remax</code>, <code>opo</code>, etc.)</td></tr>
+            <tr><td><code>A2</code> · Group Std ($F(p)$)</td><td><code>norm_adv_by_std_in_grpo</code></td><td><code>true</code></td><td>Unbiased ($G-1$) std division (<code>arcsin</code> target); set <code>false</code> for <code>linear</code> / Dr. GRPO</td></tr>
+            <tr><td><code>A3</code> · Length Weighting</td><td><code>loss_agg_mode</code></td><td><code>token-mean</code></td><td>Per mini-batch, not per prompt group</td></tr>
+            <tr><td><code>C1</code> · Ratio Gate</td><td><code>policy_loss.loss_mode</code>; <code>clip_ratio_low/high</code>; <code>clip_ratio_c</code></td><td><code>vanilla</code>; 0.2 / 0.2; 3.0</td><td>Modes include <code>gspo</code>, <code>sapo</code>, <code>cispo</code>, <code>geo_mean</code>, <code>clip_cov</code>, <code>kl_cov</code></td></tr>
+            <tr><td><code>A4</code> · KL Regularizer</td><td><code>use_kl_loss</code>; <code>kl_loss_type</code>; <code>use_kl_in_reward</code></td><td><code>false</code>; <code>low_var_kl</code> ($k_3$); <code>false</code></td><td>Uses biased $k_3$-in-loss gradient if switched on</td></tr>
+            <tr><td><code>A4</code> · Entropy Bonus</td><td><code>entropy_coeff</code></td><td><code>0</code></td><td>—</td></tr>
+            <tr><td><code>B1</code> · Off-Policy $\mu$</td><td><code>train_batch_size</code> / <code>ppo_mini_batch_size</code>; <code>ppo_epochs</code></td><td>1024 / 256; 1</td><td>Takes $\mu = 4$ optimizer steps per rollout batch by default (off-policy!)</td></tr>
+            <tr><td><code>B1</code> · Gap 1 &amp; MoE Replay</td><td><code>rollout_correction.rollout_is</code>; <code>router_replay.mode</code></td><td><code>off</code>; <code>disabled</code></td><td>Must be enabled explicitly when using vLLM/SGLang or MoE models</td></tr>
+            <tr><td><code>Cond / B1</code> · Rollout Group</td><td><code>rollout.n</code>; <code>rollout.temperature</code></td><td>1; 1.0</td><td>Group size $G$ must be set $>1$ for group baselines</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="pitfalls">9.3 Twelve Algorithmic Pitfalls (踩坑录)</h3>
+
+        <p>System bugs crash runs; algorithmic pitfalls leave training running and the loss curve looking plausible while silently changing the mathematical objective being optimized. Each pitfall below is documented from local checkouts of open-source RL frameworks (May 2026) and published post-mortems.</p>
+
+        <ol>
+          <li id="pit-kl"><strong>A KL loss that does nothing ($k_1$ outside the log-prob).</strong> In <code>slime</code>, enabling <code>--use-kl-loss</code> without changing <code>--kl-loss-type</code> uses the naive $k_1 = \log(\pi_\theta/\pi_{\text{ref}})$ estimator as a Differentiable loss term, whose expected gradient is identically zero (<a href="#correctness-kl">Chapter 4.3</a>). No warning is printed. <em>Detect:</em> verify the KL estimator type and confirm measured KL responds to $\beta$.</li>
+          <li id="pit-k3"><strong>A KL loss with the wrong tail direction ($k_3$ vs. $k_1$-in-reward).</strong> <code>SkyRL</code> enables a $k_3$ KL loss by default, and <code>verl</code> uses $k_3$ when <code>use_kl_loss</code> is enabled. Its expected gradient is that of forward KL $D_{\text{KL}}(\pi_{\text{ref}} \| \pi_\theta)$, not the reverse KL $D_{\text{KL}}(\pi_\theta \| \pi_{\text{ref}})$ named in the RL objective; the two diverge sharply whenever $\pi_\theta$ drifts far from $\pi_{\text{ref}}$. <em>Detect:</em> check whether KL enters as a detached reward penalty or a $k_3$ loss term.</li>
+          <li id="pit-cispo"><strong>"CISPO" that is not CISPO.</strong> <code>verl</code>'s <code>cispo</code> mode reuses the general clip settings, which default to $0.2$ on both sides, clipping the importance weight to $[0.8, 1.2]$. MiniMax-M1 disables the lower bound entirely, and <code>verl</code>'s own example script sets <code>clip_ratio_low = 10</code> for this reason. Running <code>loss_mode=cispo</code> with default clip flags tests a different algorithm. <em>Detect:</em> print the effective clip interval $[1-\varepsilon_{\text{low}}, 1+\varepsilon_{\text{high}}]$.</li>
+          <li id="pit-steps"><strong>Hidden off-policy updates in "synchronous" runs.</strong> <code>verl</code>'s stock batch sizes (<code>train_batch_size=1024</code>, <code>ppo_mini_batch_size=256</code>) take $\mu = 4$ optimizer steps per rollout batch, so "synchronous" training is off-policy from micro-step 2 onward (<a href="#skel-identity">the $r \equiv 1$ identity</a>). <em>Detect:</em> compute $\mu = (\text{train\_batch\_size} / \text{ppo\_mini\_batch\_size}) \times \text{ppo\_epochs}$ and log the clip fraction.</li>
+          <li id="pit-tokenmean"><strong>"Token-level" means three different denominators.</strong> <code>verl</code>'s <code>token-mean</code> normalizes per mini-batch across workers; DAPO's formula normalizes per prompt group; OLMo 3's text says "across the batch" while its equation normalizes per group. Prompts with different typical response lengths get different relative weights under each. <em>Detect:</em> read the denominator in code, not the mode's string name.</li>
+          <li id="pit-shift"><strong>A length-dependent advantage shift that activates zero-variance groups.</strong> In <code>OpenRLHF</code>'s <code>reinforce_baseline</code>, advantages are first centered within each prompt group and then re-normalized with a mean and variance weighted by token count over the whole batch. When correct and incorrect responses differ in length, the token-weighted batch mean is nonzero, so subtracting it shifts every advantage—and groups where all $G$ responses got the exact same reward (which should have zero gradient) acquire a nonzero gradient proportional to their length. <em>Detect:</em> assert that advantages sum to zero within each prompt group after all normalization steps.</li>
+          <li id="pit-ipo"><strong>A summed preference loss that should be length-averaged.</strong> <code>TRL</code>'s IPO implementation once summed token log-probabilities where the paper averages them. Once fixed, IPO performed on par with DPO; before the fix it looked worse (<a href="https://huggingface.co/blog/pref-tuning">Hugging Face, 2024</a>). <em>Detect:</em> check one batch by hand against the paper's equation.</li>
+          <li id="pit-baselinebugs"><strong>Infrastructure bugs that depress published baselines.</strong> A 2026 audit reports an optimizer-offload bug that silently dropped micro-batches and a loss-aggregation bug that together depressed the supervised baselines of several mixed-policy RL papers; once fixed, plain SFT followed by standard RL beat the proposed methods (<a href="https://arxiv.org/abs/2604.23747">arXiv:2604.23747</a>). <em>Detect:</em> reproduce a published baseline score before trusting a delta against it.</li>
+          <li id="pit-template"><strong>Re-tokenized multi-turn conversations.</strong> Re-applying a chat template to decoded strings does not reproduce the exact token IDs the policy sampled at rollout time. <code>verl</code> reports this made multi-turn PPO fail to converge (<a href="#agentic">Chapter 8.3</a>). <em>Detect:</em> pass token IDs directly from sampler to trainer and assert token-ID equality.</li>
+          <li id="pit-kernel"><strong>An inference kernel change that masquerades as an algorithm failure.</strong> An attention optimization in vLLM on A100 GPUs raised the sampler–trainer KL ($\text{Gap 1}$) by two orders of magnitude, causing runs to collapse on A100s while recovering when resumed on H100s (<a href="#correctness-gaps">Chapter 4.2</a>). <em>Detect:</em> log per-step $D_{\text{KL}}(\pi^{\text{roll}} \| \pi^{\text{train}})$ and investigate hardware/kernel spikes before changing the RL estimator.</li>
+          <li id="pit-config"><strong>Configuration YAML and Python dataclass defaults that disagree.</strong> <code>verl</code>'s rollout-correction YAML sets importance sampling to <code>null</code>, while the underlying Python dataclass defaults it to sequence-level. Which setting wins depends on how the config is instantiated. <em>Detect:</em> dump and archive the fully resolved configuration object at job startup.</li>
+          <li id="pit-eval"><strong>Evaluation settings that move benchmark scores by more than the treatment effect.</strong> Temperature, top-$p$, vLLM version, GPU architecture, and prompt wrapper each move AIME scores by 2–6 points (<a href="#tension-noise">Chapter 3.1</a>). <em>Detect:</em> lock evaluation hyperparameters and run multi-seed pass@$k$ evaluations inside the same harness for baseline and treatment.</li>
+        </ol>
+
+        <aside class="note warn"><strong>The common thread.</strong> Every item above leaves training running and the loss curve plausible while altering the gradient's expectation or the evaluation ruler. The defense is always the same: dump the resolved config, inspect the denominator of every average, verify $\sum_i \hat{A}_i = 0$ per group, and log both Gap 1 ($\pi^{\text{roll}}$ vs. $\pi^{\text{train}}$) and Gap 2 ($\pi_{\text{old}}$ vs. $\pi_\theta$) KL divergences from step 1.</aside>
+      </section>

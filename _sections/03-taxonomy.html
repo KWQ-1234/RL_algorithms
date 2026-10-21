@@ -1,0 +1,524 @@
+      <section id="skeleton">
+        <h2>2. Problem-Driven Algorithm Evolution, the Canonical Estimator &amp; the Two-Layer Sufficiency Coordinate System ($\mathbf{A} \times \mathbf{B} \times \mathbf{C} \to \mathbf{D}$)</h2>
+
+        <p>In this chapter, we first derive the core algorithms of LLM reinforcement learning from a <strong>problem-solving perspective</strong>—showing the exact mathematical bottleneck each algorithm solved and the new bottleneck it created (<a href="#skel-evolution">Section 2.1</a>). We then factorize their equations into a <strong>single canonical estimator</strong> and prove the <strong>$r \equiv 1$ On-Policy Collapse Theorem</strong> (<a href="#skel-knobs">Section 2.2</a>). Finally, we organize the entire post-training design space into the <strong>Two-Layer Sufficiency Coordinate System ($\text{Target }\mathbf{A} \times \text{Regime }\mathbf{B} \times \text{Approximation }\mathbf{C} \to \text{Dynamics }\mathbf{D}$)</strong>, dissect off-policy and credit choices via <strong>$2\times 2$ Quadrant Maps</strong>, and verify the two predictive rules against <strong>controlled same-cell and cross-cell experiments across 105 papers</strong> (<a href="#coordinate-atlas">Section 2.3</a>).</p>
+
+        <h3 id="skel-evolution">2.1 From Problems to Algorithms: The Five-Stage Constructive Evolution</h3>
+
+        <h4>Stage 1 · REINFORCE (1992): Solving Non-Differentiable Discrete Rewards</h4>
+        <p><strong>The Problem:</strong> We want to maximize $\mathcal{J}(\theta) = \mathbb{E}_{y \sim \pi_\theta(\cdot\mid x)}[R(x, y)]$, where $y = (y_1, \dots, y_T)$ is a discrete token sequence sampled from an autoregressive transformer and $R(x, y)$ is a non-differentiable black-box verifier or reward model.</p>
+        <p><strong>The Algorithmic Solution:</strong> Apply the score-function identity $\nabla_\theta \pi_\theta(y\mid x) = \pi_\theta(y\mid x)\nabla_\theta \log \pi_\theta(y\mid x)$ and factorize $\log \pi_\theta(y\mid x) = \sum_{t=1}^{|y|} \log \pi_\theta(y_t\mid x, y_{&lt;t})$:</p>
+        <div class="formula-display">$$\hat{g}_{\text{REINFORCE}}(\theta) = \frac{1}{G}\sum_{i=1}^{G} R(x, y_i) \sum_{t=1}^{|y_i|} \nabla_\theta \log \pi_\theta(y_{i,t} \mid x, y_{i,&lt;t}), \qquad y_i \sim \pi_\theta(\cdot \mid x)$$</div>
+        <p><strong>What Breaks in Practice:</strong> (1) <em>Sign ambiguity &amp; $\mathcal{O}(T^2)$ variance:</em> if $R(x, y) \in [0, 1]$, bad trajectories get zero gradient instead of negative suppression, and summing uncentered score functions across $T = 10{,}000$ tokens causes variance to explode as $\mathcal{O}(T^2)$. (2) <em>Single-step sample waste ($\mu = 1$):</em> because the expectation is under $\pi_\theta$, taking a single optimizer step invalidates the batch $\{y_i\}$, wasting $90\%+$ of GPU time on autoregressive generation.</p>
+
+        <h4>Stage 2 · PPO-RLHF (2017 / InstructGPT 2022): Solving Sample Reuse ($\mu &gt; 1$) &amp; Token Credit</h4>
+        <p><strong>The Problem:</strong> How can we reuse a generated batch of rollouts $\{y_i\} \sim \pi_{\text{old}}$ for $\mu &gt; 1$ gradient steps without catastrophic off-policy divergence, while localizing credit across $T$ tokens?</p>
+        <p><strong>The Algorithmic Solution:</strong> PPO introduces (a) a learned token-level value critic $V_\phi(s_t)$ with Generalized Advantage Estimation $\hat{A}_{i,t}^{\text{GAE}(\gamma,\lambda)}$, and (b) the per-token importance ratio $r_{i,t}(\theta) = \frac{\pi_\theta(y_{i,t}\mid x, y_{i,&lt;t})}{\pi_{\text{old}}(y_{i,t}\mid x, y_{i,&lt;t})}$ inside a pessimistic clipped surrogate:</p>
+        <div class="formula-display">$$\mathcal{L}_{\text{PPO}}(\theta) = \hat{\mathbb{E}}_{i,t}\!\Big[\min\!\big(r_{i,t}(\theta)\hat{A}_{i,t}^{\text{GAE}},\; \operatorname{clip}(r_{i,t}(\theta), 1-\varepsilon, 1+\varepsilon)\hat{A}_{i,t}^{\text{GAE}}\big)\Big], \qquad r_{i,t}(\theta) = \frac{\pi_\theta(y_{i,t}\mid s_{i,t})}{\pi_{\text{old}}(y_{i,t}\mid s_{i,t})}$$</div>
+        <p><strong>What Breaks at Reasoning Scale:</strong> (1) <em>The 4-model memory wall:</em> maintaining Actor $\pi_\theta$, Critic $V_\phi$, Reference $\pi_{\text{ref}}$, and Reward Model $R_{\text{RM}}$ simultaneously doubles memory and adds $1.6\times$ compute overhead per step. (2) <em>Long-CoT GAE attenuation:</em> when a binary outcome reward $R \in \{0, 1\}$ arrives only at terminal token $T = 8{,}000$, standard $\lambda = 0.95$ GAE attenuates the reward signal at token $t$ by $\lambda^{T-t}$ ($0.95^{200} \approx 3\times 10^{-5}$), leaving the first $7{,}800$ tokens blind to whether the final answer was right or wrong (<a href="#advantage">Chapter 4.1</a>).</p>
+
+        <h4>Stage 3 · RLOO &amp; GRPO (2024 / DeepSeekMath &amp; DeepSeek-R1): Eliminating the Value Critic</h4>
+        <p><strong>The Problem:</strong> In verifiable reasoning (math, code, logic), we only care about sequence-level outcome reward $R(x, y_i) \in \{0, 1\}$. Can we eliminate the learned critic $V_\phi$ entirely by estimating the baseline $b(x)$ directly from a group of $G$ parallel rollouts $\{y_1, \dots, y_G\} \sim \pi_{\text{old}}(\cdot\mid x)$ on the same prompt?</p>
+        <p><strong>The Algorithmic Solutions:</strong></p>
+        <ul>
+          <li><strong>RLOO (Leave-One-Out REINFORCE; <a href="https://arxiv.org/abs/2402.14740">Ahmadian et al., 2402.14740</a>):</strong> Subtracts the average reward of the <em>other</em> $G-1$ rollouts on prompt $x$, yielding an exact unbiased sequence advantage:
+            $$\hat{A}_i^{\text{RLOO}} = R_i - \frac{1}{G - 1}\sum_{j \ne i} R_j = \frac{G}{G - 1}\big(R_i - \bar{R}_G\big), \qquad \text{where } \bar{R}_G = \frac{1}{G}\sum_{j=1}^G R_j$$
+          </li>
+          <li><strong>GRPO (Group Relative Policy Optimization; <a href="https://arxiv.org/abs/2402.03300">Shao et al., 2402.03300</a>; <a href="https://arxiv.org/abs/2501.12948">DeepSeek-R1, 2501.12948</a>):</strong> Embeds the group baseline inside PPO's clipped objective for $\mu &gt; 1$ multi-epoch updates, but adds <strong>three extra design choices</strong>: (1) divides the centered reward by the group standard deviation $\sigma_G = \operatorname{std}(\{R_1,\dots,R_G\})$, (2) averages the token loss within each response by $\frac{1}{|y_i|}$, and (3) adds a per-token $k_3$ KL penalty directly to the loss:
+            <div class="formula-display">$$\mathcal{J}_{\text{GRPO}}(\theta) = \frac{1}{G}\sum_{i=1}^{G} \frac{1}{|y_i|}\sum_{t=1}^{|y_i|} \Big[\min\!\big(r_{i,t}\hat{A}_i^{\text{GRPO}},\, \operatorname{clip}(r_{i,t}, 1-\varepsilon, 1+\varepsilon)\hat{A}_i^{\text{GRPO}}\big) - \beta\,k_3(\pi_\theta, \pi_{\text{ref}})\Big], \qquad \hat{A}_i^{\text{GRPO}} = \frac{R_i - \bar{R}_G}{\sigma_G + \epsilon}$$</div>
+          </li>
+        </ul>
+        <p><strong>What Breaks When Scaling GRPO to Long-CoT Reasoning:</strong> Scaling GRPO to $16\text{k–}64\text{k}$ reasoning traces at $\mu = 4\text{–}16$ updates per batch exposed <strong>four mathematical pathologies</strong> inside $\mathcal{J}_{\text{GRPO}}$:</p>
+        <ol>
+          <li><strong>Pathology 1 (Objective &amp; Length Distortion $\to$ Target Layer <code>A2, A3</code>):</strong> Dividing by $\sigma_G = \sqrt{p_x(1-p_x)}$ gives a $3\times$ gradient boost not only to hard prompts ($p_x \to 0$) but also to trivial, nearly solved prompts ($p_x \to 1$)! Simultaneously, dividing each trajectory by its own length $\frac{1}{|y_i|}$ penalizes long wrong answers ($R_i = 0 \implies \hat{A}_i &lt; 0$) <em>less per token</em> than short wrong answers, causing incorrect chains of thought to bloat toward $L_{\max}$.</li>
+          <li><strong>Pathology 2 (Rare-Token Clipping Starvation &amp; Entropy Collapse $\to$ Approximation <code>C1</code> &amp; Dynamics <code>D1</code>):</strong> Under symmetric $\varepsilon = 0.20$, a rare reasoning pivot token (`"Wait"`, `"Alternatively"`) with $\pi_{\text{old}}(y_{i,t}) = 10^{-3}$ hits the upper clip wall $r_{i,t} = 1.20$ as soon as its probability rises by $0.0002$ on micro-step 1, getting zero-masked for the remaining $\mu - 1$ steps—while high-probability mode tokens ($\pi_{\text{old}} = 0.50$) can rise by $0.10$, collapsing policy entropy $\mathcal{H}(\pi_\theta) \to 0$.</li>
+          <li><strong>Pathology 3 (Zero-Variance Dead Groups $\to$ Dynamics <code>D2</code>):</strong> Whenever all $G$ rollouts on prompt $x$ fail ($\sum R_i = 0$) or succeed ($\sum R_i = G$), $\hat{A}_i^{\text{GRPO}} \equiv 0$. These $0$-bit groups contribute zero gradient signal while shrinking the effective batch size.</li>
+          <li><strong>Pathology 4 (Negative-Quadrant &amp; Hybrid-Engine Explosion $\to$ Regime <code>B1</code> &amp; Ratio Control <code>C1</code>):</strong> Over $T = 16{,}000$ tokens at $\mu = 4\text{–}16$ steps/batch—especially on Mixture-of-Experts (MoE) models where vLLM inference and Megatron training route tokens to different experts—negative-advantage tokens ($\hat{A}_i &lt; 0$) suffer unbounded logit drift, crashing training mid-run.</li>
+        </ol>
+
+        <h4>Stage 4 · The 2025–2026 Surgical Fixes: Dr. GRPO, DAPO, MaxRL, CISPO, GSPO &amp; R3</h4>
+        <p>Every major RLVR algorithm of 2025–2026 targets one or more of GRPO's four pathologies:</p>
+        <ul>
+          <li><strong>Dr. GRPO (<a href="https://arxiv.org/abs/2503.20783">Liu et al., 2503.20783</a>) — Fixing Pathology 1:</strong> Drops $\div\sigma_G$ ($\hat{A}_i = R_i - \bar{R}_G \equiv \frac{G-1}{G}\hat{A}_i^{\text{RLOO}}$) and replaces $\frac{1}{|y_i|}$ with a constant token normalizer $\frac{1}{M}$, restoring the exact unbiased sequence policy gradient.</li>
+          <li><strong>MaxRL (<a href="https://arxiv.org/abs/2602.02710">2602.02710</a>) &amp; Pass@$k$ Training (<a href="https://arxiv.org/abs/2508.10751">2508.10751</a>) — Fixing Pathology 1:</strong> Replaces GRPO's U-shaped weight $1/\sqrt{p_x(1-p_x)}$ with monotone decreasing weights $w(p_x) = \frac{1-(1-p_x)^T}{p_x} \to \frac{1}{p_x}$ (ascending $\sum_x \log p_x$) or $k(1-p_x)^{k-1}$ (ascending $\text{pass@}k$), up-weighting hard prompts ($p_x \to 0$) without amplifying easy ones ($p_x \to 1$).</li>
+          <li><strong>DAPO (<a href="https://arxiv.org/abs/2503.14476">Yu et al., 2503.14476</a>) — Fixing Pathologies 1, 2 &amp; 3:</strong> Replaces symmetric clipping with <strong>Clip-Higher</strong> ($\varepsilon_{\text{low}} = 0.20,\; \varepsilon_{\text{high}} = 0.28$); filters out $\sum R_i \in \{0, G\}$ dead groups via <strong>Dynamic Sampling</strong>; switches to batch <strong>token-mean</strong> normalization $\frac{1}{\sum_{j=1}^G |y_j|}$; and drops the explicit KL penalty ($\beta = 0$).</li>
+          <li><strong>CISPO (<a href="https://arxiv.org/abs/2506.13585">MiniMax-M1, 2506.13585</a>) — Fixing Pathology 2 at High Batch Reuse ($\mu = 16$):</strong> Replaces upper zero-masking with a <strong>stop-gradient capped importance weight</strong> $\operatorname{sg}\!\big(\min(r_{i,t}, 1+\varepsilon_{\text{high}})\big)$ so rare reasoning tokens continue learning across all $\mu = 16$ micro-steps.</li>
+          <li><strong>GSPO (<a href="https://arxiv.org/abs/2507.18071">2507.18071</a>), TOPR (<a href="https://arxiv.org/abs/2503.14286">2503.14286</a>), IcePop (<a href="https://arxiv.org/abs/2510.18855">2510.18855</a>) &amp; R3 (<a href="https://arxiv.org/abs/2510.11370">2510.11370</a>) — Fixing Pathology 4:</strong> <strong>GSPO</strong> replaces noisy token ratios $r_{i,t}$ with the sequence geometric mean $s_i = (\prod_{t=1}^{|y_i|} r_{i,t})^{1/|y_i|}$; <strong>TOPR</strong> and <strong>Dual-Clip</strong> bound negative-advantage ($\hat{A}_i &lt; 0$) ratios; <strong>IcePop</strong> masks tokens where the sampler-to-trainer ratio $\pi_{\text{old}}^{\text{train}}/\pi_{\text{old}}^{\text{roll}}$ exits $[0.5, 5.0]$; and <strong>R3</strong> replays the inference engine's exact MoE expert assignments during backpropagation.</li>
+        </ul>
+
+        <h3 id="skel-knobs">2.2 Factorizing the Evolution: The Master Estimator &amp; the $r \equiv 1$ Collapse Theorem</h3>
+
+        <p>Comparing the equations of Stage 1 through Stage 4 reveals that every policy-gradient algorithm in the literature computes the <strong>exact same master expression</strong> over a group of $G$ sampled trajectories $\{y_i\}_{i=1}^G$, differing only in three algebraic slots $(\hat{A}_{i,t},\; w_{i,t}\cdot m_{i,t},\; c_{i,t})$:</p>
+
+        <div class="formula-display">$$\hat{g}(\theta) = \sum_{i=1}^{G} \sum_{t=1}^{|y_i|} \underbrace{c_{i,t}}_{\substack{\text{Slot 3: Aggregation}\\\text{(Dr.GRPO vs. GRPO/DAPO)}}} \cdot \underbrace{w_{i,t}(r_{i,t}) \cdot m_{i,t}(r_{i,t}, \hat{A}_{i,t})}_{\substack{\text{Slot 2: Trust-Region Weight &amp; Gate}\\\text{(PPO / DAPO / CISPO / GSPO / SAPO)}}} \cdot \underbrace{\hat{A}_{i,t}}_{\substack{\text{Slot 1: Advantage &amp; Scale}\\\text{(GAE / RLOO / GRPO / MaxRL / OPD)}}} \cdot \nabla_\theta \log \pi_\theta(y_{i,t} \mid x, y_{i,&lt;t})$$</div>
+
+        <p>Differentiating $\log \pi_\theta(y_{i,t} \mid s_{i,t})$ with respect to the pre-softmax logit vector $z_{i,t} \in \mathbb{R}^{|\mathcal{V}|}$ gives the exact token-level force on vocabulary token $v \in \mathcal{V}$:</p>
+
+        <div class="formula-display">$$\frac{\partial \hat{\mathcal{J}}}{\partial z_{i,t,v}} = c_{i,t} \cdot w_{i,t}(r_{i,t}) \cdot m_{i,t}(r_{i,t}, \hat{A}_{i,t}) \cdot \hat{A}_{i,t} \cdot \Big(\mathbf{1}\{v = y_{i,t}\} - \pi_\theta(v \mid s_{i,t})\Big)$$</div>
+
+        <div class="primer-box" id="skel-steps">
+          <p><strong>The Three Policies and Two Physical Gaps in Every Update.</strong> Three policy evaluations participate in every distributed RL step: (1) $\pi_{\text{old}}^{\text{roll}}$, the rollout engine's policy (vLLM/SGLang, often FP8/BF16 with paged attention) that generated $y_i$; (2) $\pi_{\text{old}}^{\text{train}}$, the trainer's policy evaluated once at $\theta_{\text{old}}$ before micro-step 1; and (3) $\pi_\theta^{\text{train}}$, the trainer's current policy at micro-step $k \in \{1, \dots, \mu\}$. Standard surrogates see only the <strong>trainer-side ratio</strong> $r_{i,t}(\theta)$, whereas the true off-policy ratio factors across two physical gaps:</p>
+          <div class="formula-display">$$r_{i,t}^{\text{true}}(\theta) = \frac{\pi_\theta^{\text{train}}(y_{i,t}\mid s_{i,t})}{\pi_{\text{old}}^{\text{roll}}(y_{i,t}\mid s_{i,t})} = \underbrace{\frac{\pi_{\text{old}}^{\text{train}}(y_{i,t} \mid s_{i,t})}{\pi_{\text{old}}^{\text{roll}}(y_{i,t} \mid s_{i,t})}}_{\rho_{i,t}^{\text{roll}}\text{ (Gap 1: Engine Mismatch)}} \cdot \underbrace{\frac{\pi_\theta^{\text{train}}(y_{i,t} \mid s_{i,t})}{\pi_{\text{old}}^{\text{train}}(y_{i,t} \mid s_{i,t})}}_{r_{i,t}(\theta)\text{ (Gap 2: Policy Lag)}}$$</div>
+        </div>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Algorithm</th><th>Slot 1: Advantage $\hat{A}_{i,t}$</th><th>Slot 2: Weight $w_{i,t}(r_{i,t})$ &amp; Gate $m_{i,t} = 0$ Condition</th><th>Slot 3: Normalizer $c_{i,t}$</th><th>Gradient at $r_{i,t} \equiv 1$</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>REINFORCE / RLOO</strong></td><td>$\frac{G}{G-1}(R_i - \bar{R}_G)$</td><td>$w = 1,\; m \equiv 1$ (unclipped)</td><td>$\frac{1}{G}$</td><td>Exact sequence PG</td></tr>
+            <tr><td><strong>PPO-RLHF</strong></td><td>$\hat{A}_{i,t}^{\text{GAE}(\gamma,\lambda)}$ via $V_\phi$</td><td>$w = r_{i,t}$; $m=0$ if $(\hat{A}&gt;0 \wedge r&gt;1+\varepsilon) \vee (\hat{A}&lt;0 \wedge r&lt;1-\varepsilon)$</td><td>$\frac{1}{\sum_j |y_j|}$</td><td>GAE-weighted PG</td></tr>
+            <tr><td><strong>GRPO (Original)</strong></td><td>$\frac{R_i - \bar{R}_G}{\sigma_G}$</td><td>PPO-clip ($\varepsilon = 0.20$)</td><td>$\frac{1}{G\,|y_i|}$</td><td>Std + $\frac{1}{|y_i|}$ weighted PG</td></tr>
+            <tr><td><strong>Dr. GRPO</strong></td><td>$R_i - \bar{R}_G$</td><td>PPO-clip ($\varepsilon = 0.20$)</td><td>$\frac{1}{G\,M}$ (constant $M$)</td><td>Exact sequence PG ($\propto$ RLOO)</td></tr>
+            <tr><td><strong>DAPO</strong></td><td>$\frac{R_i - \bar{R}_G}{\sigma_G}$ ($0 &lt; \sum R_i &lt; G$)</td><td>$w = r_{i,t}$; asymmetric $\varepsilon_{\text{high}} = 0.28 &gt; \varepsilon_{\text{low}} = 0.20$</td><td>$\frac{1}{\sum_{j=1}^G |y_j|}$</td><td>Std + token-mean PG</td></tr>
+            <tr><td><strong>MaxRL</strong></td><td>$\frac{1-(1-\hat{p}_x)^T}{\hat{p}_x}(R_i - \bar{R}_G)$</td><td>PPO-clip or unclipped</td><td>$\frac{1}{G\,M}$</td><td>Ascends $\sum_x \log p_x$</td></tr>
+            <tr><td><strong>Dual-Clip PPO</strong></td><td>Any $\hat{A}_{i,t}$</td><td>PPO-clip $\;\vee\; (m = 0 \text{ when } \hat{A}_{i,t} &lt; 0 \wedge r_{i,t} &gt; c)$</td><td>Any $c_{i,t}$</td><td>Matches base $\hat{A}, c$</td></tr>
+            <tr><td><strong>CISPO (MiniMax-M1)</strong></td><td>$\frac{R_i - \bar{R}_G}{\sigma_G}$</td><td>$w = \operatorname{sg}(\min(r_{i,t}, 1+\varepsilon_{\text{high}})),\; m \equiv 1$ (no lower mask)</td><td>$\frac{1}{\sum_j |y_j|}$</td><td>Matches DAPO at $r \equiv 1$</td></tr>
+            <tr><td><strong>GSPO / GMPO</strong></td><td>$\frac{R_i - \bar{R}_G}{\sigma_G}$</td><td>$w = s_i = \big(\prod_t r_{i,t}\big)^{1/|y_i|}$; sequence or log-token clip</td><td>$\frac{1}{G\,|y_i|}$ (via $\nabla s_i$)</td><td>Matches GRPO at $r \equiv 1$</td></tr>
+            <tr><td><strong>SAPO</strong></td><td>$R_i - \bar{R}_G$</td><td>$w = r_{i,t} \cdot 4\sigma(\tau(r_{i,t}-1))(1-\sigma(\tau(r_{i,t}-1))),\; m \equiv 1$</td><td>$\frac{1}{G\,|y_i|}$</td><td>Matches $\frac{1}{|y_i|}$ PG at $r \equiv 1$</td></tr>
+            <tr><td><strong>TOPR</strong></td><td>$R_i \in \{-1, +1\}$</td><td>$w = 1$ ($\hat{A}&gt;0$); $w = \operatorname{sg}(\operatorname{clip}(r_{i,t}, 0, 1))$ ($\hat{A}&lt;0$)</td><td>$\frac{1}{G\,M}$</td><td>Matches REINFORCE at $r \equiv 1$</td></tr>
+            <tr><td><strong>On-Policy Distillation (OPD)</strong></td><td>$\log\frac{\pi_{\text{teacher}}(y_{i,t}\mid s_{i,t})}{\pi_\theta(y_{i,t}\mid s_{i,t})}$</td><td>$w = 1,\; m \equiv 1$ (or IS-weighted if $\mu &gt; 1$)</td><td>$\frac{1}{\sum_j |y_j|}$</td><td>Dense token reverse-KL PG</td></tr>
+          </tbody>
+        </table>
+
+        <div class="technique-card" id="skel-identity">
+          <p><strong>Proposition 1 (The $r \equiv 1$ On-Policy Collapse Identity).</strong> Suppose each rollout batch receives a single optimizer step ($\mu = 1$, zero asynchronous lag $\tau = 0$) and $\pi_{\text{old}}^{\text{train}}$ is evaluated on the trainer at current parameters $\theta$. Then at the point of differentiation, $r_{i,t}(\theta) \equiv 1$ for every token $(i, t)$, and PPO-clip, GRPO, DAPO (Clip-Higher), Dual-Clip, CISPO, SAPO, TOPR, GSPO, and GMPO all return the exact same gradient once $\hat{A}_{i,t}$, $c_{i,t}$, and $\beta$ are matched:</p>
+          <div class="formula-display">$$\left.\hat{g}(\theta)\right|_{r_{i,t} \equiv 1} = \sum_{i=1}^{G} \sum_{t=1}^{|y_i|} c_{i,t} \, \hat{A}_{i,t} \, \nabla_\theta \log \pi_\theta(y_{i,t} \mid x, y_{i,&lt;t})$$</div>
+          <p id="skel-names"><em>Proof.</em> At $r_{i,t} = 1$: $1 \in [1-\varepsilon_{\text{low}}, 1+\varepsilon_{\text{high}}]$ so $m_{i,t} = 1$ and $w_{i,t}(1) = 1$; $\min(1, 1+\varepsilon_{\text{high}}) = 1$ (CISPO); $4\sigma(0)(1-\sigma(0)) = 1$ (SAPO); and $s_i = 1^{1/|y_i|} = 1$ with $\left.\nabla_\theta s_i\right|_{r=1} = \frac{1}{|y_i|}\sum_t \nabla_\theta \log \pi_\theta(y_{i,t}\mid s_{i,t})$ (GSPO/GMPO). Note that if an explicit $k_3$ KL penalty is added outside the surrogate ($\beta &gt; 0$ in original GRPO vs. $\beta = 0$ in DAPO/GSPO), its gradient $-\beta\big(\frac{\pi_{\text{ref}}}{\pi_\theta} - 1\big)\nabla_\theta\log\pi_\theta$ does <em>not</em> vanish at $r \equiv 1$ once $\pi_\theta \ne \pi_{\text{ref}}$. $\blacksquare$</p>
+          <p><strong>Crucial Empirical Corollary (Why Published Surrogate Papers Still Report Large Differences):</strong> Auditing the primary PDFs and codebases of our 105-paper corpus reveals that <strong>zero headline surrogate papers actually run in the true on-policy regime <code>B1 = On-Policy</code> ($r \equiv 1 \implies \text{C1} = \varnothing$)</strong>: DAPO (<a href="https://arxiv.org/abs/2503.14476">2503.14476</a>) and MiniMax-M1 / CISPO (<a href="https://arxiv.org/abs/2506.13585">2506.13585</a>) execute <strong>$\mu = 16$ gradient updates per rollout batch</strong>; DeepSeek-R1 (<a href="https://arxiv.org/abs/2501.12948">2501.12948</a>) splits $8{,}192$ rollouts into <strong>$\mu = 16$ mini-batches</strong>; GMPO (<a href="https://arxiv.org/abs/2507.20673">2507.20673</a>) runs <strong>$\mu = 8$ updates/round</strong>; GSPO (<a href="https://arxiv.org/abs/2507.18071">2507.18071</a>) and SAPO (<a href="https://arxiv.org/abs/2511.20347">2511.20347</a>) run <strong>$\mu = 4$ mini-batches/batch</strong>; and <code>verl</code>'s default "synchronous" configuration (<code>1024/256</code>) performs <strong>$\mu = 4$ updates/batch</strong>. Even at $\mu = 1$, computing ratios against rollout-engine log-probabilities $\pi_{\text{old}}^{\text{roll}}$ violates $r \equiv 1$ via Gap 1 (<a href="https://arxiv.org/abs/2605.14220">VeXact, 2605.14220</a> shows bitwise-exact MoE REINFORCE kept improving where the standard vLLM-based run degraded after $\sim 280$ steps, and <a href="https://arxiv.org/abs/2510.11370">R3, 2510.11370</a> shows $\sim 10\%$ of MoE routing decisions differ between training and inference on Qwen3-30B-A3B, affecting $94\%$ of sequences in at least one layer). Proposition 1 therefore proves that <strong>every reported accuracy gap between PPO, DAPO, CISPO, GSPO, and SAPO is an indirect measurement of off-policy batch reuse ($\mu \in [4, 16]$ in <code>B1</code>), un-replayed MoE routing drift (<code>B1</code>), or bundled changes to $\hat{A}_i$ ($\div\sigma_G$ in <code>A2</code>) and $c_{i,t}$ ($\frac{1}{|y_i|}$ vs. token-mean in <code>A3</code>)</strong>.</p>
+        </div>
+
+        <figure>
+          <img src="diagrams/01-estimator-pipeline.svg" alt="One update in seven steps — sample, score, baseline, weight and mask, aggregate, regularize, step — each labelled with its design axes, above the single gradient estimator whose three knobs they set.">
+          <figcaption><span class="fig-label">Figure 2.</span> One update of the post-training loop in seven operational steps, mapping directly onto the Two-Layer Coordinates ($\text{Target }\mathbf{A1\text{–}A4},\; \text{Regime }\mathbf{B1},\; \text{Approximation }\mathbf{C1\text{–}C3}$) and the internal slots of $\hat{g}(\theta)$.</figcaption>
+        </figure>
+
+        <h3 id="coordinate-atlas">2.3 From Three PG Slots to Five Code Modules—and Why We Need the Two-Layer Coordinate System ($\text{Target } \mathbf{A} \times \text{Regime } \mathbf{B} \times \text{Approximation } \mathbf{C} \to \text{Dynamics } \mathbf{D}$)</h3>
+
+        <p id="skel-five-axes"><strong>Step 1: Why the three policy-gradient slots expand to five code modules for indexing.</strong> The three slots $(\hat{A}_{i,t},\; w_{i,t}m_{i,t},\; c_{i,t})$ of Section 2.2 cover single-turn scalar-reward policy gradients (PPO, GRPO, Dr. GRPO, DAPO, CISPO, GSPO, SAPO). However, five families of post-training papers step outside that single-turn bandit box: (1) <em>non-linear or game-theoretic objectives</em> (pass@$k$ training $\sum_x (1-(1-p_x)^k)$, MaxRL $\sum_x \log p_x$, Nash-MD/SPPO equilibria); (2) <em>alternative supervision signals</em> (process reward models, LLM rubrics, intrinsic self-certainty/entropy, teacher log-probabilities in OPD); (3) <em>non-PG update estimators</em> (closed-form contrastive DPO/IPO/SimPO, rejection-sampled SFT like RAFT/ReST, value-based Q-learning); (4) <em>multi-turn stateful credit assignment</em> (agentic state grouping in GiGPO, environment-token masking in Search-R1); and (5) <em>structured rollout sampling</em> (difficulty curricula, prefix-tree branching in VinePPO/TreeRL). To index which module of a codebase any paper edits, the three slots naturally expand into <strong>five operational dimensions</strong>: <em>Objective</em>, <em>Signal</em>, <em>Data</em>, <em>Estimator</em>, and <em>Update Control</em>.</p>
+
+        <p><strong>Step 2: Why a flat five-axis index cannot predict performance—the Two-Layer Split ($\pi^*$ Target vs. Approximation) and the $\beta = 0$ Simplex Subtlety.</strong> A flat five-axis index is useful as a lookup table for <em>where</em> a paper edited code, but treating those five dimensions as parallel peers loses the core causal hierarchy of RL: <strong>which dimensions determine <em>where</em> the policy converges (the stationary fixed point or optimal set $\pi^*$), and which dimensions determine <em>how</em> it gets there (bias, variance, speed, and stability)?</strong> Moreover, a flat five-axis table misses three critical facts: (i) the <strong>base model $\pi_{\text{ref}}$</strong> sits on none of the five axes yet fixes the support set $\operatorname{supp}(\pi_{\text{ref}})$ and can flip an algorithm's sign across model families; (ii) the five axes are <strong>not orthogonal</strong> (advantage normalization is coded inside the <em>Estimator</em> but alters the cross-prompt <em>Objective</em>; <em>Update Control</em> is completely inert unless the <em>Data</em> axis is off-policy); and (iii) <strong>exploration dynamics (entropy collapse)</strong> form a feedback loop that determines which solutions remain samplable in finite time. Crucially, when $\beta = 0$ and $R(x,y)\in\{0,1\}$ (as in most modern RLVR recipes), $\pi^*$ degenerates from a single interior distribution into the <strong>simplex face</strong> $\Delta(\mathcal{Y}^+(x))$ of all distributions supported on correct responses ($p_x=1$); on that simplex face, Layer $\mathbf{C}$'s implicit mirror-descent path from $\pi_{\text{ref}}$ directly selects which valid solution modes survive, while prompt weighting $F(p_x)$ in <code>A2</code> governs the finite-step cross-prompt gradient velocity ratio across easy vs. hard prompts.</p>
+
+        <p>Returning to the regularized optimal solution $\pi^*(y\mid x) \propto \pi_{\text{ref}}(y\mid x)\exp\big(R(x,y)/\beta\big)$, we elevate the five code modules into a single <strong>Two-Layer Coordinate System ($\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}$ conditioned on <code>Cond</code>)</strong> read directly from the canonical update equation</p>
+
+        <div class="formula-display">$$g(\theta) = \sum_x \underbrace{w(p_x)}_{\text{A2}} \sum_{i=1}^G \sum_{t=1}^{|y_i|} \underbrace{c_{i,t}}_{\text{A3}} \, \underbrace{\psi(r_{i,t}, \hat{A}_{i,t})}_{\text{C1, C2 (active iff B1 }\ne\text{ on-policy)}} \nabla_\theta \log \pi_\theta(y_{i,t}\mid x, y_{i,&lt;t}) - \underbrace{\beta\,\nabla_\theta \widehat{\mathrm{KL}}(\pi_\theta, \pi_{\text{ref}})}_{\text{A4}}$$</div>
+
+        <p>and one master diagnostic question: <strong>"Did this algorithmic modification change the fixed point $\pi^*$ (Layer A), or did it only alter the approximation path (Layer C) and entropy reachability (Layer D)?"</strong></p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Hierarchy Layer</th><th>Coord</th><th>Canonical Mathematical Quantity</th><th>Values &amp; Granularity (Merged within MDE Noise Floor)</th><th>Physical Role</th></tr>
+          </thead>
+          <tbody>
+            <tr class="cat-row"><td colspan="5">0. Given Problem Conditions $\mathcal{E}_{\text{cond}}$ (Not algorithm coordinates, but all predictions are conditioned on them)</td></tr>
+            <tr>
+              <td><strong>Boundary Conditions</strong></td>
+              <td><code>Cond</code></td>
+              <td>$\big(\pi_{\text{ref}},\; P(p_x),\; B_{\text{batch}},\; L_{\max}\big)$</td>
+              <td>Base model support &amp; contamination ($\pi_{\text{ref}}$), initial entropy $H_0$, prompt pass-rate distribution $P(p_x)$, compute budget ($B, L_{\max}$)</td>
+              <td>Determines initial reachable support $\operatorname{supp}(\pi_{\text{ref}})$ and which coordinates in $\mathbf{A}\text{–}\mathbf{C}$ are exercised.</td>
+            </tr>
+
+            <tr class="cat-row"><td colspan="5">A. Target Layer (Determines the stationary fixed point $\pi^*$ $\implies$ governs asymptotic ceiling $A$ and reward-hacking modes)</td></tr>
+            <tr>
+              <td rowspan="4"><strong>Layer A · Target</strong><br>Where the algorithm is going ($\pi^*$)</td>
+              <td><code>A1</code></td>
+              <td><strong>Supervision Signal &amp; Error Type</strong><br>($\mathcal{I}$: source + noise vs. exploitable bias)</td>
+              <td>Exact verifier ($\alpha_{\text{FP}}=0$) / Learned RM or Judge (exploitable Goodhart bias) / Step PRM (telescoping $\Phi(s_{t+1})-\Phi(s_t)$ vs. hackable sum) / Preference pair / Intrinsic ($0$-bit) / Teacher logprobs ($\log\pi_{\text{teacher}}$)</td>
+              <td>Sets ground-truth channel bandwidth and determines whether $\pi^*$ is unhackable or vulnerable to Goodhart drift.</td>
+            </tr>
+            <tr>
+              <td><code>A2</code></td>
+              <td><strong>Prompt Weighting $F(p_x)$</strong><br>($F'(p_x) = w(p_x)\,p_x(1-p_x)$)</td>
+              <td><strong>Linear</strong> $\sum_x p_x$ (mean-centered, RLOO, Dr. GRPO) / <strong>Arcsin</strong> $\sum_x 2\arcsin\sqrt{p_x}$ (GRPO $\div\sigma_G$) / <strong>Log</strong> $\sum_x \log p_x$ (MaxRL) / <strong>Pass@$k$</strong></td>
+              <td>Determines how the fixed point trades off easy ($p_x\to 1$) vs. hard frontier ($p_x\to 0$) prompts.</td>
+            </tr>
+            <tr>
+              <td><code>A3</code></td>
+              <td><strong>Length Weighting $c_{i,t}$</strong><br>(Sequence vs. token aggregation)</td>
+              <td><strong>Per-sequence mean</strong> $\frac{1}{G|y_i|}$ (stock GRPO, SimPO) / <strong>Global token-mean</strong> $\frac{1}{\sum_j |y_j|}$ (DAPO) / <strong>Constant normalizer</strong> $\frac{1}{GM}$ (Dr. GRPO, RLOO)</td>
+              <td>Reweights trajectories by length $|y_i|$; $\frac{1}{|y_i|}$ shifts $\pi^*$ whenever $\operatorname{Cov}_G(|y_i|^{-1}, \hat{A}_i) \ne 0$.</td>
+            </tr>
+            <tr>
+              <td><code>A4</code></td>
+              <td><strong>Regularization &amp; Anchor</strong><br>($\beta$ &amp; KL estimator unbiasedness)</td>
+              <td><strong>None</strong> ($\beta=0$, implicit path-KL) / <strong>Fixed-$\pi_{\text{ref}}$ Reverse KL</strong> (unbiased $k_1$-in-$R$, $k_2$-loss, DPO) / <strong>Biased $k_3$-in-loss</strong> (shifts $\pi^*$ toward forward KL) / <strong>Rolling $\pi_{\text{ref}}$</strong> / <strong>Entropy bonus</strong></td>
+              <td>Determines how far $\pi^*$ can move from $\pi_{\text{ref}}$ and whether the KL restoring force is unbiased.</td>
+            </tr>
+
+            <tr class="cat-row"><td colspan="5">B. Operating Regime (Determines whether Approximation Layer C is active or algebraically empty)</td></tr>
+            <tr>
+              <td><strong>Layer B · Regime</strong></td>
+              <td><code>B1</code></td>
+              <td><strong>Off-Policyness &amp; System Drift</strong><br>$\big(\text{Measure},\; \mu,\; \tau,\; \delta_{\text{sys}}\big)$</td>
+              <td><strong>Strict On-Policy</strong> ($\mu=1, \tau=0, \delta_{\text{sys}}=0 \implies r_{i,t}\equiv 1$, <strong><code>C1 = ∅</code></strong>) / <strong>Multi-step Off-Policy</strong> ($\mu \in [4,16]$, async lag $\tau$) / <strong>Hybrid-Engine &amp; MoE Drift</strong> (Gap 1 $\rho^{\text{roll}}\ne 1$, un-replayed MoE routing) / <strong>Static Offline</strong> ($\mu_{\text{off}}$)</td>
+              <td>Activates or deactivates <code>C1</code>: at strict on-policy ($r\equiv 1$), all ratio surrogates collapse to the same point (Theorem 2).</td>
+            </tr>
+
+            <tr class="cat-row"><td colspan="5">C. Approximation Layer (Determines bias, variance, speed $B$, and stability toward $\pi^*$; <code>C1</code> is non-empty only when <code>B1</code> $\ne$ on-policy)</td></tr>
+            <tr>
+              <td rowspan="3"><strong>Layer C · Approximation</strong><br>How the algorithm travels toward $\pi^*$</td>
+              <td><code>C1</code></td>
+              <td><strong>Ratio Processing $\psi(r, \hat{A})$</strong><br>(Empty $\varnothing$ when $r_{i,t} \equiv 1$)</td>
+              <td><strong>4-Quadrant action</strong> ($\hat{A}\gtrless 0 \times r\gtrless 1$: zero-mask vs. stop-grad cap vs. smooth retain) $\times$ <strong>Granularity</strong> (token $r_{i,t}$ vs. sequence $s_i$) $\times$ <strong>Reference</strong> ($\pi_{\text{old}}^{\text{train}}$ vs. $\pi_{\text{old}}^{\text{roll}}$ + R3 routing replay)</td>
+              <td>Controls off-policy variance and prevents Q-I rare-token starvation, Q-III spikes, and Q-IV negative-logit collapse.</td>
+            </tr>
+            <tr>
+              <td><code>C2</code></td>
+              <td><strong>Credit &amp; Baseline</strong><br>(Variance reduction &amp; localization)</td>
+              <td><strong>Sequence MC</strong> (group mean / RLOO, absorbed into same cell for $G\ge 8$) / <strong>Learned Critic</strong> ($\lambda=1$ GAE) / <strong>Tree or Step MC</strong> (VinePPO, SPO) / <strong>High-Entropy Fork Token Mask</strong> (top-$20\%$ $\mathcal{H}_t$)</td>
+              <td>Controls single-step gradient variance $\operatorname{Var}(\hat{g})$ and localizes credit to branching tokens without altering $\pi^*$.</td>
+            </tr>
+            <tr>
+              <td><code>C3</code></td>
+              <td><strong>Effective Step Size</strong><br>(Physical KL step, not nominal LR)</td>
+              <td>Measured by per-step $D_{\text{KL}}(\pi_{\text{new}}\|\pi_{\text{old}})$ (or effective margin temperature $\beta\psi''(0)/|\psi'(0)|$ in contrastive losses)</td>
+              <td>Normalizes nominal hyperparameters ($\eta, \beta, \varepsilon$) onto a single invariant trust-region step scale.</td>
+            </tr>
+
+            <tr class="cat-row"><td colspan="5">D. Derived Dynamical Quantities (Not independent coordinates—predicted from A–C + Cond as a self-consistency check)</td></tr>
+            <tr>
+              <td><strong>Layer D · Dynamics</strong></td>
+              <td><code>D1–D2</code></td>
+              <td><strong>Entropy Trajectory $\Delta\mathcal{H}(\pi_k)$ &amp; Effective Sample Efficiency</strong></td>
+              <td><strong>D1 (Entropy drift):</strong> $\operatorname{Cov}_t(\log\pi_\theta, \psi(r,\hat{A}))$ governs whether $\mathcal{H}(\pi_k)$ collapses prematurely; <strong>D2 (Active yield):</strong> fraction of rollout tokens with non-zero gradient</td>
+              <td><strong>The sole pathway by which Layer C can affect realized ceiling $A$:</strong> if $\mathcal{H}(\pi_k)\to 0$ too early, valid solutions become unsamplable in finite training.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout" id="disguised-target-changes">
+          <strong>The Master Diagnostic: Target-Layer Changes Disguised as Approximation Tricks.</strong>
+          A flat taxonomy misclassifies many famous techniques because they are <em>implemented</em> inside the estimator or data loader, yet mathematically alter the stationary fixed point $\pi^*$ (Layer A) rather than just variance or speed (Layer C):
+          <table class="verdict">
+            <thead>
+              <tr><th>Algorithmic Modification</th><th>What It Looks Like</th><th>What It Actually Changes in $(\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D})$</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>GRPO dividing advantage by group std $\sigma_G$</strong></td>
+                <td>Estimator variance normalization (<code>C2</code>)</td>
+                <td><strong>Changes Target <code>A2</code>:</strong> Replaces linear pass-rate objective $\sum_x p_x$ with $\sum_x 2\arcsin\sqrt{p_x}$, up-weighting trivial $p_x \to 1$ prompts.</td>
+              </tr>
+              <tr>
+                <td><strong>Per-sequence $\frac{1}{|y_i|}$ vs. token-mean / const-$M$ aggregation</strong></td>
+                <td>Loss reduction implementation detail (<code>C2</code>)</td>
+                <td><strong>Changes Target <code>A3</code>:</strong> Reweights the objective by inverse response length $|y_i|^{-1}$, shifting $\pi^*$ toward longer failed responses when $\operatorname{SD}(|y|)$ is large.</td>
+              </tr>
+              <tr>
+                <td><strong>Adding $k_3$ KL estimator directly inside the differentiated loss</strong></td>
+                <td>Low-variance KL regularizer (<code>C2</code>)</td>
+                <td><strong>Changes Target <code>A4</code>:</strong> Has biased gradient $-\beta(\frac{\pi_{\text{ref}}}{\pi_\theta}-1)\nabla\log\pi_\theta$; stationary point is no longer the reverse-KL solution $\pi^*$.</td>
+              </tr>
+              <tr>
+                <td><strong>Overlong penalty / short-window length curriculum ($8\text{k}\to 16\text{k}$)</strong></td>
+                <td>Systems throughput / formatting trick (<code>B1</code>)</td>
+                <td><strong>Changes Target <code>A1/A3</code> &amp; Dynamics <code>D1</code>:</strong> Truncates reachable support whenever required reasoning length $T^*(x) &gt; L_{\text{cap}}$ and accelerates entropy collapse.</td>
+              </tr>
+              <tr>
+                <td><strong>Asymmetric clipping (DAPO Clip-Higher, $\varepsilon_{\text{high}} &gt; \varepsilon_{\text{low}}$)</strong></td>
+                <td>Trust-region hyperparameter tweak (<code>C1</code>)</td>
+                <td><strong>Shifts Dynamics <code>D1</code> (at $\mu &gt; 1$):</strong> Introduces a positive-token drift bias that counteracts Softmax entropy decay on low-$H_0$ checkpoints.</td>
+              </tr>
+              <tr>
+                <td><strong>PPO-clip / CISPO / GSPO under strict on-policy ($\mu=1$, $\pi_{\text{old}}$ on trainer)</strong></td>
+                <td>New trust-region surrogate objective (<code>C1</code>)</td>
+                <td><strong>Changes Nothing (<code>B1 = On-Policy</code> $\implies$ <code>C1 = ∅</code>):</strong> $r_{i,t} \equiv 1$ identically, so the gradient reduces bit-for-bit to vanilla REINFORCE.</td>
+              </tr>
+              <tr>
+                <td><strong>Dynamic sampling (filtering out $\sum_{i=1}^G R_i \in \{0, G\}$ groups)</strong></td>
+                <td>Curriculum change to prompt distribution (<code>A2</code>)</td>
+                <td><strong>Pure Approximation Efficiency (<code>D2</code>, leaves $\pi^*$ unchanged):</strong> Prompts with $p_x \in \{0, 1\}$ had zero expected gradient anyway; filtering them only saves compute FLOPs.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <aside class="note"><strong>The Two Piecewise Falsifiable Predictive Rules of the Two-Layer Coordinate System:</strong>
+          <br>• <strong>Rule 1 (Target Equivalence Inside the Stable Dynamical Interior; Phase Boundary Governed by Layer C):</strong> Under matched boundary conditions <code>Cond</code> (same $\pi_{\text{ref}}$, prompt distribution, and generation budget), <strong>any two algorithms sharing the same Target Layer coordinates <code>(A1, A2, A3, A4)</code> converge to the same asymptotic ceiling $A$ within the benchmark MDE noise band—provided Layer C remains inside the stable dynamical regime</strong>. When Layer C crosses a physical collapse boundary (such as unmasked Q-IV negative-logit drift in multi-turn agents, un-replayed MoE routing flips at $\mu \ge 4$, or length penalties under $L_{\text{cap}} &lt; T^*(x)$), it directly collapses reachable support (<code>D1</code>) and lowers $A$.
+          <br>• <strong>Rule 2 (Full-Coordinate Equivalence for the Training Curve):</strong> Under matched <code>Cond</code> and tuned effective step size <code>C3</code>, <strong>any two algorithms sharing the same <code>(A, B, C)</code> coordinates exhibit matching training trajectories $(A, B, \text{stability})$</strong>. Notice an important empirical hypothesis: in short-to-medium horizon math training (<a href="https://arxiv.org/abs/2506.21495">2506.21495</a>, single seed), once data freshness <code>B1</code> is set to online and <code>A1–A4</code> are matched, Online DPO and GRPO fall into the same cell on MATH-500, suggesting <em>"Estimator Family"</em> matters far less than <code>B1</code> data freshness—though whether this equivalence persists at 32k–64k long-CoT scale remains an open verification target.
+        </aside>
+
+        <h4 id="coordinate-interactions">Quadrant Classification of Post-Training Algorithms: What Each Algorithm Modifies and What Benefit It Brings</h4>
+
+        <p>Rather than forcing a brittle one-dimensional "leaderboard ranking" across papers that operate under very different models, sequence lengths, and batch-reuse budgets, the clearest way to understand the post-training literature is through <strong>three orthogonal $2\times 2$ Quadrant Maps</strong>. Each algorithm is a surgical intervention designed for a specific quadrant, trading off one physical bottleneck for a concrete operational benefit:</p>
+
+        <div class="callout">
+          <strong>Quadrant Map I · The $(r_{i,t} - 1,\; \hat{A}_{i,t})$ Trust-Region Plane (Off-Policy Ratio Drift $\times$ Advantage Sign).</strong>
+          Every policy-gradient update multiplies the token score $\nabla_\theta \log \pi_\theta(y_{i,t}\mid s_{i,t})$ by an effective scalar force $\psi(r_{i,t}, \hat{A}_{i,t}) = w(r_{i,t})\,m(r_{i,t}, \hat{A}_{i,t})\,\hat{A}_{i,t}$. Depending on whether the trajectory succeeded ($\hat{A}_{i,t} &gt; 0$) or failed ($\hat{A}_{i,t} &lt; 0$) and whether the token's probability has risen ($r_{i,t} &gt; 1$) or fallen ($r_{i,t} &lt; 1$) since rollout, every token update lands in one of <strong>four distinct physical quadrants</strong>:
+          <ul>
+            <li><strong>Quadrant I ($\hat{A}_{i,t} &gt; 0,\; r_{i,t} &gt; 1$ — Positive Advantage, Probability Rising: The Exploration &amp; Pivot Expansion Zone):</strong>
+              <br><em>What happens here:</em> A token from a successful rollout is being reinforced across multiple micro-steps ($\mu &gt; 1$). Because $r_{i,t} = \pi_\theta / \pi_{\text{old}}$, a multiplicative clip $r_{i,t} \le 1+\varepsilon$ restricts absolute probability growth to $\Delta\pi_{\max} = \varepsilon\,\pi_{\text{old}}$, meaning rare reasoning pivots ($\pi_{\text{old}} = 10^{-3}$) hit the clip wall after $\Delta\pi = 0.0002$ while high-probability tokens ($\pi_{\text{old}} = 0.5$) can shift by $0.10$.
+              <br>• <strong>PPO / Stock GRPO ($\psi = 0$ for $r &gt; 1.20$):</strong> Hard-zeroes the gradient above $1.20$. <em>Benefit:</em> Maximum conservative stability—prevents any single positive batch from over-sharpening the policy or collapsing output diversity in one step.
+              <br>• <strong>DAPO Clip-Higher ($\psi = 0$ for $r &gt; 1 + \varepsilon_{\text{high}} = 1.28$):</strong> Widens only the upper clip boundary from $1.20$ to $1.28$. <em>Benefit:</em> Gives low-probability reasoning and reflection tokens $40\%$ more multiplicative room to grow before cutoff, preventing premature entropy collapse on long-CoT tasks while keeping a hard safety cap.
+              <br>• <strong>CISPO ($\psi = \operatorname{sg}(\min(r, 1+\varepsilon_{\text{high}}))\hat{A}$):</strong> Replaces upper zero-masking with a stop-gradient constant cap $(1+\varepsilon_{\text{high}})\hat{A} &gt; 0$. <em>Benefit:</em> Never discards a positive token across all $\mu = 16$ micro-steps—rare pivot tokens continue receiving a bounded positive update on every step, doubling sample-reuse efficiency.
+              <br>• <strong>TOPR ($\psi = \hat{A}$ for all $\hat{A} &gt; 0$) &amp; SAPO (smooth bell gate $\tau_{\text{pos}} = 1.0$):</strong> TOPR applies an unclipped SFT-like update on all positive trajectories; SAPO replaces the hard step discontinuity at $1+\varepsilon$ with a smooth sigmoid decay. <em>Benefit:</em> TOPR maximizes learning speed when positive rollouts are scarce (low pass@1); SAPO eliminates gradient cliffs at the clip boundary.
+            </li>
+            <li><strong>Quadrant II ($\hat{A}_{i,t} &gt; 0,\; r_{i,t} &lt; 1$ — Positive Advantage, Probability Falling: The Collateral Recovery Zone):</strong>
+              <br><em>What happens here:</em> A token from a successful trajectory accidentally had its probability pushed down during earlier micro-steps on other sequences.
+              <br>• <strong>PPO / GRPO / DAPO ($\psi = r\hat{A}$ unclipped):</strong> Because $\min(r\hat{A}, (1-\varepsilon)\hat{A}) = r\hat{A}$ for $\hat{A}&gt;0, r&lt;1-\varepsilon$, the lower clip is inactive. <em>Benefit:</em> Allows the policy to actively pull back up good tokens that suffered collateral downward drift, while naturally attenuating the update by $r$ if the token has drifted far from $\pi_{\text{old}}$.
+              <br>• <strong>TOPR / Floor-Clamped CISPO ($\psi = \hat{A}$ or $\ge (1-\varepsilon_{\text{low}})\hat{A}$):</strong> Maintains a constant positive recovery force even if $r \ll 1$. <em>Benefit:</em> Ensures positive tokens are never lost even under heavy off-policy lag.
+            </li>
+            <li><strong>Quadrant III ($\hat{A}_{i,t} &lt; 0,\; r_{i,t} &gt; 1$ — Negative Advantage, Probability Rising: The Off-Policy Overshoot &amp; Engine-Spike Zone):</strong>
+              <br><em>What happens here:</em> A token from a <em>failed</em> trajectory currently has higher probability under $\pi_\theta^{\text{train}}$ than under $\pi_{\text{old}}^{\text{roll}}$—either because collateral updates pushed it up, or because vLLM-to-trainer numerical drift (Gap 1) or MoE expert switching caused $\pi_{\text{old}}^{\text{roll}} \ll \pi_\theta^{\text{train}}$ ($r \gg 1$).
+              <br>• <strong>PPO / Stock GRPO / DAPO ($\psi = r\hat{A}$ unclipped):</strong> Because $\hat{A} &lt; 0$, $\min(r\hat{A}, (1+\varepsilon)\hat{A}) = r\hat{A}$ is completely unclipped for $r &gt; 1$. <em>Benefit:</em> In clean on-policy settings, aggressively corrects bad actions whose probability is mistakenly rising.
+              <br>• <strong>Dual-Clip PPO ($\psi = \max(r\hat{A}, c\hat{A}),\; c = 3$) &amp; CISPO ($\psi = \operatorname{sg}(\min(r, 1+\varepsilon_{\text{high}}))\hat{A}$):</strong> Caps the maximum negative importance weight in Q-III at $c$ or $1+\varepsilon_{\text{high}}$ without zeroing the gradient. <em>Benefit:</em> Still pushes the rising bad token back down, but prevents $r \gg 1$ outlier spikes from exploding the gradient norm.
+              <br>• <strong>SAPO ($\tau_{\text{neg}} = 4.0 &gt; \tau_{\text{pos}} = 1.0$), IcePop &amp; R3 Routing Replay (<code>B1</code> / <code>C1</code>):</strong> SAPO damps Q-III $4\times$ faster than Q-I; IcePop masks tokens where the sampler-to-trainer ratio $\rho^{\text{roll}}$ exits $[0.5, 5.0]$; R3 replays the rollout engine's exact MoE expert assignments in <code>B1</code>. <em>Benefit:</em> Eliminates hybrid-engine and MoE routing spikes at their source so Q-III never blows up.
+            </li>
+            <li><strong>Quadrant IV ($\hat{A}_{i,t} &lt; 0,\; r_{i,t} &lt; 1$ — Negative Advantage, Probability Already Suppressed: The Fluency &amp; Prefix-Protection Zone):</strong>
+              <br><em>What happens here:</em> A token from a failed rollout has <em>already</em> had its probability reduced ($r &lt; 1$). Because $90\%$ of tokens in a failed CoT are normal syntax or valid intermediate steps, and because the logit score $\nabla_z \log \pi_\theta(y_t\mid s_t) = 1 - \pi_\theta(y_t\mid s_t) \to 1$ does not vanish as $\pi_\theta \to 0$, continuing to hammer Q-IV drives logits toward $-\infty$.
+              <br>• <strong>PPO / GRPO / DAPO ($\psi = 0$ for $r &lt; 1-\varepsilon_{\text{low}} = 0.80$):</strong> Hard-masks the negative gradient once the token's probability has dropped by $20\%$. <em>Benefit:</em> Protects shared reasoning prefixes and model fluency across multiple epochs, preventing negative-logit collapse when failed rollouts dominate (e.g., hard prompts or multi-turn agentic tasks).
+              <br>• <strong>TOPR ($\psi = \operatorname{sg}(r)\hat{A}$ for $r \in (0, 1)$):</strong> Scales the negative gradient linearly by $r = \pi_\theta / \pi_{\text{old}} \to 0$. <em>Benefit:</em> Smoothly and automatically self-extinguishes as $\pi_\theta \to 0$ without requiring a hard $\varepsilon_{\text{low}}$ cutoff.
+              <br>• <strong>GSPO / GMPO (<code>C1 = Sequence Geometric Ratio</code> $s_i = (\prod_t r_{i,t})^{1/|y_i|}$):</strong> Applies the four-quadrant gate to the geometric-mean ratio of the whole trajectory rather than isolated tokens (computed in FP32 log-space in GMPO). <em>Benefit:</em> Prevents single-token MoE routing noise from triggering chaotic token-by-token masking; keeps the entire sequence update coherent with the sequence-level reward.
+            </li>
+          </ul>
+        </div>
+
+        <table class="verdict">
+          <thead>
+            <tr>
+              <th>Algorithm</th>
+              <th>Quadrant I ($\hat{A}&gt;0, r&gt;1$)<br>Good Token Rising</th>
+              <th>Quadrant II ($\hat{A}&gt;0, r&lt;1$)<br>Good Token Falling</th>
+              <th>Quadrant III ($\hat{A}&lt;0, r&gt;1$)<br>Bad Token Rising</th>
+              <th>Quadrant IV ($\hat{A}&lt;0, r&lt;1$)<br>Bad Token Falling</th>
+              <th>Core Design Benefit &amp; Best Operating Regime</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>PPO / Stock GRPO</strong></td>
+              <td>Zero-mask at $r &gt; 1.20$</td>
+              <td>Linear $r\hat{A}$</td>
+              <td>Unbounded linear $r\hat{A}$</td>
+              <td>Zero-mask at $r &lt; 0.80$</td>
+              <td><strong>Conservative Trust Region:</strong> Strong Q-I/Q-IV safety walls for small-$\mu$ dense-model training.</td>
+            </tr>
+            <tr>
+              <td><strong>DAPO (Clip-Higher)</strong></td>
+              <td><strong>Relaxed cap $r \le 1.28$</strong></td>
+              <td>Linear $r\hat{A}$</td>
+              <td>Unbounded linear $r\hat{A}$</td>
+              <td>Zero-mask at $r &lt; 0.80$</td>
+              <td><strong>Rare-Pivot Headroom:</strong> Prevents early entropy collapse on low-entropy Aligned checkpoints.</td>
+            </tr>
+            <tr>
+              <td><strong>Dual-Clip PPO</strong></td>
+              <td>Zero-mask at $r &gt; 1+\varepsilon$</td>
+              <td>Linear $r\hat{A}$</td>
+              <td><strong>Capped at $c\hat{A}$ ($c=3$)</strong></td>
+              <td>Zero-mask at $r &lt; 1-\varepsilon$</td>
+              <td><strong>Negative-Overshoot Guard:</strong> Stops Q-III gradient spikes without losing negative correction signal.</td>
+            </tr>
+            <tr>
+              <td><strong>CISPO (MiniMax-M1)</strong></td>
+              <td><strong>Stop-grad cap $(1+\varepsilon_{\text{high}})\hat{A}$</strong></td>
+              <td>Capped / linear $\hat{A}$</td>
+              <td><strong>Stop-grad cap $(1+\varepsilon_{\text{high}})\hat{A}$</strong></td>
+              <td>Unmasked (paper) or $r\ge 1-\varepsilon_{\text{low}}$ gated (<code>verl</code> / ARLArena)</td>
+              <td><strong>High-$\mu$ Sample Reuse:</strong> Keeps Q-I rare tokens learning across $\mu=16$ updates; pairing with Q-IV gate adds multi-turn stability.</td>
+            </tr>
+            <tr>
+              <td><strong>TOPR</strong></td>
+              <td><strong>Unweighted $1\cdot\hat{A}$ (MLE)</strong></td>
+              <td><strong>Unweighted $1\cdot\hat{A}$</strong></td>
+              <td><strong>Capped at $1\cdot\hat{A}$</strong></td>
+              <td><strong>Smooth linear damping $r\hat{A} \to 0$</strong></td>
+              <td><strong>Tuning-Free Asymmetry:</strong> Pure SFT force on positive rollouts + self-extinguishing $r\to 0$ damping on negative rollouts.</td>
+            </tr>
+            <tr>
+              <td><strong>SAPO</strong></td>
+              <td><strong>Smooth bell gate ($\tau_{\text{pos}}=1$)</strong></td>
+              <td>Smooth bell gate</td>
+              <td><strong>Steep bell gate ($\tau_{\text{neg}}=4$)</strong></td>
+              <td>Smooth tail decay (best with sequence Q-IV mask)</td>
+              <td><strong>Continuous Attenuation:</strong> Removes hard clipping discontinuities while damping negative drift $4\times$ faster.</td>
+            </tr>
+            <tr>
+              <td><strong>GSPO / GMPO</strong></td>
+              <td colspan="4">Evaluates Q-I–Q-IV on <strong>sequence geometric mean $s_i = (\prod_{t=1}^{|y_i|} r_{i,t})^{1/|y_i|}$</strong> (or log-space token clip in GMPO)</td>
+              <td><strong>Sequence Coherence &amp; MoE Smoothing:</strong> Absorbs token-level MoE routing jitter by averaging log-ratios across $|y_i|$.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout">
+          <strong>Quadrant Map II · The $(p_x,\; \mathcal{H}_t)$ Credit-Allocation Plane (Prompt Pass-Rate $p_x$ $\times$ Token Entropy $\mathcal{H}_t$).</strong>
+          Orthogonal to the off-policy ratio $r_{i,t}$, algorithms differ in <em>where</em> they concentrate gradient budget across prompts of varying difficulty $p_x \in [0, 1]$ and tokens of varying branching uncertainty $\mathcal{H}_t = \mathcal{H}(\pi_\theta(\cdot\mid s_t))$:
+          <ul>
+            <li><strong>Q1 · Hard Frontier Prompts $\times$ High-Entropy Forking Tokens ($p_x \ll 0.5,\; \mathcal{H}_t$ High — The Capability Expansion Zone):</strong>
+              <br><em>What algorithms do here &amp; why:</em> <strong>MaxRL</strong> (<a href="https://arxiv.org/abs/2602.02710">2602.02710</a>, <code>A2</code> weight $w(p_x) \to 1/p_x$) and <strong>Pass@$k$ Policy Gradient</strong> (<a href="https://arxiv.org/abs/2508.10751">2508.10751</a>) concentrate prompt weight on low-$p_x$ problems, while <strong>Token-Masking / Prefix-Tree Credit</strong> (<a href="https://arxiv.org/abs/2505.23564">SPO, 2505.23564</a>; <a href="https://arxiv.org/abs/2410.01679">VinePPO, 2410.01679</a>, <code>C2</code>) localizes updates to branching tokens (`"Wait"`, `"However"`, case splits) rather than uniform sequence credit. <em>Benefit:</em> Concentrates gradient capacity on the reasoning forks that determine whether a hard problem is solved, improving short-window efficiency and $\text{pass@}k$ frontier expansion.
+            </li>
+            <li><strong>Q2 · Hard Prompts $\times$ Low-Entropy Shared Prefix Tokens ($p_x \ll 0.5,\; \mathcal{H}_t \approx 0$ — The Prefix-Corruption Hazard Zone):</strong>
+              <br><em>What algorithms do here &amp; why:</em> Many tokens in a reasoning chain are deterministic algebraic steps or shared problem-setup prefixes ($\mathcal{H}_t \approx 0$). On a failed rollout, uniform sequence estimators penalize these correct shared tokens equally with the mistake token—causing DPO <em>Likelihood Displacement</em> and PG variance dilution. <strong>Step-DPO</strong>, <strong>Prefix-Tree Credit (VinePPO/SPO)</strong>, and <strong>Token Masking (<code>C2</code>)</strong> zero out or localize gradients away from shared prefixes. <em>Benefit:</em> Prevents failed rollouts from unlearning valid intermediate algebra and syntax.
+            </li>
+            <li><strong>Q3 · Medium-to-Easy Prompts $\times$ Active Variance ($p_x \in [0.2, 0.9]$ — The Pass@1 Consolidation Zone):</strong>
+              <br><em>What algorithms do here &amp; why:</em> <strong>Dr. GRPO / RLOO</strong> (<code>A2=Linear</code>, <code>A3=Const</code>) weights prompts by natural variance $p_x(1-p_x)$ without length distortion, while <strong>Original GRPO</strong> divides by $\sigma_G = \sqrt{p_x(1-p_x)}$ (<code>A2=Arcsin</code>), boosting both $p_x \to 0$ and $p_x \to 1$. <em>Benefit:</em> Unbiased linear weighting (`Dr. GRPO / RLOO`) steadily consolidates $\text{pass@1}$ reliability without over-amplifying already-solved $p_x \to 1$ prompts or inflating wrong-answer lengths.
+            </li>
+            <li><strong>Q4 · Zero-Variance Dead Prompts ($p_x \in \{0, 1\}$, i.e. $\sum_{i=1}^G R_i \in \{0, G\}$ — The Zero-Bit Zone):</strong>
+              <br><em>What algorithms do here &amp; why:</em> When all $G$ rollouts succeed or all $G$ fail, binary outcome RLVR (<code>A1=Verifier</code>) yields $\hat{A}_i \equiv 0$. <strong>DAPO Dynamic Sampling</strong> and <strong>ScaleRL Difficulty Curriculum (<code>D2</code>)</strong> filter out $p_x \in \{0, 1\}$ prompts before backward pass; <strong>On-Policy Distillation (OPD, <code>A1=Teacher Logprobs</code>)</strong> replaces the $0$-bit outcome reward with dense teacher logits $\log \pi_{\text{teacher}}(y_t\mid s_t)$ on every token. <em>Benefit:</em> Dynamic filtering saves wasted backward updates without changing $\pi^*$; OPD turns $p_x = 0$ dead prompts into high-bandwidth learning signals.
+            </li>
+          </ul>
+        </div>
+
+        <h4 id="coordinate-verification">Empirical Verification of the Coordinate System: Same-Cell Equivalence, Single-Coordinate Deltas &amp; Falsification Ledger</h4>
+
+        <p>We treat this two-layer coordinate system as a <strong>falsifiable scientific hypothesis</strong> calibrated against the Minimum Detectable Effect (MDE) noise floor ($\approx \pm 4.6$ points on single-seed 30-problem AIME at $k=32$, and $\approx \pm 1.5$ points on 500-problem MATH / multi-benchmark suites). Auditing the controlled experiments across our 105-paper verification corpus yields three master verification tables:</p>
+
+        <table class="verdict">
+          <thead>
+            <tr>
+              <th>Controlled Comparison Pair</th>
+              <th>Shared Coordinates $(\mathbf{A}, \mathbf{B}, \mathbf{C})$ &amp; Boundary <code>Cond</code></th>
+              <th>Primary-Source Empirical Result</th>
+              <th>Rule 1 &amp; 2 Verdict (Within Noise Floor?)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="cat-row"><td colspan="4">1. Same-Cell Controlled Comparisons (Testing "Same $\mathbf{A} \implies$ Same Ceiling $A$; Same $(\mathbf{A}, \mathbf{B}, \mathbf{C}) \implies$ Matching Curve")</td></tr>
+            <tr>
+              <td><strong>Online DPO vs. Semi-Online DPO vs. GRPO</strong><br>(Testing whether "Estimator Family" needs its own axis)</td>
+              <td><code>A1=Exact Math Verifier</code>, <code>A2=Linear/Sym</code>, <code>B1=Online</code><br><code>Cond:</code> Llama-3.1-8B-Instruct, MATH-500 (single training run per method)</td>
+              <td><a href="https://arxiv.org/abs/2506.21495">Lanchantin et al. (2506.21495)</a>: Semi-Online DPO $58.9$ and Online DPO $58.7$ match GRPO $58.1$ on MATH-500 and beat it on AlpacaEval LC ($\Delta = 0.6\text{–}0.8\text{ pp}$ on math; no seed error bars reported).</td>
+              <td><strong>Consistent ($\Delta \approx 0.6\text{–}0.8\text{ pp}$):</strong> Once <code>B1</code> is online, DPO and PG land in the same cell on math.</td>
+            </tr>
+            <tr>
+              <td><strong>VC-PPO (Learned Critic) vs. GRPO vs. RLOO</strong><br>(Testing <code>C2</code> baseline invariance on ceiling $A$)</td>
+              <td><code>A1=Verifier</code>, <code>A3=Token-mean</code>, <code>A4=None</code>, <code>B1=Sync (μ=4)</code>, <code>C1=Clip-Higher</code><br><code>Cond:</code> Qwen3-8B-Base (~200 steps, shared loss and hyperparameters)</td>
+              <td><a href="https://arxiv.org/abs/2604.10701">GenAC (2604.10701)</a>: Single run: GRPO $50.2$, RLOO $49.9$, VC-PPO $50.4$; across 3 seeds: VC-PPO $50.9$ vs. GRPO $50.0$ (GRPO costs $0.6\times$ PPO per iteration, VinePPO $4.3\times$).</td>
+              <td><strong>Confirmed ($\Delta \approx 0.9\text{ pp}$):</strong> Same $\mathbf{A}$ yields matching ceiling $A$; <code>C2</code> mainly alters compute cost and early step efficiency.</td>
+            </tr>
+            <tr>
+              <td><strong>DPO vs. IPO vs. SLiC vs. SimPO vs. ORPO</strong><br>(Testing contrastive link equivalence when <code>C3</code> $\beta$ is swept)</td>
+              <td><code>A1=Preference Pair</code>, <code>A4=Fixed-Ref KL</code>, <code>B1=Offline</code>, <code>C3=Swept β &amp; LR</code><br><code>Cond:</code> T5X / Llama-3.1-8B on TL;DR &amp; UltraFeedback</td>
+              <td><a href="https://arxiv.org/abs/2402.05749">GPO (2402.05749)</a>: 6 convex losses reach similar peaks at similar KL after tuning $\beta$; <a href="https://arxiv.org/abs/2502.01237">2502.01237</a>: DPO, IPO, SimPO, and ORPO land within $\sim 1.5$ AlpacaEval LC points once $\beta$ and LR are swept.</td>
+              <td><strong>Confirmed ($\Delta \lesssim 1.5\text{ pp}$):</strong> Link functions tie once <code>C3</code> (effective KL scale $\beta$) is matched.</td>
+            </tr>
+            <tr>
+              <td><strong>Token-Level PG vs. Sequence-Level Surrogates on MoE</strong><br>(Testing <code>C1</code> collapse once <code>B1</code> MoE routing drift is controlled or evaluated across seeds)</td>
+              <td><code>A1=Verifier</code>, <code>B1=MoE + Routing Replay (R2/R3)</code> or short GSM8K MoE runs<br><code>Cond:</code> Qwen3-30B-A3B &amp; 3 MoE models $\times$ 3 seeds</td>
+              <td><a href="https://arxiv.org/abs/2512.01374">2512.01374</a>: On-policy token-level PG + TIS and off-policy token-level clipping + R2/R3 stabilize Qwen3-30B-A3B without sequence-level GSPO; <a href="https://arxiv.org/abs/2609.32444">2609.32444</a>: across 3 MoE models $\times$ 3 seeds, 5-benchmark averages land within $\sim 1.6$ points across no correction, TIS, sequence-level variants, IcePop, GSPO, FP16, and CIS.</td>
+              <td><strong>Confirmed:</strong> Fixing <code>B1</code> MoE drift removes the need for sequence-level <code>C1</code>; on short MoE runs all <code>C1</code> variants cluster within $\sim 1.6\text{ pp}$.</td>
+            </tr>
+            <tr>
+              <td><strong>PPO-Clip vs. Clip-Higher on High-Entropy Base Model</strong><br>(Testing <code>C1 → ∅</code> when upper clipping rarely fires)</td>
+              <td><code>A1–A4</code> matched, <code>B1</code> upper clip fires on $\sim 0.3\%$ of tokens on base models<br><code>Cond:</code> Qwen3-4B/8B Base vs. Aligned &amp; Qwen2.5-7B/32B</td>
+              <td><a href="https://arxiv.org/abs/2508.08221">Tricks or Traps (2508.08221)</a>: upper clip fires on $\sim 0.3\%$ of tokens on Qwen3-4B/8B Base (no gain from Clip-Higher, vs. positive on Aligned); <a href="https://arxiv.org/abs/2505.22617">2505.22617</a>: $+0.2\text{ pp}$ (Qwen2.5-7B) and $+1.4\text{ pp}$ (32B) average points.</td>
+              <td><strong>Confirmed:</strong> When <code>B1</code> rarely crosses $1+\varepsilon$, <code>C1</code> is nearly inactive and variants fall inside the noise band.</td>
+            </tr>
+            <tr>
+              <td><strong>Dynamic Sampling ($0 &lt; \sum R_i &lt; G$) vs. Raw Sampling</strong><br>(Testing that dropping $0$-bit groups leaves $\pi^*$ unchanged)</td>
+              <td><code>A1–A4</code> identical ($p_x \in \{0, 1\}$ groups have $\hat{g}\equiv 0$), <code>D2</code> active yield $\uparrow$<br><code>Cond:</code> ScaleRL / Qwen3-8B</td>
+              <td><a href="https://arxiv.org/abs/2510.13786">ScaleRL (2510.13786)</a> &amp; <a href="https://arxiv.org/abs/2508.08221">2508.08221</a>: Same asymptotic plateau $A$; faster convergence velocity ($B\uparrow$) per gradient step.</td>
+              <td><strong>Confirmed:</strong> Pure <code>D2</code> compute-efficiency gain; stationary fixed point $\pi^*$ is invariant.</td>
+            </tr>
+
+            <tr class="cat-row"><td colspan="4">2. Single-Coordinate Cross-Cell Comparisons (Testing "Changing One Active Coordinate Produces Effect &gt; Noise Floor")</td></tr>
+            <tr>
+              <td><strong>Changing <code>B1</code> Alone: Static Offline $\to$ Online / On-Policy Rollouts</strong><br>(Fixed DPO loss, fixed <code>A1–A4</code>)</td>
+              <td><code>B1: Offline</code> $\longrightarrow$ <code>B1: Semi-Online / Online or On-Policy Pairs</code></td>
+              <td><a href="https://arxiv.org/abs/2506.21495">2506.21495</a>: Offline DPO trails Semi-Online/Online DPO and GRPO by $4\text{–}5\text{ pp}$ on MATH-500 and $&gt;20\text{ pp}$ on AlpacaEval LC; <a href="https://arxiv.org/abs/2406.11827">WPO (2406.11827)</a>: rebuilding pairs from SFT model samples adds $+16\text{–}17$ AlpacaEval LC points vs. $+1.6\text{–}5.6$ from switching losses on fixed data (baseline $20.6 \pm 0.7$, 5 seeds).</td>
+              <td><strong>Large $\Delta \gg \text{MDE}$:</strong> Closing OOD mass leakage via online <code>B1</code> dominates loss-function algebra.</td>
+            </tr>
+            <tr>
+              <td><strong>Changing <code>A1</code> Alone: Hackable Sum PRM $\to$ Telescoping PRM</strong><br>(Testing Ng-Harada-Russell fixed-point invariance)</td>
+              <td><code>A1: Exploitable step sum</code> $\sum_t r_t$ $\longrightarrow$ <code>A1: Telescoping Clip-Delta</code> $\Phi(s_{t+1})-\Phi(s_t)$</td>
+              <td><a href="https://arxiv.org/abs/2410.15115">Gao et al. (2410.15115)</a>: Step PRM added to outcome reward dropped Qwen2-1.5B MATH from $24.90$ start to $11.16$ (vs. $30.58$ for outcome reward alone); clip + telescoping delta reached $31.44$ vs. $30.58$ (single run).</td>
+              <td><strong>Large $\Delta \gg \text{MDE}$:</strong> Non-telescoping step rewards corrupt $\pi^*$; telescoping PRM matches outcome $\pi^*$.</td>
+            </tr>
+            <tr>
+              <td><strong>Changing <code>A1</code> Alone: 1-Bit Verifier (RLVR) $\to$ Teacher Logprobs (OPD)</strong><br>(Fixed online student rollout <code>B1</code>)</td>
+              <td><code>A1: Binary Verifier (1 bit/seq)</code> $\longrightarrow$ <code>A1: Dense Teacher Logits</code> $\log\pi_{\text{teacher}}$</td>
+              <td><a href="https://arxiv.org/abs/2505.09388">Qwen3 (2505.09388)</a>: On Qwen3-8B, OPD reached $74.4$ on AIME'24 using $\sim 1/10$ the GPU hours RL needed to reach $67.6$ ($+6.8\text{ pp}$), and also raised $\text{pass@64}$.</td>
+              <td><strong>Large $\Delta &gt; \text{MDE}$:</strong> Higher channel bandwidth in <code>A1</code> raises both ceiling $A$ and velocity $B$.</td>
+            </tr>
+            <tr>
+              <td><strong>Changing <code>A2</code> Alone: Linear $\sum p_x \to$ Concave $\sum \log p_x$ / $\text{Pass@}k$</strong><br>(When <code>Cond</code> contains hard tail prompts $p_x \ll 0.2$)</td>
+              <td><code>A2: Linear (RLOO/GRPO)</code> $\longrightarrow$ <code>A2: Log (MaxRL, w=1/p_x)</code> or <code>Pass@k</code></td>
+              <td><a href="https://arxiv.org/abs/2602.02710">MaxRL (2602.02710)</a> &amp; <a href="https://arxiv.org/abs/2508.10751">2508.10751</a>: Gains on $\text{pass@}k$ ($k\ge 16$) and hard reasoning tails by concentrating weight on low-$p_x$ prompts.</td>
+              <td><strong>Large $\Delta$ on Tails:</strong> Moving <code>A2</code> reallocates fixed-point capacity toward low-$p_x$ frontier problems.</td>
+            </tr>
+            <tr>
+              <td><strong>Changing <code>B1</code> System Drift: Gap 1 &amp; Un-Replayed MoE $\to$ Exact / R3</strong><br>(At $\mu \in [1, 4]$ on MoE models)</td>
+              <td><code>B1: vLLM-to-Trainer drift / MoE routing flip</code> $\longrightarrow$ <code>B1: Bitwise-Exact / R3 Replay</code></td>
+              <td><a href="https://arxiv.org/abs/2605.14220">VeXact (2605.14220)</a>: Bitwise-exact MoE REINFORCE kept improving where the vLLM-based run degraded after $\sim 280$ steps; <a href="https://arxiv.org/abs/2510.11370">R3 (2510.11370)</a>: GRPO crashed between steps $60$ and $120$ (TIS moved crash $60 \to 105$), while R3 stayed stable for all $180$ reported steps.</td>
+              <td><strong>Massive Stability $\Delta$:</strong> Eliminating <code>B1</code> engine/routing drift prevents mid-training MoE collapse.</td>
+            </tr>
+            <tr>
+              <td><strong>Changing <code>C1</code> in Heavy Off-Policy <code>B1</code> ($\mu=16$ or Multi-Turn): Q-I &amp; Q-IV Gates</strong></td>
+              <td>(a) Q-I zero-mask $\to$ stop-grad cap ($\mu=16$);<br>(b) Q-IV unmasked $\to$ sequence Q-IV mask (multi-turn)</td>
+              <td>(a) <a href="https://arxiv.org/abs/2510.13786">ScaleRL</a>: CISPO reaches the same ceiling faster ($B=2.01$ vs. $1.77$); (b) <a href="https://arxiv.org/abs/2602.21534">ARLArena (2602.21534)</a>: CISPO averages $34.0$ vs. GRPO's $46.2$ and collapses around step $130$; adding sequence-level Q-IV masking restores it (ALFWorld $54.4 \to 78.9$), and SAPO collapses the same way without Q-IV protection.</td>
+              <td><strong>Massive $\Delta \gg \text{MDE}$:</strong> In heavy off-policy <code>B1</code>, Q-I governs velocity $B$ while Q-IV prevents negative-logit collapse.</td>
+            </tr>
+
+            <tr class="cat-row"><td colspan="4">3. Known Anomalies, Boundary Interactions &amp; Falsification Ledger (Where Predictions Require <code>Cond</code> / <code>D</code> or Flag a New Sub-Axis)</td></tr>
+            <tr>
+              <td><strong>Anomaly 1 · Base vs. Aligned Sign Reversal on <code>A3</code> &amp; <code>C1</code></strong><br>(<a href="https://arxiv.org/abs/2508.08221">Tricks or Traps, 2508.08221</a> on Qwen3-4B/8B)</td>
+              <td>Token-mean beats Seq-mean on Base, flips on Aligned; Clip-Higher does not help Base, helps Aligned (peaking at $0.32$ on 4B, $0.28$ on 8B).</td>
+              <td>Explained by <code>Cond</code> ($\pi_{\text{ref}}$ initial entropy $H_0$ &amp; length dispersion $\operatorname{SD}_0(|y|)$) $\times$ <code>D1</code>: Base has high $H_0$ (upper clip fires on $\sim 0.3\%$ of tokens $\implies$ <code>C1</code> nearly inert) and large $\operatorname{SD}_0(|y|)$ (<code>A3</code> $1/|y|$ bias active); Aligned has low $H_0$ (<code>C1</code> needed to slow <code>D1</code> entropy collapse).</td>
+              <td><strong>Resolved by <code>Cond × D1</code> Conditioning</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Anomaly 2 · Overlong Penalty &amp; Length Curriculum Reversal</strong><br>(<a href="https://arxiv.org/abs/2503.14476">DAPO</a> vs. <a href="https://arxiv.org/abs/2512.16649">JustRL</a> $55\%\to 50\%$ &amp; <a href="https://arxiv.org/abs/2508.06471">GLM-4.5</a>)</td>
+              <td>Length penalty / two-stage curriculum helps under tight caps in DAPO/Skywork, but drops AIME24 from $\sim 55\%$ to $\sim 50\%$ in JustRL and hurts single-stage 64k in GLM-4.5.</td>
+              <td>Explained by <strong>Disguised <code>A1/A3</code> + <code>D1</code> Collapse:</strong> When $L_{\text{cap}} &lt; T^*(x)$, length penalties prune valid long-CoT support and accelerate policy entropy decay (<code>D1</code>), making long reasoning paths unsamplable.</td>
+              <td><strong>Resolved by <code>A3 + D1</code> Reachability</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Anomaly 3 · Intrinsic / Spurious Rewards (<code>A1 = 0-bit</code>) Sign Reversal</strong><br>(<a href="https://arxiv.org/abs/2506.10947">2506.10947</a>, <a href="https://arxiv.org/abs/2507.10532">2507.10532</a>, <a href="https://arxiv.org/abs/2512.13961">OLMo 3</a>)</td>
+              <td>Random rewards give $+21.4\text{ pp}$ on Qwen2.5-Math-7B, $-11.5\text{ pp}$ on Llama-3.1-8B, and $0.0\text{ pp}$ on decontaminated OLMo 3.</td>
+              <td>Explained by <code>Cond</code> ($\pi_{\text{ref}}$ contamination): Qwen2.5-Math reproduces $54.6\%$ of MATH-500 suffixes verbatim (vs. $3.8\%$ on Llama-3.1 and $0\%$ on LiveMathBench), turning pure <code>D1</code> entropy sharpening into memorization retrieval.</td>
+              <td><strong>Resolved by <code>Cond</code> ($\pi_{\text{ref}}$ Support)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Falsification-Driven Sub-Axis · Tree Credit &amp; Token Masking at Short vs. Long Context</strong><br>(<a href="https://arxiv.org/abs/2505.23564">SPO, 2505.23564</a>)</td>
+              <td>Same <code>A1–A4</code>, <code>B1</code>, <code>C1</code> as outcome PG, but localizes <code>C2</code> via tree MC or a token mask.</td>
+              <td>Tree credit gains $+11.6$ MATH-500 points at $2\text{k}$ context and $+7.6$ at $4\text{k}$, but shrinks to $+0.8$ at $32\text{k}$ (where AIME24 ties), and a token mask alone accounted for much of its GSM8K gain.</td>
+              <td><strong>Requires Context-Conditioned <code>C2</code> Split:</strong> Added to <code>C2</code> (uniform vs. tree/masked credit), interacting with <code>Cond</code> ($L_{\max}$).</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 id="axes">2.4 Actionable Engineering Tiering Derived from the Two-Layer Structure</h3>
+
+        <p>The three practical engineering categories follow directly from the Two-Layer Sufficiency Coordinate System ($\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}$) and the Master Fixed-Point Test (Figure 3):</p>
+        <ul>
+          <li><strong>Category I · Fixing Approximation Correctness (<a href="#correctness">Chapter 4</a>):</strong> Non-negotiable repairs in <code>A4, B1, C2</code> that prevent the approximation layer from silently drifting away from the intended fixed point $\pi^*$.</li>
+          <li><strong>Category II · Conditional Off-Policy &amp; Throughput Stabilizers (<a href="#trust-region">Chapter 5</a>):</strong> Ratio gates and staleness controls in <code>C1, C2</code> that are empty at <code>B1 = On-Policy</code> ($r \equiv 1 \implies \text{C1} = \varnothing$) but maintain valid convergence when system constraints force <code>B1</code> into off-policy regimes ($\mu &gt; 1, \tau &gt; 0$, or MoE engine drift).</li>
+          <li><strong>Category III · True Target-Layer $\pi^*$ Shifts &amp; Sample-Efficiency Multipliers (<a href="#normalization">Chapters 6–8</a>):</strong> Explicit or disguised modifications to the stationary fixed point <code>A1–A4</code> (plus boundary conditions <code>Cond</code> and <code>D2</code> active yield). Any "new loss" that does not alter <code>A1–A4</code> or prevent <code>D1</code> entropy collapse can only move convergence speed $B$, never the true capability ceiling $A$.</li>
+        </ul>
+
+        <figure>
+          <table class="verdict map">
+            <thead>
+              <tr><th>Coord</th><th>Design Choice</th><th>First-Principles Verdict</th><th class="sym">Ceiling $A$</th><th class="sym">Velocity $B$</th><th class="sym">Stability</th><th>Grade</th></tr>
+            </thead>
+            <tbody>
+              <tr class="cat-row"><td colspan="7">Category I · Fixing Approximation Correctness (Preventing silent drift from $\pi^*$ — <a href="#correctness">Chapter 4</a>)</td></tr>
+              <tr><td class="nowrap"><a href="#advantage"><code>C2 / A2</code></a></td><td>Unbiased sequence baseline (RLOO / Dr. GRPO) or $\lambda = 1$ GAE</td><td>Eliminates baseline self-inclusion &amp; value-bootstrap bias</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span></td></tr>
+              <tr><td class="nowrap"><a href="#correctness-gaps"><code>B1</code></a></td><td>MoE Routing Replay (R3 / Keep Routing) when $\mu &gt; 1$</td><td>Prevents expert-routing discontinuity collapse in <code>B1</code></td><td class="sym sym-up">↑</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span></td></tr>
+              <tr><td class="nowrap"><a href="#correctness-gaps"><code>B1</code></a></td><td>Eliminate Gap 1 at source (FP32 LM head / matched kernels)</td><td>Bounds $\pi^{\text{roll}} \ne \pi^{\text{train}}$ drift before <code>C1</code> clipping</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+              <tr><td class="nowrap"><a href="#correctness-kl"><code>A4</code></a></td><td>Use $k_1$-in-reward or $k_2$-loss (never $k_1$-loss; know $k_3$-in-loss biases $\pi^*$)</td><td>Ensures unbiased KL gradient toward the intended reverse-KL fixed point $\pi^*$</td><td class="sym sym-none">○</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span> <span class="grade grade-b">B</span></td></tr>
+              <tr><td class="nowrap"><a href="#correctness-kl"><code>B1 / A4</code></a></td><td>Low batch reuse ($\mu = 1\text{–}2$) &amp; zero unclipped entropy bonus</td><td>Prevents negative-gradient &amp; tail-entropy mode collapse</td><td class="sym sym-mixed">◐</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span></td></tr>
+              <tr><td class="nowrap"><a href="#agentic"><code>C2</code></a></td><td>Mask environment tokens ($I_{i,t} = \mathbf{1}_{y_{i,t}\sim\pi_\theta}$) &amp; keep raw token IDs</td><td>Required for unbiased POMDP / tool-agent gradients</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+
+              <tr class="cat-row"><td colspan="7">Category II · Conditional Off-Policy Ratio Gates &amp; Staleness Budgets (Active iff <code>B1 ≠ On-Policy</code> — <a href="#trust-region">Chapter 5</a>)</td></tr>
+              <tr><td class="nowrap"><a href="#advantage"><code>C2</code></a></td><td>Critic-free group baseline vs. tuned PPO critic</td><td>Identical ceiling $A$ (same <code>A1–A4</code>); group baseline saves $\sim 40\%$ memory/compute</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td><span class="grade grade-a">A</span> <span class="grade grade-d">D</span></td></tr>
+              <tr><td class="nowrap"><a href="#trust-region"><code>C1 → D1</code></a></td><td>Asymmetric clipping: relax Quadrant I ($\varepsilon_{\text{high}}$), guard Quadrant III/IV ($\hat{A}&lt;0$)</td><td>Prevents rare-token starvation (<code>D1</code>) &amp; negative-logit explosion when $\mu &gt; 1$</td><td class="sym sym-mixed">◐</td><td class="sym sym-up">↑</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+              <tr><td class="nowrap"><a href="#trust-region"><code>C1</code></a></td><td>CISPO / GSPO / SAPO vs. asymmetric PPO-clip</td><td>Identical at <code>B1 = On-Policy</code> ($\text{C1}=\varnothing$); moves velocity $B$ only at high $\mu$ or un-replayed MoE</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-b">B</span> <span class="grade grade-d">D</span></td></tr>
+              <tr><td class="nowrap"><a href="#off-policy"><code>C1 (B1)</code></a></td><td>Two-sided sampler masking (IcePop) vs. one-sided TIS</td><td>Bounds <code>B1</code> Gap 1 both above and below; TIS leaves $\mathcal{O}(T^2)$ prefix bias</td><td class="sym sym-none">○</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span> <span class="grade grade-d">D</span></td></tr>
+              <tr><td class="nowrap"><a href="#staleness-budget"><code>B1 × C3</code></a></td><td>Bounded async staleness $(\mu+\tau)\eta \le C_{\text{crit}}$ (AReaL / PipelineRL)</td><td>$2\text{–}2.8\times$ hardware utilization with zero ceiling loss up to $\tau \approx 8$</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+
+              <tr class="cat-row"><td colspan="7">Category III · Target-Layer $\pi^*$ Modifications (<code>A1–A4</code>), Boundary Scaling (<code>Cond</code>) &amp; Sample Efficiency (<code>D2</code>) (<a href="#normalization">Chapters 6–8</a>)</td></tr>
+              <tr><td class="nowrap"><a href="#normalization"><code>A2</code></a></td><td>Prompt weighting $F(p_x)$: Linear ($p$) vs. GRPO ($\arcsin\sqrt{p}$) vs. MaxRL ($\log p$)</td><td>Directly alters fixed-point objective $\sum F(p_x)$; GRPO's $\div\sigma_G$ is a disguised <code>A2</code> shift</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td class="sym sym-mixed">◐</td><td><span class="grade grade-a">A</span> <span class="grade grade-b">B</span></td></tr>
+              <tr><td class="nowrap"><a href="#aggregation"><code>A3</code></a></td><td>Constant normalizer $1/M$ vs. $1/|y_i|$ sequence-mean length division</td><td>Removes disguised <code>A3</code> length-reweighting bias (wrong-answer inflation &amp; brevity bias)</td><td class="sym sym-none">○</td><td class="sym sym-mixed">◐</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+              <tr><td class="nowrap"><a href="#kl-entropy"><code>A4</code></a></td><td>Drop static anchor KL ($\beta = 0$) when <code>A1 = Verifier</code>; keep $\beta &gt; 0$ when <code>A1 = RM</code></td><td>Allows $\pi^*$ to sharpen freely on exact verifiers; guards exploitable proxy RMs</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td><span class="grade grade-b">B</span></td></tr>
+              <tr><td class="nowrap"><a href="#data-sampling"><code>Cond</code></a></td><td>Scale global batch size $B_{\text{batch}}$ &amp; generation length budget $L_{\max}$</td><td>Boundary-condition compute knobs proven to raise asymptotic ceiling $A$</td><td class="sym sym-up">↑</td><td class="sym sym-down">↓</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+              <tr><td class="nowrap"><a href="#data-sampling"><code>D2</code></a></td><td>Dynamic Sampling: filter zero-variance groups ($p_x \in \{0, 1\}$)</td><td>Leaves $\pi^*$ invariant ($\hat{g}\equiv 0$ on $p\in\{0,1\}$); raises velocity $B$ by $2\text{–}3\times$</td><td class="sym sym-none">○</td><td class="sym sym-up">↑</td><td class="sym sym-up">↑</td><td><span class="grade grade-b">B</span></td></tr>
+              <tr><td class="nowrap"><a href="#reward"><code>A1</code></a></td><td>High-precision verifier &amp; telescoping potential shaping $\Phi(s_{t+1})-\Phi(s_t)$</td><td>Preserves exact $\pi^*$ while preventing Goodhart false-positive or step-sum hacking</td><td class="sym sym-up">↑</td><td class="sym sym-na">—</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span></td></tr>
+              <tr><td class="nowrap"><a href="#beyond-opd"><code>A1</code></a></td><td>On-Policy Distillation (OPD: dense teacher logprobs $\log\pi_{\text{teacher}}$)</td><td>Upgrades <code>A1</code> from $1\text{-bit}/T$ to $\mathcal{O}(\log|\mathcal{V}|)\text{ bits/token}$ on student rollouts; raises $A$ &amp; $B$</td><td class="sym sym-up">↑</td><td class="sym sym-up">↑</td><td class="sym sym-up">↑</td><td><span class="grade grade-a">A</span> <span class="grade grade-b">B</span></td></tr>
+            </tbody>
+          </table>
+          <figcaption><span class="fig-label">Figure 3.</span> Master Denoising Matrix across the Two-Layer Sufficiency Coordinates ($\text{Cond},\; \mathbf{A1\text{–}A4},\; \mathbf{B1},\; \mathbf{C1\text{–}C3},\; \mathbf{D1\text{–}D2}$), separating stationary fixed-point ceiling ($A$) effects from convergence velocity ($B$) and stability effects. ↑ improves, ↓ hurts, ◐ context-dependent, ○ no effect on that dimension, — not applicable.</figcaption>
+        </figure>
+      </section>

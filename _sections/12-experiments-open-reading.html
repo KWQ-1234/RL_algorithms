@@ -1,0 +1,96 @@
+      <section id="experiments">
+        <h2>11. Twelve Decisive Experiments, Open Questions &amp; Reading List</h2>
+
+        <p>Most of the <span class="grade grade-c">C</span> and <span class="grade grade-d">D</span> verdicts in this survey remain open not for lack of algorithmic ideas, but for lack of controlled, multi-seed experiments that isolate a single variable. This final chapter lays out twelve decisive experiments that fit on 1–4 nodes (1.5B–8B models), eight open mathematical questions at the algorithm–theory boundary, and a curated reading list.</p>
+
+        <h3>11.1 Twelve Decisive Experiments to Run Yourself</h3>
+
+        <p><strong>A shared experimental protocol</strong> makes these runs worth far more than the sum of their parts: run on both a Qwen model and at least one non-Qwen family (OLMo 3 or Llama 3.1); use $\ge 5$ training seeds; evaluate with $K \ge 32$ rollouts per problem on a contamination-checked benchmark; report compute in GPU-hours; include a random-reward or format-only control; and report both final and peak checkpoints.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>#</th><th>Question (verdict it tests)</th><th>Experimental Design</th><th>Decisive Outcome</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>Does the $r \equiv 1$ identity hold in practice? (<a href="#trust-region">Ch. 5</a>)</td><td>Eliminate Gap 1 mismatch (FP16 / bitwise-matched kernels), $\mu = 1$ step per batch; compare GRPO, DAPO, GSPO, CISPO, SAPO with matched normalization; repeat at $\mu \in \{2, 4, 8\}$</td><td>Differences stay within seed noise at $\mu = 1$ and emerge monotonically as $\mu$ grows</td></tr>
+            <tr><td>2</td><td>Do recipe choices transfer across model families? (<a href="#normalization">Ch. 6</a>)</td><td>$2 \times 2 \times 2$ factorial grid of $\div\;\text{std}_G$, length aggregation, and $\varepsilon_{\text{high}}$ across Qwen-Base, Qwen-Instruct, OLMo, and Llama ($\ge 1{,}000$ steps)</td><td>Separates sign flips caused by base-vs.-instruct from those caused by Qwen pretraining</td></tr>
+            <tr><td>3</td><td>Is GRPO's easy-prompt up-weighting the harmful half? (<a href="#pattern-weighting">Ch. 6.1</a>)</td><td>Compare symmetric $w(p) = [p(1-p)]^{-1/2}$, one-sided hard-only weighting ($p &lt; 0.5$ only), and uniform $w(p)=1$ on easy-heavy, mixed, and hard-heavy prompt mixtures</td><td>One-sided hard-prompt weighting matches or beats both across all mixtures</td></tr>
+            <tr><td>4</td><td>Is the compute asymptote $A$ statistically identifiable? (<a href="#case-scalerl">Ch. 3.4</a>)</td><td>Fit sigmoid and log-linear models to the first half of long runs; evaluate out-of-sample on the second half; bootstrap confidence intervals on $A$ and $B$</td><td>If $A$'s 95% CI exceeds $0.03$, "raises the ceiling" claims at mid-scale cannot be separated from log-linear drift</td></tr>
+            <tr><td>5</td><td>How do truncation handling and $L_{\max}$ interact? (<a href="#data-sampling">Ch. 7.1</a>)</td><td>Cross masking truncated rollouts, soft length penalty, and no penalty across $L_{\max} \in \{4\text{k}, 8\text{k}, 16\text{k}\}$; log truncation fraction</td><td>Masking helps at tight budgets and hurts at generous budgets; truncation rate $>10\%$ predicts instability</td></tr>
+            <tr><td>6</td><td>Which Gap 1 mismatch correction minimizes gradient bias? (<a href="#correctness-gaps">Ch. 4.2</a>)</td><td>Inject controlled FP8/kernel mismatch; compute ground-truth trainer gradient over large sample; compare TIS, sequence masks, GSPO, and IcePop by cosine similarity across lengths</td><td>Direct bias–variance frontier across sequence lengths $L \in [1\text{k}, 32\text{k}]$</td></tr>
+            <tr><td>7</td><td>Is staleness governed by a $(\mu + \tau) \cdot \eta \le C$ budget? (<a href="#staleness-budget">Ch. 5.2</a>)</td><td>Sweep async lag $\tau \in [1, 16]$ against three learning rates $\eta$; record steps-to-collapse and KL divergence</td><td>Stability boundary lies along a hyperbola $(\mu + \tau)\eta \approx \text{const}$</td></tr>
+            <tr><td>8</td><td>Does clip-higher's benefit scale with off-policy clip rate? (<a href="#trust-region">Ch. 5.1</a>)</td><td>Sweep $\varepsilon_{\text{high}} \in \{0.20, 0.28, 0.35\}$ at $\mu = 1$ vs. $\mu = 4$ on base and instruct checkpoints; log Quadrant I clip fraction</td><td>Gain scales with Quadrant I clip fraction rather than model family</td></tr>
+            <tr><td>9</td><td>Is dense tree/MC credit worth its extra rollouts? (<a href="#prm-credit">Ch. 8.2</a>)</td><td>Match total generated tokens between vine/tree MC rollouts and plain outcome-reward RLOO with larger $G$ at 4k and 16k lengths</td><td>Gap closes under wall-clock and token-matched accounting</td></tr>
+            <tr><td>10</td><td>By what factor does preference data provenance beat loss shape? (<a href="#preference">Ch. 8.1</a>)</td><td>Cross loss (DPO, IPO, SimPO, LN-DPO) $\times$ data regime (offline, semi-online, online) $\times$ $\beta$ sweep across $\ge 5$ seeds</td><td>Quantifies variance explained by data regime vs. loss shape</td></tr>
+            <tr><td>11</td><td>How often do states recur in open-ended agent environments? (<a href="#agentic">Ch. 8.3</a>)</td><td>Measure exact and near-duplicate state collisions in SWE-bench and web-browsing rollouts</td><td>Near-zero collision rate proves state-grouped baselines (GiGPO) collapse to episode-level GRPO in open worlds</td></tr>
+            <tr><td>12</td><td>Do framework KL defaults regularize the intended tail? (<a href="#correctness-kl">Ch. 4.3</a>)</td><td>Compare $k_1$-as-loss, $k_2$-as-loss, $k_3$-as-loss, detached $k_1$-in-reward, and $\beta = 0$ at low and high drift (including on-policy distillation)</td><td>$k_1$-as-loss matches $\beta=0$; $k_3$-as-loss and detached $k_1$-in-reward diverge at high drift</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="open">11.2 Eight Open Mathematical Questions</h3>
+
+        <p>Each question below marks a point where a rigorous theorem or tight statistical bound would settle an empirical debate that current papers can only grade heuristically:</p>
+
+        <ol>
+          <li id="open-identify"><strong>Identifiability of the compute asymptote $A$:</strong> Sigmoid and unbounded log-linear curves fit finite RL training trajectories nearly equally well (<a href="https://arxiv.org/abs/2610.04158">arXiv:2610.04158</a>). Under what conditions on the prompt difficulty distribution is the asymptote $A$ statistically identifiable from compute budget $C$, and how wide is its minimax confidence interval?</li>
+          <li id="open-ratio"><strong>Tight bias bounds for length-normalized importance filtering:</strong> Token-level truncated IS corrects per-step conditionals without correcting prefix state visitation, incurring bias that grows polynomially in sequence length $|y|$ (<a href="#correctness-gaps">Chapter 4.2</a>). Length-normalized geometric filters ($\text{GSPO}, \text{GMPO}$) stabilize long-horizon training empirically without a matching bias-variance bound. What is the exact bias of geometric-mean ratio clipping as a function of $|y|$ and per-token Rényi divergence?</li>
+          <li id="open-staleness"><strong>First-principles derivation of the staleness $\times$ step-size stability law:</strong> Empirically, $\eta_{\max} \propto (\mu + \tau)^{-1}$ (<a href="#staleness-budget">Chapter 5.2</a>). Proving a tight lower bound showing that mirror descent with stale gradients diverges whenever $(\mu + \tau)\eta$ exceeds a curvature-dependent threshold would turn a tuning heuristic into a formal system-design law.</li>
+          <li id="open-f"><strong>Optimal prompt-weighting transform $F(p)$ across training time:</strong> Every advantage normalization ascends $\sum_x F(p_x)$ (<a href="#pattern-weighting">Law 2</a>). Given an initial pass-rate distribution $\rho_0(p)$ across prompts, what schedule of transforms $F_t(p)$ maximizes final pass@1—or pass@$k$—under a fixed rollout budget?</li>
+          <li id="open-expansion"><strong>Cross-prompt generalization and support expansion:</strong> On a single prompt, outcome-reward updates only reweight existing support (<a href="#core-logic">Layer 1</a>). New capabilities must arise from cross-prompt parameter sharing during gradient updates. Can we bound how much probability mass leaks onto novel reasoning chains on prompt $x'$ when updating on prompt $x$ via neural tangent or feature-learning kernels?</li>
+          <li id="open-sharpening"><strong>Tight upper bounds on label-free sharpening:</strong> Updates that concentrate mass push pass@1 toward $\text{maj@}\infty(\pi_{\text{ref}})$ (<a href="#pattern-sharpening">Law 3</a>). How closely do entropy minimization and asymmetric clipped random-reward updates approach this theoretical limit, and at what rate?</li>
+          <li id="open-proxy"><strong>Safe intermediate credit between potential shaping and free learned scores:</strong> Potential-based shaping $\phi_t = \Phi(s_{t+1}) - \Phi(s_t)$ preserves $\pi^*$ exactly, while unconstrained additive PRMs are exploited (<a href="#pattern-proxy">Law 5</a>). Which bounded or min-aggregated step-reward operators guarantee $\varepsilon$-preservation of the ground-truth optimal policy set?</li>
+          <li id="open-entropy"><strong>Multi-step policy entropy dynamics under clipping and batch reuse:</strong> The single-step entropy change equals $-\eta\,\text{Cov}_{\pi_\theta}(\log\pi_\theta, \hat{A})$ (<a href="#kl-entropy">Chapter 7.3</a>). Can multi-step entropy collapse under $\mu &gt; 1$ clipped updates be predicted analytically from initial rollout log-probability variance?</li>
+        </ol>
+
+        <h3 id="reading">11.3 Curated Reading List</h3>
+
+        <p id="recent">Twenty-two foundational and recent (through 2026) papers, selected for how sharply they clarify the mathematical and experimental picture rather than citation volume. Read the controlled measurement studies first; they provide the lens needed to interpret the rest.</p>
+
+        <div class="study">
+          <div class="study-title">1. Controlled Studies &amp; Measurement Hygiene</div>
+          <ul>
+            <li><a href="https://arxiv.org/abs/2510.13786">The Art of Scaling Reinforcement Learning Compute for LLMs</a> (ScaleRL) — separates asymptote $A$ from efficiency $B$ across 400k GPU-hours; read the leave-one-out appendices alongside the main text.</li>
+            <li><a href="https://arxiv.org/abs/2504.07086">A Sober Look at Progress in Language Model Reasoning</a> (Hochlehnert et al.) — quantifies evaluation variance on AIME/AMC and shows single-seed claims sit inside noise.</li>
+            <li><a href="https://arxiv.org/abs/2503.20783">Understanding R1-Zero-Like Training: A Critical Perspective</a> (Dr. GRPO) — identifies the $1/|y_i|$ length bias and $\div\;\text{std}_G$ prompt-difficulty bias.</li>
+            <li><a href="https://arxiv.org/abs/2508.08221">Tricks or Traps? A Deep Dive into RL for LLM Reasoning</a> — demonstrates how algorithm rankings flip between base and instruction-tuned checkpoints.</li>
+            <li><a href="https://arxiv.org/abs/2604.10701">GenAC</a> (2026) — compares GRPO, RLOO, and critic-based PPO with one variable changed at a time, showing all three converge within $\sim 1$ point.</li>
+            <li><a href="https://arxiv.org/abs/2005.12729">Implementation Matters in Deep Policy Gradients</a> (Engstrom et al., 2020) — the classic deep-RL precursor proving code-level choices dominate named surrogate losses.</li>
+          </ul>
+        </div>
+
+        <div class="study">
+          <div class="study-title">2. First-Principles Mechanisms &amp; Theory</div>
+          <ul>
+            <li><a href="https://arxiv.org/abs/2504.13837">Does RL Really Incentivize Reasoning Capacity Beyond the Base Model?</a> (Yue et al.) — pass@$k$ convergence analysis showing RL sharpens within base-model support while distillation expands it.</li>
+            <li><a href="https://arxiv.org/abs/2607.00152">Prompt Weighting as an Implicit Objective</a> (2026) &amp; <a href="https://arxiv.org/abs/2602.02710">MaxRL</a> (2026) — unify advantage normalization rules via $F'(p) = w(p)$.</li>
+            <li><a href="https://arxiv.org/abs/2505.22617">The Entropy Mechanism of RL for Reasoning LMs</a> (Cui et al.) — derives the exact one-step entropy-covariance identity.</li>
+            <li><a href="https://arxiv.org/abs/2506.09477">On a Few Pitfalls in KL Divergence Gradient Estimation for RL</a> — proves $k_1$-as-loss has zero expected gradient and $k_3$-as-loss estimates the forward-KL gradient.</li>
+            <li><a href="https://arxiv.org/abs/2503.14286">Tapered Off-Policy REINFORCE</a> (TOPR) — explains why Quadrant III ($\hat{A} &lt; 0$) causes unbounded gradient variance off-policy.</li>
+            <li><a href="https://arxiv.org/abs/2210.10760">Scaling Laws for Reward Model Overoptimization</a> (Gao et al.) — establishes the functional form of Goodhart's Law against learned reward proxies.</li>
+          </ul>
+        </div>
+
+        <div class="study">
+          <div class="study-title">3. Off-Policy Staleness, Engine Mismatch &amp; Numerics</div>
+          <ul>
+            <li><a href="https://fengyao.notion.site/off-policy-rl">Your Efficient RL Framework Secretly Brings You Off-Policy RL Training</a> (Yao et al.) — documents Gap 1 between vLLM/SGLang rollout engines and FSDP/Megatron trainers.</li>
+            <li><a href="https://yingru.notion.site/When-Speed-Kills-Stability-Demystifying-RL-Collapse-from-the-Training-Inference-Mismatch-271211a558b7808d8b12d403fd15edda">When Speed Kills Stability</a> (Liu et al.) &amp; <a href="https://arxiv.org/abs/2605.14220">VeXact</a> (2026) — token vs. sequence mismatch corrections and bitwise-exact rollout verification.</li>
+            <li><a href="https://arxiv.org/abs/2512.01374">Stabilizing RL for LLMs</a> (Qwen Team) &amp; <a href="https://arxiv.org/abs/2609.32444">CIS</a> (2026) — controlled multi-seed evaluations of importance-sampling corrections and MoE stability.</li>
+            <li><a href="https://arxiv.org/abs/2510.11370">Rollout Routing Replay</a> (R3) — solves MoE expert-routing discontinuity between inference and multi-epoch training.</li>
+            <li><a href="https://arxiv.org/abs/2505.24298">AReaL</a> &amp; <a href="https://arxiv.org/abs/2607.01083">Staleness-Learning-Rate Scaling</a> (2026) — decoupled proximal policies and the $(\mu+\tau)\eta$ stability budget.</li>
+          </ul>
+        </div>
+
+        <div class="study">
+          <div class="study-title">4. Base-Model Priors &amp; Neighbouring Families</div>
+          <ul>
+            <li><a href="https://arxiv.org/abs/2506.10947">Spurious Rewards: Rethinking Training Signals in RLVR</a> &amp; <a href="https://arxiv.org/abs/2512.16912">The Mirage of Spurious Correlations</a> — read as a pair on Qwen2.5-Math contamination and sharpening vs. true learning.</li>
+            <li><a href="https://arxiv.org/abs/2503.01307">Cognitive Behaviors that Enable Self-Improving Reasoners</a> (Gandhi et al.) — shows base-model verification primitives govern downstream RL ceiling.</li>
+            <li><a href="https://arxiv.org/abs/2406.09279">Unpacking DPO and PPO</a>, <a href="https://arxiv.org/abs/2402.05749">Generalized Preference Optimization</a> &amp; <a href="https://arxiv.org/abs/2506.21495">Bridging Offline and Online RL</a> — prove on-policy pair generation dominates loss-function algebra.</li>
+            <li><a href="https://arxiv.org/abs/2504.15275">PURE</a> — dissects Process Reward Model (PRM) hacking and bounded credit assignment.</li>
+            <li><a href="https://arxiv.org/abs/2503.09516">Search-R1</a> — establishes state-token masking and raw token-ID preservation for multi-turn agentic RL.</li>
+          </ul>
+        </div>
+
+        <p>For the systems and distributed-runtime counterpart to this survey—covering rollout engine scheduling, KV-cache weight synchronization, FSDP/Megatron sharding transitions, and throughput bottlenecks—see <a href="https://chenggong-zhang.github.io/RL_infra/">RL Infrastructure for the Mathematically Inclined</a>.</p>
+      </section>

@@ -172,16 +172,18 @@ window.MathJax = {
 <body>
 <div class="wrap">
   <header class="mast">
-    <div class="kicker">LLM post-training · 讨论笔记 · 2026 年 10 月</div>
-    <h1>RL 算法的核心逻辑</h1>
-    <p class="thesis">在模型自己的输出上，按奖励重新加权，每次只挪一小步。</p>
+    <div class="kicker">LLM post-training · 第一性原理与两层坐标体系 · 2026 年 10 月</div>
+    <h1>RL 算法的核心逻辑：从不动点 $\pi^*$ 到两层坐标与受控验证</h1>
+    <p class="thesis">在模型自己的输出上，按奖励重新加权，每次只挪一小步。目标层（A）决定不动点 $\pi^*$ 在哪（决定上限）；逼近层（C，仅在离策略区间 B 生效）决定怎么稳定高效地到达 $\pi^*$。</p>
     <p class="basis">依据：核对过的约 100 篇论文与技术报告，加上推导。我没有跑过大规模 RL 训练，下面的判断不是一手实验经验。</p>
   </header>
 
   <ol class="toc" aria-label="目录">
-    <li><a href="#logic"><span class="q">问 1</span><span>RL 算法的核心逻辑是什么</span></a></li>
-    <li><a href="#taxonomy"><span class="q">问 2</span><span>这个视角能给成千上万的算法分类吗</span></a></li>
-    <li><a href="#useful"><span class="q">问 3</span><span>从第一性原理看，这些算法真的有用吗</span></a></li>
+    <li><a href="#logic"><span class="q">问 1</span><span>RL 算法的核心逻辑是什么（目标、闭式解 $\pi^*$、有限样本逼近与“三个选择”）</span></a></li>
+    <li><a href="#taxonomy"><span class="q">问 2</span><span>怎么给成千上万的算法建立坐标：从“三个选择”扩成“五轴索引”，再升级为“两层坐标体系（A / B / C / D）”</span></a></li>
+    <li><a href="#verification"><span class="q">问 3</span><span>这套坐标站得住吗：文献中已有的同格对照、异格对照与矛盾案例记录</span></a></li>
+    <li><a href="#useful"><span class="q">问 4</span><span>从第一性原理与两层结构看，哪些算法改动真正有用</span></a></li>
+    <li><a href="#frontier"><span class="q">问 5</span><span>从单域数学 RLVR 到前沿后训练系统（OpenAI / Anthropic 视角）：坐标表之外的五个真实战场</span></a></li>
   </ol>
 
   <!-- ============ Part 1 ============ -->
@@ -284,20 +286,22 @@ window.MathJax = {
   <!-- ============ Part 2 ============ -->
   <section class="part" id="taxonomy">
     <header>
-      <div class="ask"><b>问 2</b> · 这个视角能给成千上万的算法分类吗</div>
-      <h2>三个选择不够，要扩成五个轴</h2>
+      <div class="ask"><b>问 2</b> · 怎么给成千上万的算法建立坐标体系</div>
+      <h2>从“三个选择”扩成“五轴索引”，再升级为区分“去哪”与“怎么去”的两层坐标（A / B / C / D）</h2>
     </header>
-    <p>不完全能。上面的三个选择只覆盖一大类算法：<strong>单轮生成、标量奖励、用 policy gradient 优化期望奖励</strong>。PPO、GRPO、DAPO、GSPO、CISPO、RLOO、REINFORCE++ 和各种 off-policy 修正都在这个框里，2025 年以来的大部分命名算法也属于这一类。</p>
-    <p>有五类放不进去，原因各不相同：</p>
+
+    <h3>第一步：为什么问 1 的“三个选择”不够，按代码模块会扩成五个轴？</h3>
+    <p>问 1 结尾的“三个选择”（数据从哪来、每个样本给多大权重、每步走多远）只覆盖一大类算法：<strong>单轮生成、标量奖励、用 policy gradient 优化期望奖励</strong>。PPO、GRPO、DAPO、GSPO、CISPO、RLOO、REINFORCE++ 和各种 off-policy 修正都在这个框里，2025 年以来的大部分命名算法也属于这一类。</p>
+    <p>但放眼整个 post-training 文献，有五类工作放不进“三个选择”里，原因各不相同：</p>
     <ol>
-      <li><strong>目标本身不是“期望奖励 + KL”。</strong>pass@k 训练优化的是 $\sum_x 1-(1-p_x)^k$，MaxRL 近似优化 $\sum_x\log p_x$，两者都不是期望奖励的指数倾斜。SPPO、Nash-MD 处理可能不传递的偏好，目标是一个博弈的 Nash 均衡。</li>
-      <li><strong>奖励从哪来，本身是一个独立的设计轴。</strong>PRM、rubric/judge、self-certainty、熵最小化、TTRL 的多数投票、on-policy distillation 里老师的 log 概率，改的都是信号，不是估计量。把它塞进“怎么加权”粒度太粗。</li>
-      <li><strong>不走 policy gradient 的估计路线。</strong>ILQL、soft Q-learning 这类 value-based 方法先学 Q 再导出策略；DPO 系直接拟合闭式解；RAFT、ReST 用过滤后的 SFT。它们和 PPO 逼近的可能是同一个目标分布，但估计方式完全不同。</li>
-      <li><strong>多轮、有状态的 credit assignment。</strong>agent 任务里有环境状态和工具输出，turn-level advantage、GiGPO 的状态分组、环境 token 屏蔽，都是单轮 bandit 视角里不存在的维度。</li>
-      <li><strong>采样分布的设计远不止 on/off-policy。</strong>选哪些 prompt（难度过滤、课程）、从哪个前缀分叉（TreeRL、在 entropy 高的位置分支）、用什么温度。</li>
+      <li><strong>目标本身不是“期望奖励 + KL”。</strong> pass@k 训练优化的是 $\sum_x \big(1-(1-p_x)^k\big)$，MaxRL 近似优化 $\sum_x\log p_x$，两者都不是期望奖励的简单线性平均。SPPO、Nash-MD 处理可能不传递的偏好，目标是一个博弈的 Nash 均衡。</li>
+      <li><strong>奖励从哪来，本身是一个独立的设计维度。</strong> PRM、rubric/judge、self-certainty、熵最小化、TTRL 的多数投票、on-policy distillation 里老师的 log 概率，改的都是监督信号，不是估计量。把它塞进“怎么加权”粒度太粗。</li>
+      <li><strong>不走 policy gradient 的估计路线。</strong> ILQL、soft Q-learning 这类 value-based 方法先学 Q 再导出策略；DPO 系直接拟合闭式解；RAFT、ReST 用过滤后的 SFT。它们和 PPO 逼近的可能是同一个目标分布，但具体更新方式不同。</li>
+      <li><strong>多轮、有状态的 credit assignment。</strong> agent 任务里有环境状态和工具输出，turn-level advantage、GiGPO 的状态分组、环境 token 屏蔽，都是单轮 bandit 视角里不存在的维度。</li>
+      <li><strong>采样分布的设计远不止 on/off-policy。</strong> 选哪些 prompt（难度过滤、课程）、从哪个前缀分叉（TreeRL、在 entropy 高的位置分支）、用什么温度。</li>
     </ol>
 
-    <h3>修正后的框架</h3>
+    <p>为了把这些工作都装进来，最直观的做法是按“一篇论文改了代码里的哪个模块”，把“三个选择”扩成<strong>五个并列的轴</strong>：</p>
     <ul class="axes">
       <li><span class="name">目标<small>Objective</small></span><span class="def">逼近哪个分布或解。期望奖励、pass@k、log-likelihood、风险敏感目标；正则项（KL 方向、强度、参考策略固定还是滚动更新）；或者一个博弈均衡、一个老师分布。</span></li>
       <li><span class="name">信号<small>Signal</small></span><span class="def">奖励从哪来。规则 verifier、学习得到的 RM、PRM、judge/rubric、偏好对、内在信号、老师的 log 概率。</span></li>
@@ -306,41 +310,151 @@ window.MathJax = {
       <li><span class="name">更新控制<small>Update control</small></span><span class="def">每步走多远。clip、IS 截断或屏蔽、近端 KL、每批数据更新几步。</span></li>
     </ul>
 
-    <p>拿代表性方法检验：</p>
+    <h3>第二步：为什么平铺的五轴还不够？——五轴不是平等的，而是两层</h3>
+    <p>上面这五个轴适合用来<strong>索引</strong>一篇论文改了哪里，但它把五个轴并列成了平等的维度，丢掉了 RL 算法里最重要的因果结构：<strong>哪些轴决定“去哪”，哪些轴只决定“怎么去”</strong>。</p>
+
+    <p>回到问 1 第二层的式子 $\pi^*(y|x) \propto \pi_{\text{ref}}(y|x)\exp(R(x,y)/\beta)$：</p>
+    <ul>
+      <li><strong>目标层：决定不动点（或最优解集）$\pi^*$ 在哪。</strong> 对应五轴里的“目标”和“信号”，再加上 base model（$\pi_{\text{ref}}$）。它们决定渐近上限，也决定模型会被钻什么空子。</li>
+      <li><strong>逼近层：决定能不能稳定、高效地到达 $\pi^*$。</strong> 对应五轴里的“数据”、“估计量”、“更新控制”。在动力学稳定区内，它们主要影响偏差、方差、速度和稳定性。</li>
+    </ul>
+
+    <p><strong>两个必须交代清楚的理论细节（$\beta=0$ 退化与跨题权衡）：</strong></p>
+    <ol>
+      <li><strong>当 $\beta = 0$（主流数学/代码 RLVR 设置）时，$\pi^*$ 从唯一点退化为单纯形面：</strong> 当 $\beta &gt; 0$ 时，$\pi^*$ 是由目标层唯一确定的内点分布；但在 DAPO、Dr. GRPO、GSPO、ScaleRL 等现代 RLVR 配方中，显式 KL 常被设为 $\beta = 0$。此时对任意 $R(x,y)\in\{0,1\}$，所有将概率 100% 放在正确回答子集 $\mathcal{Y}^+(x)$ 上的分布（$p_x=1$）都是全局最优解——<strong>$\pi^*$ 不再是一个点，而是一个单纯形面 $\Delta(\mathcal{Y}^+(x))$</strong>。在这个单纯形面上，算法最终停在哪一个具体模式（是坍缩到单一短套路，还是保留多条推理路径），<strong>直接由逼近层 C 从 $\pi_{\text{ref}}$ 出发的隐式镜像下降轨迹决定</strong>。</li>
+      <li><strong>跨题加权 $F(p_x)$（<code>A2</code>）在 $\beta&gt;0$ 与 $\beta=0$ 下的物理含义不同：</strong> 如果每道题独立优化且 $\beta=0$，任何严格递增的 $F(p_x)$（无论是 $\sum p_x$、$\sum 2\arcsin\sqrt{p_x}$ 还是 $\sum\log p_x$）的单题无约束极值都是 $p_x=1$。$F'(p_x)=w(p_x)p_x(1-p_x)$ 真正改变的是：① 在 $\beta&gt;0$ 时把每道题的有效正则温度改成了 $\beta_{\text{eff}}(x)=\beta/w(p_x)$；② 在 $\beta=0$ 但模型参数共享、训练步数有限时，改变了<strong>简单题与难题之间的梯度分配流速比（跨题轨迹权衡）</strong>。</li>
+    </ol>
+
+    <p class="callout">所以真正有判别力的问题不是“它改了五轴里的哪一轴”，而是：<strong>这个改动有没有改变目标层（不动点 $\pi^*$ 或跨题目标权重 $F(p_x)$）？</strong><br>
+    • <strong>没改变：</strong>属于逼近层改动。在未触发崩溃相变的稳定区内，它的增益应该体现在收敛速度或吞吐效率上，而不是渐近上限上。<br>
+    • <strong>改变了：</strong>属于目标层改动，往往伪装成逼近层的技巧。这类改动最值得警惕，也最常被误读。</p>
+
+    <h3>伪装成逼近技巧的目标改动</h3>
+    <p>平铺的五轴把下面这些操作都归到“估计量”、“更新控制”或“数据”，但按两层检验一看，它们的性质完全不同：</p>
     <div class="table-box">
       <table>
-        <thead><tr><th>方法</th><th>改了哪一轴</th></tr></thead>
+        <thead><tr><th>改动</th><th>在五轴里看起来在改</th><th>实际上（按两层结构检验）</th></tr></thead>
         <tbody>
-          <tr><td>GRPO</td><td><span class="axis-tag">估计量</span> group mean baseline 加 std 归一化</td></tr>
-          <tr><td>DAPO</td><td><span class="axis-tag">更新控制</span> clip-higher；<span class="axis-tag">数据</span> dynamic sampling；<span class="axis-tag">估计量</span> token 级聚合</td></tr>
-          <tr><td>GSPO / CISPO / TIS</td><td><span class="axis-tag">更新控制</span></td></tr>
-          <tr><td>DPO / SimPO</td><td><span class="axis-tag">估计量</span> 闭式拟合；SimPO 还改了 <span class="axis-tag">目标</span> 的正则形式</td></tr>
-          <tr><td>SPPO / Nash-MD</td><td><span class="axis-tag">目标</span> 从标量奖励换成博弈均衡</td></tr>
-          <tr><td>RAFT / ReST</td><td><span class="axis-tag">估计量</span> 过滤后 SFT</td></tr>
-          <tr><td>PRIME / PURE</td><td><span class="axis-tag">信号</span> 过程奖励</td></tr>
-          <tr><td>TTRL / 熵最小化</td><td><span class="axis-tag">信号</span> 内在信号</td></tr>
-          <tr><td>VinePPO / TreeRL</td><td><span class="axis-tag">数据</span> 分叉采样；<span class="axis-tag">估计量</span> MC credit</td></tr>
-          <tr><td>GiGPO</td><td><span class="axis-tag">估计量</span> 多轮下的状态级 credit</td></tr>
-          <tr><td>pass@k 训练 / MaxRL</td><td><span class="axis-tag">目标</span></td></tr>
-          <tr><td>On-policy distillation</td><td><span class="axis-tag">信号</span> 老师 log 概率；<span class="axis-tag">数据</span> on-policy</td></tr>
-          <tr><td>ILQL</td><td><span class="axis-tag">估计量</span> value-based</td></tr>
+          <tr><td>GRPO 除以组内 std $\sigma_G$</td><td><span class="axis-tag">估计量</span> 降方差</td><td><strong>改了目标层（A2）：</strong>把跨题目标从 $\sum_x p_x$ 换成 $\sum_x 2\arcsin\sqrt{p_x}$，放大 $p_x \to 1$ 与 $p_x \to 0$ 两端的梯度权重</td></tr>
+          <tr><td>Token 级 vs. 序列级 $\frac{1}{|y_i|}$ 聚合</td><td><span class="axis-tag">估计量</span> 求平均方式</td><td><strong>改了目标层（A3）：</strong>按长度给回答重新加权，等价于换了目标分布</td></tr>
+          <tr><td>$k_3$ KL 估计直接放进 loss 求导</td><td><span class="axis-tag">正则实现</span> 低方差 KL</td><td><strong>改了目标层（A4）：</strong>梯度有偏 $-\beta(\frac{\pi_{\text{ref}}}{\pi_\theta}-1)\nabla\log\pi_\theta$，不动点不再是反向 KL 的解</td></tr>
+          <tr><td>Clip 上下界不对称（Clip-Higher）</td><td><span class="axis-tag">更新控制</span> 调截断超参</td><td><strong>有偏的更新（动力学 D1）：</strong>在 $\mu&gt;1$ 时引入正样本漂移偏置，系统性地改变策略熵的走向</td></tr>
+          <tr><td>PPO-clip / CISPO / GSPO（完全 on-policy）</td><td><span class="axis-tag">更新控制</span> 新代理损失</td><td><strong>什么都没改（$\text{B1}=\text{on-policy} \implies \text{C1}=\varnothing$）：</strong>$r\equiv 1$，梯度完全等于 REINFORCE</td></tr>
+          <tr><td>Dynamic sampling（过滤 $p_x \in \{0,1\}$ 题）</td><td><span class="axis-tag">数据</span> 改变采样分布</td><td><strong>不改目标方向（纯省算力 D2）：</strong>$p_x \in \{0,1\}$ 的题本来就没有梯度（$\hat A \equiv 0$），过滤只省了反向传播算力</td></tr>
         </tbody>
       </table>
     </div>
 
-    <h3>判断</h3>
+    <h3>平铺的五轴还漏了三样东西</h3>
+    <ol>
+      <li><strong>base model（$\pi_{\text{ref}}$）不在任何一轴上，但它是最重要的坐标。</strong> 支撑集由它决定（见问 1 演示中的 <code>y9</code>），同一个算法在 Qwen 和 Llama 上的结论可以完全相反（spurious reward 就是典型例子）。它不属于算法，但属于问题本身的给定条件（<code>Cond</code>），分类和预测时必须标出来。</li>
+      <li><strong>轴与轴不正交。</strong> 归一化在“估计量”里实现，作用却落在“目标”上；off-policy 修正（“更新控制”）只有在数据陈旧（“数据”轴 $\mu&gt;1$ 或引擎不一致）时才有意义，严格 on-policy 时根本不工作；PRM 和 OPD 改了“信号”，也就同时改了目标分布。</li>
+      <li><strong>动力学相变边界（探索与可达集坍缩）。</strong> RL 的采样分布来自 $\pi_k$ 本身，这是一个反馈回路。在平滑稳定区内，逼近层 C 只影响收敛速度；但一旦 C 层的选择跨过了某个动力学崩塌阈值（如第四象限 Q-IV 负梯度打穿公共前缀、MoE 路由翻转失控、或截断长度小于解题所需最短长度 $L_{\text{cap}} &lt; T^*(x)$），就会引发不可逆的熵坍缩或前缀损坏，直接把可达上限砸穿。静态的五轴描述不了这种分段相变。</li>
+    </ol>
+
+    <h3>第三步：把五轴重构为两层 `ABCD` 坐标体系</h3>
+    <p>如果我们不仅想给论文归档，还想用尽量少的坐标去解释和预测“<strong>为什么同坐标算法在受控实验中往往打平，异坐标算法在什么条件下拉开差距</strong>”，坐标设计就必须满足四个条件：</p>
+    <ol>
+      <li><strong>按算法实际计算的规范方程定坐标，不按机制或名字。</strong> CISPO 和 GSPO 机制不同，但严格 on-policy 时梯度完全一样，必须落在同一格；反过来，GRPO 和 Dr. GRPO 只差一个除以 std，但目标不同（<code>arcsin</code> 对 <code>linear</code>），必须分到两格。做法是把每个算法写成规范形式，直接从式子里读坐标：
+        <div class="eq">$$g(\theta)=\sum_x \underbrace{w(p_x)}_{\text{A2}}\sum_{i,t} \underbrace{c_{i,t}}_{\text{A3}}\,\underbrace{\psi(r_{i,t},\hat A_{i,t})}_{\text{C1, C2（仅在 B1 非 on-policy 时展开）}}\,\nabla_\theta\log\pi_\theta(y_{i,t}\mid x,y_{i,&lt;t}) - \underbrace{\beta\,\nabla_\theta\widehat{\mathrm{KL}}(\pi_\theta, \pi_{\text{ref}})}_{\text{A4}}$$</div>
+      </li>
+      <li><strong>坐标必须带运行区间（`B1`）。</strong> 等价关系是有条件的：$\mu=1$、$\pi_{\text{old}}$ 在训练端重算时，所有 clip 变体严格等价；一批数据更新十几步、跑 MoE、有异步延迟时，它们才分开。所以逼近层的 ratio 控制（`C1`）只在 off-policy 区间里才有取值，在 on-policy 区间里它是<strong>空的（$\varnothing$）</strong>。</li>
+      <li><strong>格子的粒度由评测噪声底（MDE）决定。</strong> “效果差不多”要有统计尺度。单 seed、AIME 30 题、$k=32$ 时，两个分数之差的 95% 最小可检测效应（MDE）大约是 $\pm 4.6$ 分（500 题 MATH 约为 $\pm 1.5$ 分）。没有受控证据显示差异超过这个尺度的两个取值，就合并成一格。理论给出哪些严格等价，证据决定哪些区别值得保留。</li>
+      <li><strong>实验条件（`Cond`）不是算法坐标，但预测必须以它为条件。</strong> base model、数据难度分布 $P(p_x)$、算力预算不属于算法，却会和坐标发生交互（例如 $F(p_x)$ 的选择只有在数据里有很多 $p_x$ 接近 $0$ 或 $1$ 的题时才起作用）。所以能承诺的是“<strong>同坐标、同条件下效果相近</strong>”。</li>
+    </ol>
+
+    <div class="table-box">
+      <table>
+        <thead><tr><th>层级</th><th>坐标</th><th>取值（受控差异在噪声底以内的已合并）</th></tr></thead>
+        <tbody>
+          <tr><td><strong>0. 给定条件</strong><br>（预测的前提）</td><td><code>Cond</code></td><td><strong>Base model $\pi_{\text{ref}}$</strong>（决定支撑集、初始熵 $H_0$、预训练污染）/ <strong>数据难度分布 $P(p_x)$</strong> / <strong>算力预算</strong>（batch size $B$、最大生成长度 $L_{\max}$）</td></tr>
+          <tr><td rowspan="4"><strong>A. 目标层</strong><br>（决定不动点 $\pi^*$，从而决定上限与 hacking 方式）</td><td><code>A1 信号</code></td><td>精确 verifier / 学习的 RM / PRM（势函数差分 $\Phi(s_{t+1})-\Phi(s_t)$ vs. 可被刷步数的直接累加）/ judge / 偏好对 / 内在信号（0-bit）/ 老师 logprob；同时标出误差类型：<strong>随机噪声，还是可被利用的偏差</strong></td></tr>
+          <tr><td><code>A2 Prompt 加权</code></td><td><code>linear</code>（只减均值、RLOO、Dr. GRPO：$\sum p_x$）/ <code>arcsin</code>（除以 std：$\sum 2\arcsin\sqrt{p_x}$）/ <code>log</code>（MaxRL：$\sum\log p_x$）/ <code>pass@k</code></td></tr>
+          <tr><td><code>A3 长度加权</code></td><td>按序列平均（$\frac{1}{|y_i|}$，GRPO/SimPO）/ 全局按 token 平均（DAPO）/ 常数归一（$\frac{1}{M}$，Dr. GRPO/RLOO）</td></tr>
+          <tr><td><code>A4 正则</code></td><td>无（$\beta=0$）/ 对固定参考的 KL（方向，梯度是否无偏：$k_1$-in-$R$, $k_2$-loss, DPO vs. 有偏 $k_3$-loss）/ 对滚动参考的 KL / entropy bonus</td></tr>
+          <tr><td><strong>B. 运行区间</strong><br>（决定 C 层是否生效）</td><td><code>B1 Off-Policy 程度</code></td><td><strong>严格 on-policy</strong>（$\mu=1, \tau=0$, $\pi_{\text{old}}$ 训练端重算 $\implies r\equiv 1$, <strong>此时 <code>C1 = ∅</code></strong>）/ <strong>多步复用与异步</strong>（每批更新步数 $\mu \in [4,16]$、异步延迟 $\tau$）/ <strong>引擎不一致</strong>（dense 精度误差 Gap 1 vs. MoE 专家路由跳变）/ <strong>静态离线</strong>（Offline）</td></tr>
+          <tr><td rowspan="3"><strong>C. 逼近层</strong><br>（决定速度与稳定性，C1 仅在 B1 非 on-policy 时有取值）</td><td><code>C1 Ratio 处理</code></td><td>按<strong>四个象限（$\hat A$ 的正负 $\times$ $r$ 偏高或偏低）</strong>分别是<strong>置零、截断还是保留</strong>（Q-I $\hat A&gt;0,r&gt;1$ 决定稀有反思词多步吸收速度；Q-III $\hat A&lt;0,r&gt;1$ 防引擎/路由尖峰；Q-IV $\hat A&lt;0,r&lt;1$ 防负梯度打穿流利度）；token 级 $r_{i,t}$ 还是序列级几何平均 $s_i$；ratio 相对 $\pi_{\text{old}}^{\text{train}}$ 还是 $\pi_{\text{sampler}}$（含 MoE R3 路由回放）</td></tr>
+          <tr><td><code>C2 Credit / Baseline</code></td><td>序列级（group mean / leave-one-out / $\lambda=1$ critic，上限同格）/ MC 树分叉或步级 / turn 或 state 级（多轮 agent 屏蔽环境 token）/ <strong>高熵分叉 token 门控（top-20% $\mathcal{H}_t$）</strong></td></tr>
+          <tr><td><code>C3 有效步长</code></td><td>用每步实际产生的 $\mathrm{KL}(\pi_{\text{new}}\|\pi_{\text{old}})$（或 DPO 调优后的有效 $\beta$）衡量，不用名义 lr、$\varepsilon$</td></tr>
+          <tr><td><strong>D. 推导量</strong><br>（由 A–C 推出的自检预测）</td><td><code>D1–D2</code></td><td><strong>D1 熵漂移方向 $\Delta\mathcal{H}(\pi_k)$</strong>（检验逼近层是否通过早熟熵坍缩改变了哪些答案还采得到）/ <strong>D2 样本效率</strong>（有效非零梯度样本占比）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="callout"><strong>从这张表可以读出两条分段可证伪的预测规则：</strong><br>
+    <strong>1. 在动力学稳定区内，A 相同则上限应该相近；但 C 层决定了稳定区的相变边界。</strong> 在相同条件 <code>Cond</code> 下，只要 C 层没有越过崩溃阈值（如 Q-IV 负梯度打穿公共前缀、MoE 路由翻转失控、或截断长度 $L_{\text{cap}} &lt; T^*(x)$），C 层只影响收敛速度，上限由 A 层决定；一旦 C 层越过相变边界触发 <code>D1</code> 可达集坍缩，上限会直接被砸穿。<br>
+    <strong>2. A、B、C 都相同，整条训练曲线应该相近</strong>（在相同条件 <code>Cond</code> 且有效步长 <code>C3</code> 调到同一尺度后）。</p>
+
+    <h3>这套坐标的边界（做不到的地方）</h3>
     <ul>
-      <li><strong>作为分类器，五个轴大概能覆盖绝大多数方法。</strong>大部分论文只改一两个轴上的一个取值。真正新的工作是给某个轴增加一个新取值，比如把目标从标量奖励换成 Nash 均衡，或者把老师当作奖励来源。</li>
-      <li><strong>分类和“判断哪个改动重要”是两件事。</strong>分类告诉你一篇论文动了哪里；它重不重要，要看那一轴在实验条件下是否真的起作用。比如完全 on-policy 时，更新控制这一轴根本不生效（见问 3）。</li>
-      <li><strong>“成千上万”这个说法我没有实证。</strong>要验证覆盖率，可以抽 100 篇左右近两年的 RL 论文逐一归类，看有多少放不进去、卡在哪一轴。这比凭印象下结论可靠。</li>
+      <li><strong>超参必须调到同一有效尺度（<code>C3</code>）。</strong> DPO 系各种 loss 只有在 $\beta$ 和学习率调好之后才打平。没调好超参的比较，不能用来否定“同坐标等效”。</li>
+      <li><strong>不能把 `D1`（熵坍缩）当成不可证伪的“万能事后补丁”。</strong> 如果任何 C 层引起的上限差异都推给“因为熵变了”，规则 1 就会退化成套套逻辑。正确用法是事先标出 C 层导致崩塌的物理机制（Q-IV 失守、MoE 路由翻转、长度截断 $L_{\text{cap}} &lt; T^*(x)$）。</li>
+      <li><strong>现有“同格打平”的公开实验多处于短程或小规模区间。</strong> 许多受控实验只跑了 200 步或短序列，短跑打平不等于 1000+ 步长思维链训练下不会因微小偏差累积而分叉。</li>
     </ul>
   </section>
 
   <!-- ============ Part 3 ============ -->
+  <section class="part" id="verification">
+    <header>
+      <div class="ask"><b>问 3</b> · 用文献中已有的受控比较检验这套坐标</div>
+      <h2>同格对照、异格对照、估计量族核对与矛盾案例记录</h2>
+    </header>
+
+    <h3>专项核对：“估计量族”（PG vs. DPO 闭式拟合 vs. 过滤 SFT）需要单独成轴吗？</h3>
+    <p>把数据区间 <code>B1</code> 控制成一致之后，估计量族之间的差异远小于“离线 vs. 在线”的差异，但现有公开证据仍属于<strong>启发性假说而非最终定论</strong>：</p>
+    <ul>
+      <li><strong>Online DPO 与 GRPO / PPO：</strong> 在 <a href="https://arxiv.org/abs/2506.21495">Bridging Offline and Online RL (2506.21495)</a> 中（Llama-3.1-8B-Instruct，<strong>注意：每个方法仅跑了 1 个训练 seed，未报告误差棒，且属于短/中程训练</strong>），<code>Semi-Online DPO</code>（$58.9$）和 <code>Online DPO</code>（$58.7$）在 MATH-500 上与 <code>GRPO</code>（$58.1$）表现接近，在 AlpacaEval LC 上甚至高于 GRPO；而 <code>Offline DPO</code> 在数学上落后三者 $4\text{–}5$ 分，在对话上落后超过 $20$ 分。同样，Ivison et al. (<a href="https://arxiv.org/abs/2406.09279">2406.09279</a>) 在 Tulu 2 13B 上固定相同数据对比，PPO 领先 DPO 的平均幅度只有 $0.7$ 分（代码上为 $2.9$ 分）。不过，在 32k–64k 长思维链和大 $\mu$ 异步推理训练中，目前尚无受控实验证明 Online DPO 能复现 GRPO/PPO 的长程涌现。</li>
+      <li><strong>为什么仍有细微差别（而非无条件恒等）：</strong> 只有在每步都把参考模型重置为当前策略（$\pi_{\text{ref}} = \pi_{\theta_k},\, \mu=1$）且 $G=2$ 时，DPO 梯度前的权重 $\sigma(0)=1/2$ 才会在代数上退化为两样本 RLOO；实际使用的 Online DPO 通常保留固定或慢速更新的 $\pi_{\text{ref}}$（自带隐式 KL 约束），而 GRPO 用 $G&gt;2$ 组基线且常设 $\beta=0$（属于 <code>A4</code> 与 <code>C2</code> 的区别）。</li>
+      <li><strong>过滤 SFT（只训正样本）与正负对比的区别：</strong> <a href="https://arxiv.org/abs/2512.13961">OLMo 3 (2512.13961)</a>（单次运行）发现，用大模型回答优于小模型回答做 DPO 对比，效果好于只在正样本上做 SFT。这可以直接在 <code>C1</code> 坐标里刻画：过滤 SFT 等价于把负优势象限（$\hat A &lt; 0$）置零，缺少主动压低高先验错误模式（如Kimi k1.5 所强调的负梯度）的能力。</li>
+    </ul>
+
+    <h3>1. 同格对照表（检验“同坐标、同条件下差异是否在噪声底以内”）</h3>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>受控对照组</th><th>共享坐标与条件</th><th>文献实测结果（全部取自已核对原文）</th><th>检验结论</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Online DPO vs. Semi-Online DPO vs. GRPO</strong><br>(<a href="https://arxiv.org/abs/2506.21495">2506.21495</a>，单 seed)</td><td><code>A1=数学 Verifier</code>, <code>B1=Online</code><br>Llama-3.1-8B-Instruct, MATH-500</td><td>Semi-Online DPO $58.9$，Online DPO $58.7$，GRPO $58.1$</td><td>差距 $0.6\text{–}0.8$ 分（在评测噪声带内）</td></tr>
+          <tr><td><strong>VC-PPO (Critic) vs. GRPO vs. RLOO</strong><br>(<a href="https://arxiv.org/abs/2604.10701">GenAC, 2604.10701</a>)</td><td>共享同一 loss 与超参，Qwen3-8B-Base 训约 200 步</td><td>单次运行：GRPO $50.2$，RLOO $49.9$，VC-PPO $50.4$；<strong>3 seeds 均值：VC-PPO $50.9$ vs. GRPO $50.0$</strong>（GRPO 每步耗时约为 PPO 的 $0.6\times$）</td><td>差距 $\le 0.9$ 分（Critic 仅在早期略快，终点收敛到同一水平）</td></tr>
+          <tr><td><strong>DPO vs. IPO vs. SimPO vs. ORPO</strong><br>(<a href="https://arxiv.org/abs/2502.01237">2502.01237</a>; <a href="https://arxiv.org/abs/2402.05749">GPO, 2402.05749</a>)</td><td><code>A1=偏好对</code>, <code>B1=Offline</code>, <code>C3=网格搜索各自的 β 与 LR</code><br>Llama-3.1-8B / T5</td><td>GPO 中 6 种凸损失在相同 KL 下峰值一致；<a href="https://arxiv.org/abs/2502.01237">2502.01237</a> 中 DPO、IPO、SimPO、ORPO 彼此差距在 <strong>约 $1.5$ 个 AlpacaEval LC 点以内</strong></td><td>调齐有效步长 <code>C3</code>（$\beta$ 与 LR）后，成对损失函数形状打平</td></tr>
+          <tr><td><strong>短程数学训练上的各种 Off-Policy 修正</strong><br>(<a href="https://arxiv.org/abs/2609.32444">CIS, 2609.32444</a>)</td><td>3 个 MoE 模型 $\times$ <strong>3 seeds</strong>，GSM8K 短程训练</td><td>无修正、TIS、序列级变体、IcePop、GSPO、FP16 与 CIS 的五基准均分彼此在 <strong>约 $1.6$ 分以内</strong>；Qwen1.5-MoE 上 GSPO 与未训练基座打平（$28.90 \pm 1.25$ vs. $28.93$）</td><td>当离策略漂移尚未累积到崩盘阈值时，各种 <code>C1</code> 修正在 seed 波动内打平</td></tr>
+          <tr><td><strong>ScaleRL Leave-One-Out 组件消融</strong><br>(<a href="https://arxiv.org/abs/2510.13786">ScaleRL, 2510.13786</a>)</td><td>从完整成熟配方中每次只去掉一个逼近/过滤组件（CISPO 换 DAPO、去掉零方差过滤、换平均方式）</td><td>3 次重复运行测得渐近线 $A$ 的噪声带为 $\pm 0.015$（作者建议 $&lt;\pm 0.02$ 视为噪声）；LOO 中去掉任一单一组件，<strong>渐近线 $A$ 均保持在 $\pm 0.02$ 噪声带内</strong>（仅改变收敛速度 $B$，如 CISPO 换 DAPO 使 $B$ 从 $2.01$ 降为 $1.77$）</td><td>验证“不改不动点的逼近层改动主要影响速度 $B$ 而非上限 $A$”</td></tr>
+          <tr><td><strong>标准 Clip vs. Clip-Higher（高初始熵 Base 模型）</strong><br>(<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>; <a href="https://arxiv.org/abs/2505.22617">2505.22617</a>)</td><td>Base 模型初始熵高，上界截断仅在约 $0.3\%$ 的 token 上触发（<code>C1</code> 近似未激活）</td><td><a href="https://arxiv.org/abs/2508.08221">2508.08221</a> 中 Base 模型提高 $\varepsilon_{\text{high}}$ 几乎无变化或略降；<a href="https://arxiv.org/abs/2505.22617">2505.22617</a> 测得 Qwen2.5-7B 平均仅 $+0.2$ 分（32B 为 $+1.4$ 分但后期不稳定）；DAPO 原表增量为 $+2$ 分（$36\to 38$，在 $\pm 4.6$ 评测带内）</td><td>当触发率极低（接近 on-policy）时，<code>C1</code> 变体效果在噪声带内</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>2. 异格单变量对照表（检验“只改一个有效坐标，差异是否显著超过噪声底”）</h3>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>改变的单一坐标</th><th>受控对照设置</th><th>文献实测结果</th><th>理论机制对应</th></tr></thead>
+        <tbody>
+          <tr><td><strong>只改 <code>B1</code>（Offline $\to$ SFT/Online 采样）</strong></td><td><a href="https://arxiv.org/abs/2406.11827">WPO (2406.11827)</a> Table 1；<a href="https://arxiv.org/abs/2506.21495">2506.21495</a></td><td>WPO 中把偏好对换成从 SFT 模型采样带来 <strong>$+16\text{–}17$ LC 点</strong>（而固定数据换 loss 仅 $+1.6\text{–}5.6$ 点）；<a href="https://arxiv.org/abs/2506.21495">2506.21495</a> 中 Online 比 Offline DPO 在数学上高 $4\text{–}5$ 分、对话上高 $&gt;20$ 分</td><td>消除离线数据分布外的似然位移（likelihood displacement）</td></tr>
+          <tr><td><strong>只改 <code>B1</code>（长程/MoE 下消除引擎与路由漂移）</strong></td><td><a href="https://arxiv.org/abs/2510.11370">R3 (2510.11370)</a>；<a href="https://arxiv.org/abs/2605.14220">VeXact (2605.14220)</a>；<a href="https://arxiv.org/abs/2512.01374">2512.01374</a></td><td>Qwen3-30B-A3B 上推理与训练约 $10\%$ 路由决策不同（$94\%$ token 至少一层翻转），无回放 GRPO 在 $60\text{–}120$ 步崩溃（加 TIS 仅延缓到 $105$ 步），开启 R3 在报告的 $180$ 步内稳定；VeXact 逐位对齐后 MoE REINFORCE 在 vLLM 约 $280$ 步退化处继续提升</td><td>消除 <code>B1</code> 中的 Gap 1（引擎不一致）与 MoE 专家翻转导致的梯度方向错误</td></tr>
+          <tr><td><strong>只改 <code>A1</code>（可利用步级 PRM $\to$ 势函数差分/截断）</strong></td><td><a href="https://arxiv.org/abs/2410.15115">Gao et al. (2410.15115)</a>，Qwen2-1.5B MATH；<a href="https://arxiv.org/abs/2603.06621">2603.06621</a></td><td>把学习到的步级 PRM 直接加进结果奖励，MATH 分数从基座 $24.90$ <strong>跌至 $11.16$</strong>（纯结果奖励为 $30.58$），模型学会输出短句甚至单个表情刷分；做截断与差分（telescoping）后恢复到 $31.44$（与纯结果奖励 $30.58$ 同格）</td><td>非势函数累加改变了不动点 $\pi^*$ 诱发 reward hacking；势函数差分不改变最优策略 $\pi^*$，因此安全但也只恢复到结果奖励同格水平</td></tr>
+          <tr><td><strong>只改 <code>A1</code>（1-bit Verifier $\to$ 老师 Logprob OPD）</strong></td><td><a href="https://arxiv.org/abs/2505.09388">Qwen3 (2505.09388)</a>，Qwen3-8B</td><td>On-policy distillation 在 AIME'24 上达到 <strong>$74.4$</strong>，而 RL 训练到 <strong>$67.6$</strong> 耗费了约 $10$ 倍的 GPU 小时；且 OPD 提升了 $\text{pass@64}$，RL 未提升</td><td>把每条序列 $1\text{ bit}$ 的稀疏结果信号升级为每个 token 的老师分布监督，并跨模型转移支撑集</td></tr>
+          <tr><td><strong>只改 <code>A2</code>（Linear $\to$ Pass@$k$ / MaxRL 难题加权）</strong></td><td><a href="https://arxiv.org/abs/2508.10751">Pass@k Training (2508.10751)</a>；<a href="https://arxiv.org/abs/2602.02710">MaxRL (2602.02710)</a></td><td>Llama-3.1-8B-Instruct 在 AIME 2024 上的 $\text{pass@8}$ 从基座 $17.9$、普通 $\text{pass@1}$ 训练的 $32.1$ 提升至 <strong>$40.0$</strong>（$\text{pass@1}$ 变化很小）；MaxRL 在 $8$ 个设置中的 $7$ 个上提升了 $\text{pass@}k$</td><td>在 `A2` 上只放大低通过率难题（$p_x \to 0$）的权重，保持大 $k$ 覆盖率</td></tr>
+          <tr><td><strong>只改 <code>Cond</code>（扩大 Batch Size 与生成长度预算）</strong></td><td><a href="https://arxiv.org/abs/2510.13786">ScaleRL (2510.13786)</a> 受控拟合</td><td>Batch 从 $512 \to 768 \to 2{,}048$ 个 prompt 使渐近线 $A$ 从 $0.605 \to 0.610 \to 0.645$；最大生成长度从 $14\text{k} \to 32\text{k}$ 使 $A$ 从 $0.610 \to 0.645$（代价是到达中点算力 $C_{\text{mid}}$ 增加 $4.4\times$）</td><td>算力与上下文边界条件直接扩大了每步梯度的信噪比与长链反思可达空间</td></tr>
+          <tr><td><strong>离策略多轮下只改 <code>C1</code> 第四象限掩码（Q-IV）</strong></td><td><a href="https://arxiv.org/abs/2602.21534">ARLArena (2602.21534)</a> 多轮 agent 任务</td><td>CISPO 平均仅 $34.0$（低于 GRPO 的 $46.2$）并在约 $130$ 步崩溃；SAPO 同样崩溃。加上序列级下界掩码后恢复稳定（ALFWorld 从 <strong>$54.4 \to 78.9$</strong>）</td><td>CISPO 和 SAPO 重新打开了 PPO 原本关闭的第四象限（$\hat A &lt; 0, r &lt; 1$），导致已下降的负样本 token 被持续打压至崩盘</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>3. 预测受挫、前后矛盾与暴露坐标边界的案例记录</h3>
+    <p>如果只挑符合预期的实验，任何分类法都会显得“好得不像真的”。把文献里真正打架或暴露局限的案例单列出来，才能看清这套坐标的真实边界：</p>
+    <ul>
+      <li><strong>案例 1 · Base 与 Instruct 模型上 <code>A3</code> 和 <code>C1</code> 结论同时反号（<a href="https://arxiv.org/abs/2508.08221">Tricks or Traps, 2508.08221</a>）：</strong> 在 Qwen3-8B 上，Base 模型用 token-level 聚合更好、提高 $\varepsilon_{\text{high}}$ 没用或有害；到了 instruction-tuned 模型上，反而是 sequence-level 聚合更好、Clip-Higher 有益（4B 在 $0.32$、8B 在 $0.28$ 见顶）。这说明如果不以 <code>Cond</code>（$\pi_{\text{ref}}$ 的初始熵与长度分布）为条件，单看 <code>A3</code> 或 <code>C1</code> 无法预测正负号。</li>
+      <li><strong>案例 2 · ScaleRL 内部“前向消融”与“Leave-One-Out 消融”的四处自相矛盾（<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>）：</strong> 在弱基线上逐个加组件（前向消融）时，CISPO、零方差过滤、FP32 LM head 都显著抬高了拟合渐近线 $A$（例如 FP32 head 把 $A$ 从 $0.52$ 提到 $0.61$）；但在完整配方上做 LOO 时，去掉它们中的任何一个，$A$ 却都在 $\pm 0.02$ 噪声带内！原因在于多个组件修补的是同一个底层脆弱性（如 noisy ratio 导致的失稳），单独加时救活了训练（表现为 $A$ 升高），但在成熟配方里彼此冗余。而且后续研究（<a href="https://arxiv.org/abs/2610.04158">2610.04158</a>）指出，在有限算力窗口内，没有渐近线的对数线性曲线与 sigmoid 拟合得几乎一样好——所谓“改变上限 $A$”很多时候只是稳定性差异的外推假象。</li>
+      <li><strong>案例 3 · 小模型短跑与 150B MoE 大规模运行在 Critic（<code>C2</code>）上的未解张力：</strong> GenAC（<a href="https://arxiv.org/abs/2604.10701">2604.10701</a>）在 Qwen3-8B-Base 上训 200 步证明 VC-PPO 与 GRPO/RLOO 仅差 $0.5\text{–}0.9$ 分；但 <a href="https://arxiv.org/abs/2504.13914">Seed1.5-Thinking (2504.13914)</a> 在 150B MoE 上报告带 critic 的 VAPO 为 $79$ vs. DAPO 的 $73$。8B 上的 200 步受控实验能拆穿“基线没配好导致的 10 分假差距”，但不能排除在超大模型或长程多轮任务中 critic 仍有独立价值。</li>
+      <li><strong>案例 4 · 随机/虚假奖励在 Qwen2.5-Math 上涨 $+21.4$ 分，在 Llama-3.1 上跌 $-11.5$ 分、在去污 OLMo 3 上为 $0$（<a href="https://arxiv.org/abs/2506.10947">2506.10947</a>, <a href="https://arxiv.org/abs/2507.10532">2507.10532</a>, <a href="https://arxiv.org/abs/2512.13961">2512.13961</a>）：</strong> 证明当 <code>Cond</code> 中的 $\pi_{\text{ref}}$ 存在预训练污染（Qwen2.5-Math 在给前 $60\%$ 题目时能逐字背出 $54.6\%$ 的 MATH-500 文本，而 Llama 为 $3.8\%$）或高准确率的预设模式（Python 代码模式占 $65\%$ 且准确率 $60.9\%$）时，哪怕 <code>A1</code> 是 $0\text{-bit}$ 噪声，单靠 <code>D1</code> 降熵锐化也能刷出 20 分。</li>
+      <li><strong>案例 5 · 树分叉信用分配与 Token 掩码的混淆（<a href="https://arxiv.org/abs/2505.23564">SPO, 2505.23564</a>）：</strong> SPO 的树结构信用分配在 $2\text{k}$ 长度下比 GRPO 高 $11.6$ 个 MATH-500 点，但在 $4\text{k}$ 降为 $7.6$ 点，到 $32\text{k}$ 仅差 $0.8$ 点（AIME24 打平）；且作者发现仅靠一个 token mask 就解释了其在 GSM8K 上的大部分增益。这提醒我们 `C2` 里的“精细信用分配”随着上下文放长和规模变大，收益会快速衰减。</li>
+    </ul>
+  </section>
+
+  <!-- ============ Part 4 ============ -->
   <section class="part" id="useful">
     <header>
-      <div class="ask"><b>问 3</b> · 从第一性原理看，这些算法真的有用吗</div>
-      <h2>大部分改动决定不了结果，有用的多半是修正确性</h2>
+      <div class="ask"><b>问 4</b> · 从这套两层结构直接推出工程判断</div>
+      <h2>三类改动的本质：修不动点偏差、维持离策略逼近、或未承认的目标改动</h2>
     </header>
 
     <h3>一个算法到底能改变什么</h3>
@@ -397,8 +511,55 @@ window.MathJax = {
       <li><strong>“没用”指的是不决定上限，不是不值得做。</strong>第一、二类在工程上往往是必要的。</li>
     </ul>
 
-    <h3>对 blog 的含义</h3>
-    <p>与其逐轴给每个算法打分，不如直接论证<strong>上限在哪里决定、算法负责什么</strong>，再用上面三类改动作为骨架。</p>
+    <h3>小结：怎么用这套框架读任何一篇新 RL 论文</h3>
+    <p>当一篇新算法论文出来时，不需要先给它打分，只需按三步检验：① 把它的更新式写成规范形式，读出它在 <strong>目标层（<code>A1–A4</code>）、运行区间（<code>B1</code>）、逼近层（<code>C1–C3</code>）</strong> 上的坐标；② 问一句“<strong>它改变不动点 $\pi^*$ 了吗，还是只在 <code>B1</code> 离策略条件下改了逼近路径或 <code>D1</code> 熵轨迹？</strong>”；③ 查表对照同格算法在受控条件下的已有实证。</p>
+  </section>
+
+  <!-- ============ Part 5 ============ -->
+  <section class="part" id="frontier">
+    <header>
+      <div class="ask"><b>问 5</b> · 跳出学术界单域数学刷榜，站在前沿后训练负责人（OpenAI / Anthropic 视角）看</div>
+      <h2>从单次 RLVR 到工业级后训练系统：坐标表之外的五个真实战场</h2>
+    </header>
+
+    <p>前面的两层坐标体系（<code>A / B / C / D</code>）把过去三年学术界在<strong>单域数学/代码 RLVR 与偏好对齐 Loss 上的混战</strong>梳理清楚了——对于“砍掉无效的新 Loss 复现、排查 MoE 与离策略基础设施隐患”，它是一套极好用的去噪工具。</p>
+    <p>但如果我们站在 OpenAI 或 Anthropic 这类前沿实验室<strong>后训练负责人</strong>的视角，就会发现学术论文（95% 是在 7B–32B 模型上跑 200–500 步单域数学题）与工业界主线之间存在一个巨大的代差：<strong>前沿后训练从来不是在单域 AIME 上刷 2 分，而是在同一个旗舰模型上同时对齐数学、竞赛代码、真实软件工程（SWE / 终端操作）、长文写作、深度研究以及安全边界（Safety / Honesty）。</strong> 在这个真实战场上，真正卡脖子的往往是下面五个坐标表尚未完全展开的深水区：</p>
+
+    <h3>1. 多域混合 RL 的梯度干扰与“对齐税”（向量 $\vec{R}$，而非标量 $R$）</h3>
+    <p>在单域论文里，<code>A1</code> 只是单一通道（要么是精确 0/1 验证器，要么是对话 RM），<code>A2</code> 只是同一题库内的难度权重 $F(p_x)$。但在工业界联合训练中，一个训练阶段往往混着<strong>异构环境</strong>：既有 32k 长度、0/1 稀疏反馈的数学与代码单元测试，又有 1k 长度、由神经网络 Rubric/RM 连续打分的写作、语气、指令遵循与安全拒答。</p>
+    <ul>
+      <li><strong>为什么会打架：</strong>精确验证器的梯度方差形态、序列长度分布和最优步长，与软 RM 完全不在一个量级。长 CoT 的强化学习会迅速污染通用对话的文风（对简单闲聊也过度思考、机械列点、丧失文采），而通用对话 RM 的训练又会反过来削弱长程推理深度。</li>
+      <li><strong>工业界的真实解法：</strong><code>A2</code> 的核心不再是单域内的 $F(p_x)$，而是<strong>跨环境的梯度范数配比、分域独立 KL 预算（$\beta_{\text{domain}}$）、显式思考预算条件化（Thinking-budget conditioning），或者走“先训分域 RL 专家 $\to$ 再通过 On-Policy Distillation（OPD）合流到单一通用基座”的架构</strong>。</li>
+    </ul>
+
+    <h3>2. 对抗性优化器下的环境与裁判工程（<code>A1</code> 占 80% 研发精力，<code>C1</code> 只占 5%）</h3>
+    <p>在前沿团队里，80% 以上的研究人力花在构建环境与打分器（<code>A1</code>）上，只有不到 5% 花在调策略梯度截断（<code>C1</code>）上。在没有单元测试的真实任务（写完整 PR、深度网页调研、医疗/法律分析、复杂写作）中，<strong>根本不存在无偏的 0/1 Verifier</strong>。</p>
+    <ul>
+      <li><strong>静态误差公式的局限：</strong>把代理奖励误差写成常数假阳性率 $\alpha_{\text{FP}}$ 低估了真实风险——因为 RL 策略是一个针对打分器做定向搜索的对抗优化器，随着 $\mathrm{KL}(\pi_\theta\|\pi_{\text{ref}})$ 增大，模型会主动搜出让裁判稳定误判的高分对抗样本（如固定讨好句式、伪造引用格式、空洞长文）。</li>
+      <li><strong>工业界怎么防 Hacking：</strong>不是靠单纯放大 $\beta$（那会直接锁死能力），而是靠<strong>结构化 Rubric 拆解（把主观好坏拆成可核对的原子判据）、成对生成式裁判（先写 Critique 再做 Pairwise 比较）、多 RM 悲观取小（$\min_k R_k$）、在奖励端显式回归正交化长度与格式偏置、以及在线迭代重训 RM（Iterative RM + Policy Co-evolution）</strong>。</li>
+    </ul>
+
+    <h3>3. 超长视界有状态 Agent（50–150 轮不可逆交互）vs. 单轮纯文本内省 CoT（<code>C2</code> 结论不能盲目外推）</h3>
+    <p>基于 <code>GenAC</code>（~200 步单轮数学）和 <code>SPO</code>（32k 单轮数学），前文指出在单轮数学上“组均值（GRPO/RLOO）与带 Critic 的 PPO 上限持平、树分叉信用分配在 32k 长度下收益衰减到 $+0.8$ 分”。这个结论在<strong>单轮纯文本 CoT</strong> 上成立，因为模型可以通过上下文内的 <code>"Wait, let me recheck"</code> 自己完成回溯，不需要外部对中间 token 逐个归因；但<strong>绝不能外推到 50–150 轮的有状态外部环境 Agent（如 SWE-bench、Computer Use、多跳浏览器搜索）</strong>：</p>
+    <ul>
+      <li><strong>成本与不可逆性：</strong>当一条轨迹包含 80 次容器内 bash 执行、耗时数十分钟、总长 100k tokens 时，环境状态转移昂贵且不可逆，不可能像单轮数学那样廉价地对同一题并发采 $G=64$ 条完整轨迹来算组均值。</li>
+      <li><strong>信噪比崩溃：</strong>到底是第 12 轮的搜索词选错了，还是第 65 轮的补丁写错了？只靠末尾一个 1-bit 结果把同一个 $\hat A_i$ 广播给 80 轮工具调用，信噪比几乎为零。在这个区间里，<strong>Turn 级价值基线（Critic）、环境状态检查点分叉（如 GiGPO 的状态分组）、以及高密度的步级环境反馈</strong>不再是“只改早期速度的可选项”，而是决定能不能学出来的必要条件。</li>
+    </ul>
+
+    <h3>4. 多代外循环飞轮：RL 与 OPD / 拒绝采样 SFT 是上下游接力，而非二选一</h3>
+    <p>如果只看<strong>单次 RL 训练</strong>，模型确实受限于 $\operatorname{supp}(\pi_{\text{ref}})$，且一旦在训练后期发生 <code>D1</code> 熵坍缩就无法恢复。但前沿实验室从来不是一趟 RL 跑到底就上线，而是运行<strong>多代交替的外部飞轮（Outer Loop）</strong>：</p>
+    <div class="eq">$$\pi_{\text{ref}}^{(k)} \xrightarrow{\text{高温度 / Pass@}k\text{ 探索型 RL}} \text{采出高价值长链与工具轨迹} \xrightarrow{\text{OPD / 拒绝采样 SFT / 上下文蒸馏}} \pi_{\text{ref}}^{(k+1)}\text{（重置熵与基座）} \xrightarrow{\text{第 }k+1\text{ 代 RL}}$$</div>
+    <ul>
+      <li><strong>打破单次训练的熵与支撑集死锁：</strong>在第 $k$ 代可以用极小甚至为 $0$ 的 $\beta$、配合高温度或 <code>pass@k</code> 加权去激进搜出难样本的解；一旦采到正确轨迹（哪怕过程啰嗦或策略熵已跌穿），立刻通过 <strong>On-Policy Distillation（OPD）或过滤 SFT</strong> 将其蒸馏回一个高熵、干净的新起点 $\pi_{\text{ref}}^{(k+1)}$（或并入 Mid-training 数据）。</li>
+      <li><strong>RL 与 OPD 的真实分工：</strong>在坐标表里，OPD 看似只是 <code>A1</code> 里的另一种信号；但在系统层面，<strong>RL 是“用推理算力在前沿探路的生成器（Producer）”，而 OPD 是“把探路成果无损、低成本压回主模型的压缩器（Consumer）”</strong>。</li>
+    </ul>
+
+    <h3>5. 随通过率分布 $P_k(p_x)$ 相变演化的动态算力分配（把静态 <code>Cond</code> 变成动态控盘变量）</h3>
+    <p>坐标表把 <code>Cond</code>（数据难度分布 $P(p_x)$、group size $G$、batch size $B$）当作静态前提，但对后训练负责人来说，<strong>随训练进程动态调度算力本身就是核心算法</strong>：</p>
+    <ul>
+      <li><strong>训练前中后期的相变：</strong>训练初期，大量题目处在 $p_x \in [0.2, 0.8]$ 的高方差甜点区，$G=8$ 就能拿到很高的有效梯度占比（<code>D2</code>）。但到了训练中后期，$P_k(p_x)$ 会两极分化——90% 的题已经 $p_x \to 1$，剩下的硬骨头 $p_x &lt; 0.01$。此时如果还死守固定的 $G=8$，几乎所有 group 都是全对或全错（$\hat A \equiv 0$），有效样本率 <code>D2</code> 跌向 $0$，算力全在空转。</li>
+      <li><strong>算力最优控盘：</strong>必须根据当前策略的通过率在线调整资源——把 $p_x \to 1$ 的已掌握题目移出活跃采样池（只留极小比例防遗忘），把省下的 rollout 算力按 $G(x) \propto 1/\hat p_x$ 动态集中到 $p_x \ll 0.1$ 的前沿难题上；而当某类难题在放大 $G$ 后依然 $\hat p_x \equiv 0$（撞上 <code>y9</code> 支撑集墙）时，果断停止追加 RL 算力，转而通过合成数据或专家示范回补 Mid-training / SFT。</li>
+    </ul>
   </section>
 
   <p class="foot">相关：完整的逐轴综述草稿见 <a href="https://kwq-1234.github.io/RL_algorithms/">RL Algorithms for the Mathematically Inclined</a>。演示中的 9 个候选回答和奖励值是为说明 π* 的形状而虚构的。</p>

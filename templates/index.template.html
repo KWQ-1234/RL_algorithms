@@ -3,11 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RL Algorithms for the Mathematically Inclined — Which Changes Matter</title>
-<meta name="description" content="A survey of LLM RL post-training algorithms for mathematicians and RL theorists: eight design axes of the policy-gradient estimator, three algorithm families, five evidence case studies, and a decision guide, with every claim graded by the strength of its controlled evidence.">
+<title>RL Algorithms for the Mathematically Inclined — First Principles &amp; Verdict Map</title>
+<meta name="description" content="A first-principles survey of LLM RL post-training algorithms for mathematicians and RL theorists: the exponential-tilting target distribution, a five-axis taxonomy, the r ≡ 1 identity, and controlled evidence graded across correctness constraints, off-policy trust regions, and implicit objectives.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=Source+Sans+3:wght@400;600;700&family=Source+Code+Pro:wght@400;500&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  svg: { fontCache: 'global' },
+  options: { enableMenu: false }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg-full.js" async></script>
 <style>
   /* ---------- Tokens ---------- */
   :root {
@@ -33,8 +45,8 @@
     --mono: "Source Code Pro", "SFMono-Regular", Menlo, Consolas, monospace;
 
     --header-h: 56px;
-    --sidebar-w: 268px;
-    --measure: 700px;
+    --sidebar-w: 276px;
+    --measure: 720px;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -88,32 +100,33 @@
   /* ---------- Left navigation ---------- */
   .site-nav {
     position: fixed; top: var(--header-h); bottom: 0; left: 0; width: var(--sidebar-w);
-    overflow-y: auto; padding: 28px 0 40px;
+    overflow-y: auto; padding: 24px 0 40px;
     background: #fafbfc; border-right: 1px solid var(--hair);
     font-family: var(--sans);
   }
   .site-nav .nav-heading {
-    padding: 18px 24px 6px; font-size: 12.5px; font-weight: 600; color: var(--muted);
+    padding: 16px 22px 5px; font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted);
   }
   .site-nav .nav-heading:first-child { padding-top: 0; }
   .site-nav ul { list-style: none; }
   .site-nav a {
-    display: block; padding: 4px 24px 4px 21px;
+    display: block; padding: 4px 20px 4px 19px;
     border-left: 3px solid transparent;
-    color: var(--text); font-size: 14px; line-height: 1.4; text-decoration: none;
+    color: var(--text); font-size: 13.5px; line-height: 1.4; text-decoration: none;
   }
   .site-nav a:hover { color: var(--accent); background: var(--accent-tint); }
   .site-nav a.active { color: var(--accent-deep); font-weight: 600; border-left-color: var(--accent); background: var(--accent-tint); }
   .site-nav .nav-row { display: flex; align-items: stretch; }
   .site-nav .nav-row .nav-link { flex: 1; }
   .site-nav .nav-toggle {
-    width: 32px; border: 0; background: transparent; color: var(--muted);
+    width: 30px; border: 0; background: transparent; color: var(--muted);
     font: 15px var(--sans); cursor: pointer;
   }
   .site-nav .nav-toggle::before { content: "−"; }
   .site-nav .nav-collapsible.is-collapsed .nav-toggle::before { content: "+"; }
   .site-nav .nav-collapsible.is-collapsed .nav-sublist { display: none; }
-  .site-nav .nav-sublink { padding: 2px 24px 2px 38px; font-size: 13px; color: var(--muted); }
+  .site-nav .nav-sublink { padding: 2px 20px 2px 34px; font-size: 12.5px; color: var(--muted); }
 
   /* ---------- Main column ---------- */
   .main-wrap { margin-left: var(--sidebar-w); margin-top: var(--header-h); display: flex; min-height: calc(100vh - var(--header-h)); }
@@ -121,33 +134,37 @@
   article { width: 100%; max-width: var(--measure); }
 
   .toc-rail {
-    width: 232px; flex-shrink: 0; align-self: flex-start;
+    width: 236px; flex-shrink: 0; align-self: flex-start;
     position: sticky; top: var(--header-h); max-height: calc(100vh - var(--header-h)); overflow-y: auto;
-    padding: 64px 24px 40px 8px;
+    padding: 64px 20px 40px 8px;
     font-family: var(--sans);
   }
-  .toc-rail h4 { margin: 22px 0 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .toc-rail h4 { margin: 18px 0 5px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
   .toc-rail h4:first-child { margin-top: 0; }
   .toc-rail ul { list-style: none; border-left: 1px solid var(--hair); }
-  .toc-rail a { display: block; padding: 3px 0 3px 12px; margin-left: -1px; border-left: 1px solid transparent; color: var(--muted); font-size: 13px; line-height: 1.45; text-decoration: none; }
+  .toc-rail a { display: block; padding: 3px 0 3px 12px; margin-left: -1px; border-left: 1px solid transparent; color: var(--muted); font-size: 12.5px; line-height: 1.4; text-decoration: none; }
   .toc-rail a:hover { color: var(--accent); }
   .toc-rail a.active { color: var(--accent-deep); border-left-color: var(--accent); font-weight: 600; }
 
   /* ---------- Front matter ---------- */
-  article > header { margin-bottom: 56px; }
+  article > header { margin-bottom: 52px; }
+  article > header .kicker {
+    font-family: var(--sans); font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--accent); margin-bottom: 10px;
+  }
   article > header h1 {
-    font-family: var(--serif); font-size: 46px; line-height: 1.12; font-weight: 600;
+    font-family: var(--serif); font-size: 44px; line-height: 1.12; font-weight: 600;
     letter-spacing: -0.015em; color: var(--ink);
   }
-  article > header .subtitle { margin-top: 14px; font-size: 23px; line-height: 1.4; font-style: italic; color: var(--text); }
+  article > header .subtitle { margin-top: 14px; font-size: 22px; line-height: 1.42; font-style: italic; color: var(--text); }
   article > header .abstract {
-    margin-top: 32px; padding-top: 22px; border-top: 1px solid var(--rule);
+    margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--rule);
     font-size: 17px; line-height: 1.65; color: var(--text);
   }
   article > header .abstract .runin { font-variant: small-caps; letter-spacing: 0.04em; font-weight: 600; color: var(--ink); }
-  article > header .byline { margin-top: 14px; font-family: var(--sans); font-size: 14.5px; color: var(--muted); }
+  article > header .byline { margin-top: 14px; font-family: var(--sans); font-size: 14px; color: var(--muted); }
   .grade-key {
-    margin-top: 26px; padding: 16px 18px; background: var(--panel); border-radius: 6px;
+    margin-top: 24px; padding: 15px 18px; background: var(--panel); border-radius: 6px;
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px;
     font-family: var(--sans); font-size: 14px; line-height: 1.45; color: var(--text);
   }
@@ -156,13 +173,27 @@
   .grade-key .grade { margin-top: 1px; flex-shrink: 0; }
 
   /* ---------- Body typography ---------- */
+  .part-banner {
+    margin: 72px 0 8px; padding-top: 28px; border-top: 2px solid var(--ink);
+    font-family: var(--sans); font-size: 12.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--accent);
+  }
+  .part-banner .part-kicker {
+    font-family: var(--sans); font-size: 12.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--accent);
+  }
+  .part-banner .part-desc {
+    margin: 4px 0 4px; font-family: var(--sans); font-size: 13.5px; font-weight: 400;
+    text-transform: none; letter-spacing: normal; color: var(--muted); line-height: 1.45;
+  }
   article h2 {
-    margin: 80px 0 18px; font-size: 31px; line-height: 1.22; font-weight: 600;
+    margin: 64px 0 18px; font-size: 30px; line-height: 1.22; font-weight: 600;
     letter-spacing: -0.01em; color: var(--ink);
   }
-  article section > h2:first-child { padding-top: 28px; border-top: 1px solid var(--rule); }
-  article h3 { margin: 44px 0 12px; font-size: 23px; line-height: 1.3; font-weight: 600; color: var(--ink); }
-  article h4 { margin: 30px 0 8px; font-family: var(--sans); font-size: 16.5px; font-weight: 700; color: var(--ink); }
+  article section > h2:first-child { padding-top: 26px; border-top: 1px solid var(--rule); }
+  article section > .part-banner + h2 { margin-top: 6px; padding-top: 0; border-top: none; }
+  article h3 { margin: 40px 0 12px; font-size: 22px; line-height: 1.32; font-weight: 600; color: var(--ink); }
+  article h4 { margin: 28px 0 8px; font-family: var(--sans); font-size: 16px; font-weight: 700; color: var(--ink); }
   article p { margin-bottom: 18px; hyphens: auto; }
   article ul, article ol { margin: 0 0 20px 1.3em; }
   article li { margin-bottom: 7px; padding-left: 0.2em; }
@@ -197,16 +228,18 @@
   .source-badge .file-meta { color: var(--muted); }
   pre.with-source { border-top-left-radius: 0; }
 
-  /* Displayed formulas, set as mathematics rather than code */
+  /* Displayed formulas & MathJax */
   article .formula-display {
-    margin: 22px 0 24px; padding: 4px 0; overflow-x: auto;
-    font-family: var(--math); font-size: 20px; line-height: 1.6; color: var(--ink);
-    text-align: center; white-space: nowrap;
+    margin: 20px 0 22px; padding: 6px 0; overflow-x: auto;
+    font-family: var(--math); font-size: 19px; line-height: 1.6; color: var(--ink);
+    text-align: center;
   }
+  mjx-container[display="true"] { margin: 0.5em 0 !important; overflow-x: auto; max-width: 100%; }
+  mjx-container { font-size: 102% !important; }
 
   /* ---------- Tables: booktabs ---------- */
   table {
-    width: 100%; margin: 24px 0 30px; border-collapse: collapse;
+    width: 100%; margin: 22px 0 28px; border-collapse: collapse;
     font-family: var(--sans); font-size: 14.5px; line-height: 1.5;
     border-top: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink);
   }
@@ -214,18 +247,30 @@
   th { text-align: left; font-weight: 600; color: var(--ink); padding: 9px 12px; vertical-align: bottom; }
   td { padding: 9px 12px; vertical-align: top; border-top: 1px solid var(--hair); }
   tbody tr:first-child td { border-top: none; }
+  tbody tr.cat-row td {
+    background: var(--panel); font-weight: 700; color: var(--ink);
+    font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em;
+    border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    padding: 6px 10px;
+  }
   td.nowrap, th.nowrap { white-space: nowrap; }
   table.verdict { font-size: 13.5px; }
   table.verdict th, table.verdict td { padding: 8px 9px; }
   table.verdict td:first-child { font-weight: 600; color: var(--ink); width: 22%; }
+  table.verdict tr.cat-row td:first-child { width: auto; }
   table.verdict td.num, table.verdict th.num { text-align: right; font-variant-numeric: tabular-nums; }
   table.map td:first-child { width: auto; }
-  table.map td.sym, table.map th.sym { text-align: center; width: 56px; }
+  table.map td.sym, table.map th.sym { text-align: center; width: 52px; }
   table.map td.sym { font-size: 16px; }
   table.map td.sym-up { color: var(--grade-a); font-weight: 700; }
   table.map td.sym-down { color: var(--grade-d); font-weight: 700; }
   table.map td.sym-mixed { color: var(--grade-c); }
   table.map td.sym-none, table.map td.sym-na { color: #9aa0ad; }
+  .axis-tag {
+    display: inline-block; font-family: var(--mono); font-size: 11.5px; font-weight: 500;
+    color: var(--accent-deep); background: var(--accent-tint);
+    padding: 1px 6px; border-radius: 3px; white-space: nowrap;
+  }
   @media (max-width: 720px) {
     table.verdict { display: block; overflow-x: auto; }
     table.verdict td, table.verdict th { min-width: 96px; }
@@ -243,23 +288,44 @@
   .grade-c { color: var(--grade-c); background: var(--grade-c-bg); border-color: #e3cf9f; }
   .grade-d { color: var(--grade-d); background: var(--grade-d-bg); border-color: #e6bdb5; }
 
-  /* ---------- Boxes ---------- */
-  .primer-box, .question-box, .technique-card, aside.note {
+  /* ---------- Boxes & Cards ---------- */
+  .primer-box, .question-box, .technique-card, aside.note, .case-box {
     margin: 24px 0 28px; padding: 16px 20px;
     border-left: 3px solid var(--accent-deep); background: var(--panel); border-radius: 0 6px 6px 0;
   }
-  .primer-box p, .question-box p, aside.note { font-size: 16.5px; line-height: 1.6; }
-  .primer-box p:last-child, .question-box p:last-child, .technique-card p:last-child { margin-bottom: 0; }
+  .primer-box p, .question-box p, aside.note, .case-box p { font-size: 16.5px; line-height: 1.62; }
+  .primer-box p:last-child, .question-box p:last-child, .technique-card p:last-child, .case-box p:last-child { margin-bottom: 0; }
   .question-box { border-left-color: var(--grade-c); background: #fbf9f4; }
   .question-box p { margin-bottom: 10px; }
-  /* A displayed identity reads like a theorem: italic statement, upright formula */
   .technique-card { background: #fff; border: 1px solid var(--rule); border-left: 3px solid var(--accent-deep); }
   .technique-card p { font-style: italic; }
   .technique-card p strong { font-style: normal; }
   .technique-card .formula-display { font-style: normal; margin: 14px 0; }
+  .case-box { background: #fafbfd; border: 1px solid var(--rule); border-left: 3px solid var(--ink); }
+  .case-box .case-kicker {
+    font-family: var(--sans); font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--accent-deep); margin-bottom: 4px;
+  }
+  .case-box h4 { margin-top: 0; font-family: var(--serif); font-size: 19px; margin-bottom: 10px; }
   aside.note { font-family: var(--serif); border-left-color: var(--muted); }
   aside.note.warn { border-left-color: var(--grade-d); background: #fcf6f5; }
-  aside.note.draft { color: var(--muted); }
+
+  /* Three Verdict Category Cards */
+  .verdict-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 22px 0 28px; }
+  .vcard, .verdict-card {
+    padding: 16px; border-radius: 6px; border: 1px solid var(--rule); background: #fff;
+    display: flex; flex-direction: column; gap: 8px; font-family: var(--sans);
+  }
+  .vcard .vchip, .verdict-card .vc-tag {
+    align-self: flex-start; font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+    padding: 2px 8px; border-radius: 3px;
+  }
+  .vcard.must .vchip, .verdict-card.vc-cat1 .vc-tag { background: var(--grade-a-bg); color: var(--grade-a); }
+  .vcard.cond .vchip, .verdict-card.vc-cat2 .vc-tag { background: var(--grade-b-bg); color: var(--grade-b); }
+  .vcard.noise .vchip, .verdict-card.vc-cat3 .vc-tag { background: var(--grade-c-bg); color: var(--grade-c); }
+  .vcard h4, .verdict-card h4 { margin: 0; font-family: var(--serif); font-size: 17.5px; color: var(--ink); line-height: 1.35; }
+  .vcard p, .verdict-card p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text); }
+  @media (max-width: 760px) { .verdict-cards { grid-template-columns: 1fr; } }
 
   blockquote.pull {
     margin: 30px 0; padding: 4px 0 4px 22px; border-left: 3px solid var(--accent);
@@ -272,12 +338,161 @@
   .study ul { list-style: none; margin: 0; }
   .study li { padding-left: 0; margin-bottom: 6px; line-height: 1.5; }
 
-  /* ---------- Figures ---------- */
-  figure { margin: 36px 0 38px; }
+  /* ---------- Figures & Interactive Widgets ---------- */
+  figure { margin: 34px 0 36px; }
   figure img { display: block; width: 100%; height: auto; }
   figure > table { margin-top: 0; }
   figcaption { margin-top: 12px; font-family: var(--sans); font-size: 14px; line-height: 1.5; color: var(--muted); }
   figcaption .fig-label { font-weight: 700; color: var(--ink); }
+
+  .ifig {
+    background: #fafbfd; border: 1px solid var(--rule); border-radius: 8px;
+    padding: 20px 22px 16px; margin: 32px 0 36px; font-family: var(--sans);
+    display: grid; gap: 14px;
+  }
+  .ifig-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; align-items: baseline; border-bottom: 1px solid var(--hair); padding-bottom: 10px; }
+  .ifig-title { font-family: var(--serif); font-weight: 600; font-size: 18px; color: var(--ink); }
+  .ifig-sub { font-size: 13px; color: var(--muted); }
+  .ifig-ctrl { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .ifig-ctrl output { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; min-width: 7.5em; text-align: right; }
+
+  /* Brand-Consistent Native Range Slider (modern-web-guidance: slider) */
+  input[type="range"].ifig-range {
+    --slider-track-size: 0.42rem;
+    --slider-thumb-size: 1.15rem;
+    --slider-track-radius: 999px;
+    --slider-thumb-radius: 50%;
+    --slider-track-color: #d8dbe1;
+    --slider-fill-color: #2a5da8;
+    --slider-thumb-color: var(--slider-fill-color);
+    --slider-direction: to right;
+    --attr-min: attr(min type(<number>), 0);
+    --attr-max: attr(max type(<number>), 1000);
+    --control-value: attr(value type(<number>), 500);
+    --slider-progress: calc(
+      progress(var(--control-value), var(--attr-min), var(--attr-max)) * 100%
+    );
+    appearance: none;
+    inline-size: 100%;
+    block-size: 2rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"].ifig-range:dir(rtl) {
+    --slider-direction: to left;
+  }
+  @supports not (opacity: progress(1, 0, 100)) {
+    input[type="range"].ifig-range {
+      --slider-progress: calc(
+        (var(--control-value) - var(--attr-min)) /
+        (var(--attr-max) - var(--attr-min)) * 100%
+      );
+    }
+  }
+  input[type="range"].ifig-range::-webkit-slider-runnable-track {
+    block-size: var(--slider-track-size);
+    border: 0;
+    border-radius: var(--slider-track-radius);
+    background: linear-gradient(
+      var(--slider-direction),
+      var(--slider-fill-color) var(--slider-progress),
+      var(--slider-track-color) var(--slider-progress)
+    );
+  }
+  input[type="range"].ifig-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    inline-size: var(--slider-thumb-size);
+    block-size: var(--slider-thumb-size);
+    margin-block-start: calc(
+      (var(--slider-track-size) - var(--slider-thumb-size)) / 2
+    );
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    border-radius: var(--slider-thumb-radius);
+    background: var(--slider-thumb-color);
+  }
+  input[type="range"].ifig-range::-moz-range-track {
+    block-size: var(--slider-track-size);
+    border: 0;
+    border-radius: var(--slider-track-radius);
+    background: var(--slider-track-color);
+  }
+  input[type="range"].ifig-range::-moz-range-progress {
+    block-size: var(--slider-track-size);
+    border-radius: var(--slider-track-radius);
+    background: var(--slider-fill-color);
+  }
+  input[type="range"].ifig-range::-moz-range-thumb {
+    inline-size: var(--slider-thumb-size);
+    block-size: var(--slider-thumb-size);
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    border-radius: var(--slider-thumb-radius);
+    background: var(--slider-thumb-color);
+  }
+  input[type="range"].ifig-range:focus-visible {
+    outline: 2px solid var(--slider-fill-color);
+    outline-offset: 4px;
+  }
+
+  /* Interactive Widget Tabs / Pills */
+  .ifig-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ifig-pill {
+    padding: 5px 11px; font-family: var(--mono); font-size: 12.5px; font-weight: 500;
+    background: #fff; color: var(--text); border: 1px solid var(--rule); border-radius: 4px;
+    cursor: pointer; transition: all 0.12s ease;
+  }
+  .ifig-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .ifig-pill[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* Tilt Figure Specifics */
+  .tilt-bars {
+    position: relative; height: 185px; display: grid; grid-template-columns: repeat(9, 1fr);
+    gap: 6px; align-items: end; padding-left: 32px; border-bottom: 1px solid var(--ink);
+    background: #fff; padding-top: 10px; border-radius: 4px 4px 0 0;
+  }
+  .tilt-grid-line { position: absolute; left: 32px; right: 0; border-top: 1px dashed var(--rule); font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .tilt-grid-line span { position: absolute; left: -32px; top: -8px; width: 28px; text-align: right; }
+  .tilt-col { position: relative; height: 100%; }
+  .tilt-col .ref, .tilt-col .tilt { position: absolute; left: 12%; right: 12%; bottom: 0; }
+  .tilt-col .tilt { transition: height 0.15s ease-out; border-radius: 2px 2px 0 0; }
+  .tilt-col .ref { border: 1.5px dashed var(--muted); border-bottom: 0; z-index: 2; }
+  .tilt-col.ok .tilt, .tilt-col.unseen .tilt { background: var(--grade-a); }
+  .tilt-col.bad .tilt { background: #9aa0ad; }
+  .tilt-col.hack .tilt { background: var(--grade-c); }
+  .tilt-col .zero { position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--grade-a); }
+  .tilt-labels { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; padding-left: 32px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: center; margin-top: -6px; }
+  .ifig-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); }
+  .ifig-legend i { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; margin-right: 5px; border-radius: 2px; }
+  .ifig-legend .l-ref { border: 1.5px dashed var(--muted); background: transparent; }
+  .ifig-readouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .ifig-ro { background: #fff; border: 1px solid var(--hair); border-top: 2.5px solid var(--rule); padding: 8px 10px; border-radius: 0 0 4px 4px; }
+  .ifig-ro .k { font-size: 12px; color: var(--muted); line-height: 1.35; }
+  .ifig-ro .v { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .ifig-ro.proxy { border-top-color: var(--accent); }
+  .ifig-ro.true { border-top-color: var(--grade-a); }
+  .ifig-ro.hackm { border-top-color: var(--grade-c); }
+  @media (max-width: 580px) { .ifig-readouts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .tilt-curve { position: relative; height: 140px; margin: 4px 0 22px 32px; border-left: 1px solid var(--ink); border-bottom: 1px solid var(--ink); background: #fff; }
+  .tilt-curve svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .tilt-curve .c-proxy { stroke: var(--accent); fill: none; stroke-width: 2.2; }
+  .tilt-curve .c-true { stroke: var(--grade-a); fill: none; stroke-width: 2.2; }
+  .tilt-curve .c-now { stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 3 3; }
+  .tilt-curve .tick { position: absolute; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .tilt-curve .ty { left: -32px; width: 28px; text-align: right; transform: translateY(-50%); }
+  .tilt-curve .tx { top: calc(100% + 4px); transform: translateX(-50%); white-space: nowrap; }
+
+  /* Dual SVG interactive canvas */
+  .ifig-svg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .ifig-svg-box { background: #fff; border: 1px solid var(--hair); border-radius: 6px; padding: 12px 12px 8px; }
+  .ifig-svg-box h5 { font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--ink); margin: 0 0 6px; }
+  .ifig-svg-box svg { display: block; width: 100%; height: auto; overflow: visible; }
+  @media (max-width: 640px) { .ifig-svg-grid { grid-template-columns: 1fr; } }
 
   /* ---------- Footer ---------- */
   footer {
@@ -286,7 +501,7 @@
   }
   footer a { color: var(--accent); }
 
-  section[id], h3[id], h4[id] { scroll-margin-top: 76px; }
+  section[id], h3[id], h4[id], div[id] { scroll-margin-top: 76px; }
 
   /* ---------- Responsive ---------- */
   @media (max-width: 1240px) { .toc-rail { display: none; } }
@@ -304,104 +519,144 @@
     main { padding: 32px 16px 80px; }
     article > header h1 { font-size: 34px; }
     article > header .subtitle { font-size: 19px; }
-    article h2 { font-size: 26px; margin-top: 64px; }
-    article h3 { font-size: 21px; }
+    article h2 { font-size: 26px; margin-top: 52px; }
+    article h3 { font-size: 20px; }
     .grade-key { grid-template-columns: 1fr; }
-    article .formula-display { font-size: 17px; text-align: left; }
+    article .formula-display { font-size: 16.5px; text-align: left; }
   }
 </style>
 </head>
 <body>
 
 <header class="site-header">
-  <a href="#top" class="brand"><span class="mark" aria-hidden="true">∇</span>RL Algorithms <em>a survey</em></a>
+  <a href="#top" class="brand"><span class="mark" aria-hidden="true">∇</span>RL Algorithms <em>for the Mathematically Inclined</em></a>
   <div class="search-bar">
-    <input type="search" id="searchBox" placeholder="Search the survey" aria-label="Search the survey" />
+    <input type="search" id="searchBox" placeholder="Search the survey…" aria-label="Search the survey" />
   </div>
   <nav class="aux-nav">
+    <a href="core-logic/index.html">中文核心逻辑</a>
     <a href="https://chenggong-zhang.github.io/" target="_blank">Homepage</a>
-    <a href="https://chenggong-zhang.github.io/blog/" target="_blank">Blog</a>
-    <a href="https://chenggong-zhang.github.io/RL_infra/" target="_blank">Infra survey</a>
+    <a href="https://chenggong-zhang.github.io/RL_infra/" target="_blank">Infra Survey</a>
     <a href="https://github.com/KWQ-1234/RL_algorithms" target="_blank">Source</a>
   </nav>
 </header>
 
 <aside class="site-nav">
-  <div class="nav-heading">Survey</div>
+  <div class="nav-heading">Overview</div>
   <ul>
-    <li><a href="#top" class="nav-link active">Opening</a></li>
-    <li><a href="#why" class="nav-link">Preface</a></li>
-    <li><a href="#how-to-read" class="nav-link">How to read this survey</a></li>
+    <li><a href="#top" class="nav-link active">Abstract &amp; Grade Key</a></li>
+    <li><a href="#why" class="nav-link">Preface &amp; How to Read</a></li>
+  </ul>
+
+  <div class="nav-heading">I · First Principles</div>
+  <ul>
     <li class="nav-collapsible" data-nav-collapsible>
       <div class="nav-row">
-        <a href="#skeleton" class="nav-link">The skeleton</a>
-        <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="skeleton-subs" aria-label="Collapse skeleton subsections"></button>
+        <a href="#core-logic" class="nav-link">1. Three Layers &amp; the Ceiling</a>
+        <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="nav-ch1" aria-label="Collapse Chapter 1 subsections"></button>
       </div>
-      <ul id="skeleton-subs" class="nav-sublist">
-        <li><a href="#skel-steps" class="nav-sublink">One update, seven steps</a></li>
-        <li><a href="#skel-knobs" class="nav-sublink">Three knobs</a></li>
-        <li><a href="#skel-identity" class="nav-sublink">The r ≡ 1 identity</a></li>
-        <li><a href="#skel-names" class="nav-sublink">Names as knob settings</a></li>
+      <ul id="nav-ch1" class="nav-sublist">
+        <li><a href="#what-rl-changes" class="nav-sublink">Law I: Emergence vs. sharpening</a></li>
+        <li><a href="#case-spurious" class="nav-sublink">Case: Spurious rewards</a></li>
+        <li><a href="#post-training-spectrum" class="nav-sublink">Law II: DPO-to-OPD spectrum</a></li>
       </ul>
     </li>
-    <li><a href="#tension" class="nav-link">Why the estimator is not enough</a></li>
+    <li class="nav-collapsible" data-nav-collapsible>
+      <div class="nav-row">
+        <a href="#skeleton" class="nav-link">2. Core Algorithms &amp; Framework</a>
+        <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="nav-ch2" aria-label="Collapse Chapter 2 subsections"></button>
+      </div>
+      <ul id="nav-ch2" class="nav-sublist">
+        <li><a href="#skel-evolution" class="nav-sublink">REINFORCE → PPO → GRPO → DAPO</a></li>
+        <li><a href="#skel-knobs" class="nav-sublink">Unified canonical estimator</a></li>
+        <li><a href="#skel-identity" class="nav-sublink">The r ≡ 1 collapse theorem</a></li>
+        <li><a href="#coordinate-atlas" class="nav-sublink">Two-Layer Coordinates (A/B/C/D)</a></li>
+        <li><a href="#coordinate-interactions" class="nav-sublink">4-Quadrant ratio &amp; credit maps</a></li>
+        <li><a href="#coordinate-verification" class="nav-sublink">Same/Cross-cell verification</a></li>
+        <li><a href="#axes" class="nav-sublink">Three-tier verdict matrix</a></li>
+      </ul>
+    </li>
+    <li class="nav-collapsible" data-nav-collapsible>
+      <div class="nav-row">
+        <a href="#tension" class="nav-link">3. The Measurement Problem</a>
+        <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="nav-ch3" aria-label="Collapse Chapter 3 subsections"></button>
+      </div>
+      <ul id="nav-ch3" class="nav-sublist">
+        <li><a href="#case-dapo-table" class="nav-sublink">Case: DAPO's ablation table</a></li>
+        <li><a href="#case-scalerl" class="nav-sublink">Case: ScaleRL &amp; ceilings</a></li>
+      </ul>
+    </li>
   </ul>
 
-  <div class="nav-heading">Design axes</div>
+  <div class="nav-heading">II · Estimator Correctness</div>
   <ul>
-    <li><a href="#axes" class="nav-link">Eight axes at a glance</a></li>
-    <li><a href="#advantage" class="nav-link">① Advantage &amp; baseline</a></li>
-    <li><a href="#normalization" class="nav-link">② Normalization</a></li>
-    <li><a href="#aggregation" class="nav-link">③ Loss aggregation</a></li>
-    <li><a href="#trust-region" class="nav-link">④ Clipping &amp; trust regions</a></li>
-    <li><a href="#kl-entropy" class="nav-link">⑤ KL &amp; entropy</a></li>
-    <li><a href="#off-policy" class="nav-link">⑥ Off-policy &amp; mismatch</a></li>
-    <li><a href="#data-sampling" class="nav-link">⑦ Data &amp; sampling</a></li>
-    <li><a href="#reward" class="nav-link">⑧ Reward &amp; verifiers</a></li>
+    <li class="nav-collapsible" data-nav-collapsible>
+      <div class="nav-row">
+        <a href="#correctness" class="nav-link">4. Five Correctness Constraints</a>
+        <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="nav-ch4" aria-label="Collapse Chapter 4 subsections"></button>
+      </div>
+      <ul id="nav-ch4" class="nav-sublist">
+        <li><a href="#advantage" class="nav-sublink">① Advantage &amp; λ = 1</a></li>
+        <li><a href="#case-weak-baseline" class="nav-sublink">Case: Vanishing 10-pt gain</a></li>
+        <li><a href="#correctness-gaps" class="nav-sublink">Two gaps &amp; MoE replay</a></li>
+        <li><a href="#correctness-kl" class="nav-sublink">KL gradients &amp; batch reuse</a></li>
+      </ul>
+    </li>
   </ul>
 
-  <div class="nav-heading">The layer beneath</div>
+  <div class="nav-heading">III · System &amp; Off-Policy</div>
   <ul>
-    <li><a href="#what-rl-changes" class="nav-link">What RL actually changes</a></li>
-    <li><a href="#base-model" class="nav-link">Base models &amp; the ceiling</a></li>
+    <li><a href="#trust-region" class="nav-link">5. Clipping, IS &amp; Mismatch</a></li>
   </ul>
 
-  <div class="nav-heading">Algorithm families</div>
+  <div class="nav-heading">IV · Objectives, Data &amp; Reward</div>
   <ul>
-    <li><a href="#preference" class="nav-link">DPO &amp; preference optimization</a></li>
-    <li><a href="#prm-credit" class="nav-link">Process rewards &amp; credit</a></li>
-    <li><a href="#agentic" class="nav-link">Agentic multi-turn RL</a></li>
+    <li><a href="#normalization" class="nav-link">6. Implicit Objectives &amp; Length</a></li>
+    <li><a href="#data-sampling" class="nav-link">7. Batch, Length &amp; Verifiers</a></li>
   </ul>
 
-  <div class="nav-heading">Evidence case studies</div>
+  <div class="nav-heading">V · Families &amp; Practice</div>
   <ul>
-    <li><a href="#case-scalerl" class="nav-link">ScaleRL · ceiling vs efficiency</a></li>
-    <li><a href="#case-dapo-table" class="nav-link">DAPO's ablation table</a></li>
-    <li><a href="#case-weak-baseline" class="nav-link">A vanishing 10-point gain</a></li>
-    <li><a href="#case-spurious" class="nav-link">Spurious rewards</a></li>
-    <li><a href="#case-frontier" class="nav-link">Frontier recipes</a></li>
-    <li><a href="#recent" class="nav-link">Recent results</a></li>
+    <li class="nav-collapsible" data-nav-collapsible>
+      <div class="nav-row">
+        <a href="#preference" class="nav-link">8. DPO, PRM, Agents &amp; OPD</a>
+        <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="nav-ch8" aria-label="Collapse Chapter 8 subsections"></button>
+      </div>
+      <ul id="nav-ch8" class="nav-sublist">
+        <li><a href="#prm-credit" class="nav-sublink">Process rewards &amp; credit</a></li>
+        <li><a href="#agentic" class="nav-sublink">Agentic multi-turn RL</a></li>
+        <li><a href="#beyond" class="nav-sublink">On-policy distillation</a></li>
+      </ul>
+    </li>
+    <li class="nav-collapsible" data-nav-collapsible>
+      <div class="nav-row">
+        <a href="#case-frontier" class="nav-link">9. Frontier, Code &amp; Pitfalls</a>
+        <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="nav-ch9" aria-label="Collapse Chapter 9 subsections"></button>
+      </div>
+      <ul id="nav-ch9" class="nav-sublist">
+        <li><a href="#landscape" class="nav-sublink">25-method landscape</a></li>
+        <li><a href="#code" class="nav-sublink">Reading verl code</a></li>
+        <li><a href="#pitfalls" class="nav-sublink">12 algorithmic pitfalls</a></li>
+      </ul>
+    </li>
   </ul>
 
-  <div class="nav-heading">Putting it together</div>
+  <div class="nav-heading">VI · Synthesis &amp; Playbook</div>
   <ul>
-    <li><a href="#patterns" class="nav-link">Patterns · algebraic view</a></li>
-    <li><a href="#code" class="nav-link">Reading real code</a></li>
-    <li><a href="#landscape" class="nav-link">Algorithm landscape</a></li>
-    <li><a href="#beyond" class="nav-link">Beyond verifiable rewards</a></li>
-    <li><a href="#scaling" class="nav-link">Scaling chain</a></li>
-    <li><a href="#pitfalls" class="nav-link">Pitfalls (踩坑录)</a></li>
-    <li><a href="#checklist" class="nav-link">Researcher's checklist</a></li>
+    <li class="nav-collapsible" data-nav-collapsible>
+      <div class="nav-row">
+        <a href="#patterns" class="nav-link">10. Laws, Diagnostics &amp; Guide</a>
+        <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="nav-ch10" aria-label="Collapse Chapter 10 subsections"></button>
+      </div>
+      <ul id="nav-ch10" class="nav-sublist">
+        <li><a href="#diagnostics" class="nav-sublink">WandB Diagnostic Atlas</a></li>
+        <li><a href="#scaling" class="nav-sublink">5-link scaling chain</a></li>
+        <li><a href="#decision-guide" class="nav-sublink">Decision guide &amp; checklist</a></li>
+        <li><a href="#frontier-battlegrounds" class="nav-sublink">5 frontier battlegrounds</a></li>
+      </ul>
+    </li>
+    <li><a href="#experiments" class="nav-link">11. Experiments, Open &amp; Reading</a></li>
   </ul>
-
-  <div class="nav-heading">Going further</div>
-  <ul>
-    <li><a href="#decision-guide" class="nav-link">Decision guide</a></li>
-    <li><a href="#experiments" class="nav-link">Twelve small experiments</a></li>
-    <li><a href="#open" class="nav-link">Open questions</a></li>
-    <li><a href="#reading" class="nav-link">Reading list</a></li>
-  </ul>
-
 </aside>
 
 <div class="main-wrap">
@@ -412,98 +667,101 @@
   </main>
 
   <aside class="toc-rail">
-    <h4>Survey</h4>
+    <h4>Overview</h4>
     <ul>
-      <li><a href="#why">Preface</a></li>
-      <li><a href="#how-to-read">How to read this survey</a></li>
-      <li><a href="#skeleton">The skeleton</a></li>
-      <li><a href="#tension">Why the estimator is not enough</a></li>
+      <li><a href="#why">Preface: Target π* vs. Path</a></li>
     </ul>
 
-    <h4>Design axes</h4>
+    <h4>I · First Principles</h4>
     <ul>
-      <li><a href="#axes">Eight axes at a glance</a></li>
-      <li><a href="#advantage">① Advantage &amp; baseline</a></li>
-      <li><a href="#normalization">② Normalization</a></li>
-      <li><a href="#aggregation">③ Loss aggregation</a></li>
-      <li><a href="#trust-region">④ Clipping &amp; trust regions</a></li>
-      <li><a href="#kl-entropy">⑤ KL &amp; entropy</a></li>
-      <li><a href="#off-policy">⑥ Off-policy &amp; mismatch</a></li>
-      <li><a href="#data-sampling">⑦ Data &amp; sampling</a></li>
-      <li><a href="#reward">⑧ Reward &amp; verifiers</a></li>
-    </ul>
-
-    <h4>The layer beneath</h4>
-    <ul>
-      <li><a href="#what-rl-changes">What RL actually changes</a></li>
-      <li><a href="#base-model">Base models &amp; the ceiling</a></li>
-    </ul>
-
-    <h4>Algorithm families</h4>
-    <ul>
-      <li><a href="#preference">DPO &amp; preference optimization</a></li>
-      <li><a href="#prm-credit">Process rewards &amp; credit</a></li>
-      <li><a href="#agentic">Agentic multi-turn RL</a></li>
-    </ul>
-
-    <h4>Evidence case studies</h4>
-    <ul>
-      <li><a href="#case-scalerl">ScaleRL · ceiling vs efficiency</a></li>
+      <li><a href="#core-logic">1. Variational Foundations</a></li>
+      <li><a href="#what-rl-changes">Law I: Emergence vs. sharpening</a></li>
+      <li><a href="#case-spurious">Case: Spurious rewards</a></li>
+      <li><a href="#post-training-spectrum">Law II: DPO-to-OPD spectrum</a></li>
+      <li><a href="#skeleton">2. Landmarks &amp; Two-Layer Coordinates</a></li>
+      <li><a href="#skel-evolution">REINFORCE → PPO → GRPO → DAPO</a></li>
+      <li><a href="#coordinate-atlas">Two-Layer Table (A / B / C / D)</a></li>
+      <li><a href="#coordinate-interactions">4-Quadrant Ratio &amp; Credit Maps</a></li>
+      <li><a href="#coordinate-verification">Same / Cross-Cell Verification</a></li>
+      <li><a href="#axes">Category I–III verdict map</a></li>
+      <li><a href="#tension">3. Law V: Identifiability</a></li>
       <li><a href="#case-dapo-table">DAPO's ablation table</a></li>
-      <li><a href="#case-weak-baseline">A vanishing 10-point gain</a></li>
-      <li><a href="#case-spurious">Spurious rewards</a></li>
-      <li><a href="#case-frontier">Frontier recipes</a></li>
-      <li><a href="#recent">Recent results</a></li>
+      <li><a href="#case-scalerl">ScaleRL &amp; ceilings</a></li>
     </ul>
 
-    <h4>Putting it together</h4>
+    <h4>II · Correctness (Cat. I)</h4>
     <ul>
-      <li><a href="#patterns">Patterns · algebraic view</a></li>
-      <li><a href="#code">Reading real code</a></li>
-      <li><a href="#landscape">Algorithm landscape</a></li>
-      <li><a href="#beyond">Beyond verifiable rewards</a></li>
-      <li><a href="#scaling">Scaling chain</a></li>
-      <li><a href="#pitfalls">Pitfalls (踩坑录)</a></li>
-      <li><a href="#checklist">Researcher's checklist</a></li>
+      <li><a href="#correctness">4. Five Must-Haves</a></li>
+      <li><a href="#advantage">① Advantage &amp; λ = 1</a></li>
+      <li><a href="#case-weak-baseline">Vanishing 10-pt gain</a></li>
+      <li><a href="#correctness-gaps">Two gaps &amp; MoE R3</a></li>
     </ul>
 
-    <h4>Going further</h4>
+    <h4>III · Off-Policy (Cat. II)</h4>
     <ul>
+      <li><a href="#trust-region">5. Law III: Softmax Asymmetry</a></li>
+      <li><a href="#off-policy">IS &amp; staleness budget</a></li>
+    </ul>
+
+    <h4>IV · Objectives (Cat. III)</h4>
+    <ul>
+      <li><a href="#normalization">6. Prompt ODE F(p) &amp; Length</a></li>
+      <li><a href="#aggregation">③ Loss aggregation</a></li>
+      <li><a href="#data-sampling">7. Bandwidth, Length &amp; Reward</a></li>
+      <li><a href="#reward">⑧ Verifiers &amp; hacking</a></li>
+    </ul>
+
+    <h4>V · Families &amp; Code</h4>
+    <ul>
+      <li><a href="#preference">8. DPO, PRM, Agents, OPD</a></li>
+      <li><a href="#case-frontier">9. Frontier, Code &amp; Pitfalls</a></li>
+      <li><a href="#code">Reading verl code</a></li>
+      <li><a href="#pitfalls">12 pitfalls (踩坑录)</a></li>
+    </ul>
+
+    <h4>VI · Synthesis &amp; Atlas</h4>
+    <ul>
+      <li><a href="#patterns">10. Six Laws &amp; Guide</a></li>
+      <li><a href="#diagnostics">WandB Diagnostic Atlas</a></li>
       <li><a href="#decision-guide">Decision guide</a></li>
-      <li><a href="#experiments">Twelve small experiments</a></li>
+      <li><a href="#checklist">12-question checklist</a></li>
+      <li><a href="#frontier-battlegrounds">5 frontier battlegrounds</a></li>
+      <li><a href="#experiments">11. Experiments &amp; Open</a></li>
       <li><a href="#open">Open questions</a></li>
       <li><a href="#reading">Reading list</a></li>
     </ul>
-
   </aside>
 </div>
 
 <script>
-// Active-link tracking spans both sidebars: left nav (.nav-link) and right toc-rail (.toc-rail a)
-const navLinks = document.querySelectorAll('.nav-link, .toc-rail a');
-const sections = document.querySelectorAll('article section, article > header');
+const navLinks = document.querySelectorAll('.nav-link, .nav-sublink, .toc-rail a');
+const observedTargets = document.querySelectorAll('article section[id], article h3[id], article div[id], article > header');
 
 const observer = new IntersectionObserver(entries => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
       const id = entry.target.id;
       if (!id) return;
+      let matched = false;
       navLinks.forEach(a => {
-        a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+        if (a.getAttribute('href') === '#' + id) matched = true;
       });
+      if (matched) {
+        navLinks.forEach(a => {
+          a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+        });
+      }
     }
   });
-}, { rootMargin: '-80px 0px -70% 0px' });
-sections.forEach(s => { if (s.id) observer.observe(s); });
+}, { rootMargin: '-80px 0px -72% 0px' });
+observedTargets.forEach(s => { if (s.id) observer.observe(s); });
 
 document.querySelectorAll('[data-nav-collapsible]').forEach(item => {
   const toggle = item.querySelector('.nav-toggle');
   if (!toggle) return;
-
   toggle.addEventListener('click', () => {
     const collapsed = item.classList.toggle('is-collapsed');
     toggle.setAttribute('aria-expanded', String(!collapsed));
-    toggle.setAttribute('aria-label', collapsed ? 'Expand skeleton subsections' : 'Collapse skeleton subsections');
   });
 });
 

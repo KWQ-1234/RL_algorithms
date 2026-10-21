@@ -1,0 +1,318 @@
+      <section id="core-logic">
+        <div class="part-banner">
+          <div class="part-kicker">Part I · Variational Foundations, Emergence &amp; The Unified Spectrum</div>
+          <p class="part-desc">Deriving the exact target distribution of RL post-training, resolving the paradox of support sharpening vs. compositional emergence in parameter space, and unifying SFT, DPO, RLVR, PRMs, and On-Policy Distillation along two information-theoretic coordinates.</p>
+        </div>
+        <h2>1. Variational Foundations: Support Conservation, Compositional Emergence &amp; The Post-Training Spectrum</h2>
+
+        <p>Every post-training algorithm for an autoregressive language model $\pi_\theta(y_{1:T} \mid x) = \prod_{t=1}^T \pi_\theta(y_t \mid x, y_{&lt;t})$ is an attempt to solve a single variational problem under finite samples and finite compute. Understanding that variational problem—and where its tabular approximation breaks down in neural parameter space—immediately resolves the deepest debates in the post-training literature.</p>
+
+        <h3 id="layer-objective">1.1 The Three-Layer Variational Reduction</h3>
+
+        <p><strong>Layer 1 (The Functional Objective).</strong> Given a prompt distribution $\mathcal{D}$, a black-box reward or verifier $R(x, y) \in \mathbb{R}$, and a reference policy $\pi_{\text{ref}}$, we seek a policy $\pi$ that maximizes expected reward subject to a reverse Kullback–Leibler divergence budget:</p>
+
+        <div class="formula-display">$$\max_{\pi}\; \mathcal{J}_{\beta}(\pi) = \mathbb{E}_{x \sim \mathcal{D}}\!\left[\mathbb{E}_{y \sim \pi(\cdot \mid x)}\big[R(x, y)\big] - \beta\,D_{\text{KL}}\!\big(\pi(\cdot \mid x)\,\big\|\,\pi_{\text{ref}}(\cdot \mid x)\big)\right]$$</div>
+
+        <p>Why does RL differ fundamentally from supervised fine-tuning (SFT)? First, <strong>the sampling measure $\pi_\theta(\cdot \mid x)$ depends on the parameters $\theta$</strong>: optimization moves the very distribution from which training data is drawn. Second, <strong>$R(x, y)$ is non-differentiable with respect to discrete tokens $y_{1:T}$</strong>. Differentiating $\mathbb{E}_{y \sim \pi_\theta}[R(x, y)]$ therefore requires the score-function (log-derivative) identity $\nabla_\theta \pi_\theta(y\mid x) = \pi_\theta(y\mid x)\nabla_\theta \log \pi_\theta(y\mid x)$:</p>
+
+        <div class="formula-display">$$\nabla_\theta \mathbb{E}_{y \sim \pi_\theta}[R(x, y)] = \mathbb{E}_{y \sim \pi_\theta(\cdot \mid x)}\!\left[\big(R(x, y) - b(x)\big)\sum_{t=1}^{|y|} \nabla_\theta \log \pi_\theta(y_t \mid x, y_{&lt;t})\right]$$</div>
+
+        <p>where any prompt-only baseline $b(x)$ has zero expectation under $\pi_\theta$ because $\mathbb{E}_{y\sim\pi_\theta}[\nabla_\theta \log \pi_\theta(y\mid x)] = \nabla_\theta \sum_y \pi_\theta(y\mid x) = \nabla_\theta 1 = 0$.</p>
+
+        <p id="layer-target"><strong>Layer 2 (The Closed-Form Gibbs Target &amp; Implicit Mirror-Descent Duality).</strong> Because $\mathcal{J}_\beta(\pi)$ is strictly concave in $\pi(\cdot \mid x)$ on the probability simplex, setting its functional Euler–Lagrange derivative $\frac{\delta \mathcal{J}_\beta}{\delta \pi(y\mid x)} = R(x,y) - \beta \log \frac{\pi(y\mid x)}{\pi_{\text{ref}}(y\mid x)} - \beta - \lambda(x) = 0$ yields the unique global optimizer:</p>
+
+        <div class="formula-display">$$\pi^*(y \mid x) = \frac{1}{Z(x)}\,\pi_{\text{ref}}(y \mid x)\,\exp\!\left(\frac{R(x, y)}{\beta}\right), \qquad Z(x) = \sum_{y'} \pi_{\text{ref}}(y' \mid x)\,\exp\!\left(\frac{R(x, y')}{\beta}\right)$$</div>
+
+        <p>This is <strong>exponential tilting (Gibbs reweighting)</strong> of the reference prior $\pi_{\text{ref}}$. Even when modern verifiable-reward RL (RLVR) sets the explicit KL penalty coefficient to $\beta = 0$ (<a href="#kl-entropy">Chapter 7.3</a>), this equation still governs the trajectory of training. Why? Because policy gradient with step size $\eta$ performs entropic mirror descent starting from $\pi_0 = \pi_{\text{ref}}$:</p>
+
+        <div class="formula-display">$$\pi_{k+1}(y \mid x) \;\propto\; \pi_k(y \mid x)\,\exp\!\big(\eta\,\hat{A}_k(x, y)\big) \quad\Longrightarrow\quad \pi_K(y \mid x) \;\propto\; \pi_{\text{ref}}(y \mid x)\,\exp\!\left(\eta \sum_{k=0}^{K-1} \hat{A}_k(x, y)\right)$$</div>
+
+        <p>Under stationary advantages, $K$ mirror-descent updates of step size $\eta$ trace the exact exponential-tilting family with an <strong>implicit temperature $\beta_{\text{eff}} \propto (\eta K)^{-1}$</strong>. Removing the explicit KL anchor simply lets $\beta_{\text{eff}} \to 0$ as $K$ grows—proving why an explicit KL penalty to $\pi_{\text{ref}}$ is mathematically dual to early stopping along the reward–KL Pareto frontier (<a href="https://arxiv.org/abs/2210.10760">Gao et al., 2210.10760</a>). Three immediate laws follow from the Gibbs solution $\pi^*(y\mid x) \propto \pi_{\text{ref}}(y\mid x)\exp(R/\beta)$:</p>
+
+        <ol>
+          <li><strong>Function-space support conservation ($\operatorname{supp}(\pi^*) \subseteq \operatorname{supp}(\pi_{\text{ref}})$).</strong> Wherever $\pi_{\text{ref}}(y \mid x) = 0$, multiplying by $\exp(R(x,y)/\beta)$ still yields strictly zero (`y9` in Figure 1 below). In non-parametric function space on a single prompt, RL reweights existing probability mass; it cannot create support ex nihilo.</li>
+          <li><strong>Mode sharpening as $\beta_{\text{eff}} \to 0$.</strong> As $\beta_{\text{eff}}$ shrinks, mass drains exponentially from suboptimal completions onto the highest-reward modes inside $\operatorname{supp}(\pi_{\text{ref}})$, raising single-sample accuracy ($\text{pass@1}$) while contracting distribution entropy and large-$k$ sample diversity.</li>
+          <li><strong>Exponential proxy amplification (Goodhart's Law).</strong> Whenever the reward function $R(x, y)$ assigns a false positive or inflated score to a degenerate sequence (`y7` in Figure 1) that also enjoys non-negligible prior mass $\pi_{\text{ref}}(y_7 \mid x)$, driving $\beta_{\text{eff}} \to 0$ concentrates $100\%$ of the asymptotic probability mass onto the hack. Reward hacking is not an optimization bug; it is the exact analytical optimum of $\mathcal{J}_\beta$ under an imperfect proxy $R$.</li>
+        </ol>
+
+        <figure class="ifig" id="tilt-fig" aria-label="Interactive demonstration of exponential tilting">
+          <div class="ifig-head">
+            <span class="ifig-title">Figure 1 (Interactive) · Exponential Tilting $\pi^*(y\mid x) \propto \pi_{\text{ref}}(y\mid x)\exp(R/\beta)$</span>
+            <span class="ifig-sub">Drag $\beta$ from $10$ (weak tilt) to $0.02$ (hard sharpening / large $\eta K$) on a 9-response prompt</span>
+          </div>
+          <div class="ifig-ctrl">
+            <label for="beta-slider">Temperature $\beta$ (large $\to$ small)</label>
+            <input id="beta-slider" class="ifig-range" type="range" min="0" max="1000" value="480" aria-describedby="beta-out">
+            <output id="beta-out" for="beta-slider">β = 0.25</output>
+          </div>
+          <div class="tilt-bars" id="tilt-bars" aria-hidden="true"></div>
+          <div class="tilt-labels" id="tilt-labels" aria-hidden="true"></div>
+          <div class="ifig-legend">
+            <span><i class="l-ref"></i>$\pi_{\text{ref}}$ (dashed outline)</span>
+            <span><i style="background: var(--grade-a)"></i>Correct ($R = 1$)</span>
+            <span><i style="background: #9aa0ad"></i>Incorrect ($R = 0$)</span>
+            <span><i style="background: var(--grade-c)"></i><code>y7</code>: Reward-hacked false positive ($R = 1.15$, wrong)</span>
+            <span><i style="border: 1.5px solid var(--grade-a)"></i><code>y9</code>: Correct, but $\pi_{\text{ref}}(y_9) = 0$</span>
+          </div>
+          <div class="ifig-readouts">
+            <div class="ifig-ro proxy"><div class="k">Proxy reward $\mathbb{E}_{\pi^*}[R]$</div><div class="v" id="ro-proxy">–</div></div>
+            <div class="ifig-ro true"><div class="k">True accuracy (pass@1)</div><div class="v" id="ro-true">–</div></div>
+            <div class="ifig-ro hackm"><div class="k">Mass on hacked <code>y7</code></div><div class="v" id="ro-hack">–</div></div>
+            <div class="ifig-ro"><div class="k">Mass on unseen <code>y9</code></div><div class="v" id="ro-unseen">0.0%</div></div>
+          </div>
+          <div class="tilt-curve" id="tilt-curve">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <polyline id="pl-proxy" class="c-proxy" vector-effect="non-scaling-stroke" points=""></polyline>
+              <polyline id="pl-true" class="c-true" vector-effect="non-scaling-stroke" points=""></polyline>
+              <line id="ln-now" class="c-now" vector-effect="non-scaling-stroke" x1="50" x2="50" y1="0" y2="100"></line>
+            </svg>
+          </div>
+          <figcaption><span class="fig-label">Figure 1.</span> Left to right on the horizontal axis, $\beta$ decreases from $10$ to $0.02$ (corresponding to more optimization steps $\eta K$ or weaker KL regularization). The <strong style="color: var(--accent)">blue curve</strong> is expected proxy reward $\mathbb{E}_{\pi^*}[R]$, which increases monotonically; the <strong style="color: var(--grade-a)">green curve</strong> is true accuracy, which <span id="peak-text">peaks around $\beta \approx 0.27$ and then collapses as mass concentrates on the reward-hacking response <code>y7</code></span>. Response <code>y9</code> stays at $0\%$ throughout: what $\pi_{\text{ref}}$ assigns zero support, tabular tilting never reaches.</figcaption>
+        </figure>
+
+        <script>
+        (function () {
+          var C = [
+            { id: "y1", kind: "ok", p: 0.22, r: 1 },
+            { id: "y2", kind: "ok", p: 0.10, r: 1 },
+            { id: "y3", kind: "bad", p: 0.25, r: 0 },
+            { id: "y4", kind: "bad", p: 0.18, r: 0 },
+            { id: "y5", kind: "bad", p: 0.12, r: 0 },
+            { id: "y6", kind: "ok", p: 0.04, r: 1 },
+            { id: "y7", kind: "hack", p: 0.03, r: 1.15 },
+            { id: "y8", kind: "bad", p: 0.06, r: 0 },
+            { id: "y9", kind: "unseen", p: 0, r: 1 }
+          ];
+          var B_MAX = 10, B_MIN = 0.02, YMAX = 1.2;
+          var L0 = Math.log(B_MAX), L1 = Math.log(B_MIN);
+
+          function betaAt(t) { return Math.exp(L0 + (L1 - L0) * t); }
+          function tilt(beta) {
+            var rmax = -Infinity;
+            C.forEach(function (c) { if (c.p > 0 && c.r > rmax) rmax = c.r; });
+            var w = C.map(function (c) { return c.p * Math.exp((c.r - rmax) / beta); });
+            var z = w.reduce(function (a, b) { return a + b; }, 0);
+            return w.map(function (x) { return x / z; });
+          }
+          function stats(pi) {
+            var proxy = 0, acc = 0, hack = 0, unseen = 0;
+            C.forEach(function (c, i) {
+              proxy += pi[i] * c.r;
+              if (c.kind === "ok" || c.kind === "unseen") acc += pi[i];
+              if (c.kind === "hack") hack += pi[i];
+              if (c.kind === "unseen") unseen += pi[i];
+            });
+            return { proxy: proxy, acc: acc, hack: hack, unseen: unseen };
+          }
+
+          var bars = document.getElementById("tilt-bars");
+          var labels = document.getElementById("tilt-labels");
+          [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+            var g = document.createElement("div");
+            g.className = "tilt-grid-line";
+            g.style.bottom = (v * 100) + "%";
+            g.innerHTML = "<span>" + v + "</span>";
+            bars.appendChild(g);
+          });
+          var tiltEls = C.map(function (c) {
+            var col = document.createElement("div");
+            col.className = "tilt-col " + c.kind;
+            var ref = document.createElement("div");
+            ref.className = "ref";
+            ref.style.height = (c.p * 100) + "%";
+            var t = document.createElement("div");
+            t.className = "tilt";
+            col.appendChild(t);
+            col.appendChild(ref);
+            if (c.kind === "unseen") {
+              var z = document.createElement("div");
+              z.className = "zero";
+              z.textContent = "0";
+              col.appendChild(z);
+            }
+            bars.appendChild(col);
+            var lab = document.createElement("div");
+            lab.textContent = c.id;
+            labels.appendChild(lab);
+            return t;
+          });
+
+          var N = 160, ptsP = [], ptsT = [], peak = { acc: 0, beta: 0 };
+          for (var k = 0; k <= N; k++) {
+            var tt = k / N, b = betaAt(tt), s = stats(tilt(b));
+            var x = (tt * 100).toFixed(2);
+            ptsP.push(x + "," + (100 - s.proxy / YMAX * 100).toFixed(2));
+            ptsT.push(x + "," + (100 - s.acc / YMAX * 100).toFixed(2));
+            if (s.acc > peak.acc) peak = { acc: s.acc, beta: b };
+          }
+          document.getElementById("pl-proxy").setAttribute("points", ptsP.join(" "));
+          document.getElementById("pl-true").setAttribute("points", ptsT.join(" "));
+          var curve = document.getElementById("tilt-curve");
+          [0, 0.4, 0.8, 1.2].forEach(function (v) {
+            var d = document.createElement("div");
+            d.className = "tick ty";
+            d.style.top = (100 - v / YMAX * 100) + "%";
+            d.textContent = v.toFixed(1);
+            curve.appendChild(d);
+          });
+          [10, 1, 0.1, 0.02].forEach(function (b) {
+            var d = document.createElement("div");
+            d.className = "tick tx";
+            d.style.left = ((Math.log(b) - L0) / (L1 - L0) * 100) + "%";
+            d.textContent = "β=" + b;
+            curve.appendChild(d);
+          });
+          document.getElementById("peak-text").textContent =
+            "peaks at " + Math.round(peak.acc * 100) + "% around β ≈ " + peak.beta.toFixed(2) +
+            " and then falls as y7 takes over";
+
+          var input = document.getElementById("beta-slider");
+          var out = document.getElementById("beta-out");
+          var now = document.getElementById("ln-now");
+          function pct(v) { return (v * 100).toFixed(1) + "%"; }
+          function syncSlider(el, valText) {
+            el.style.setProperty("--attr-min", el.min || 0);
+            el.style.setProperty("--attr-max", el.max || 1000);
+            el.style.setProperty("--control-value", el.value);
+            if (valText) el.setAttribute("aria-valuetext", valText);
+          }
+          function render() {
+            var t = input.value / 1000, b = betaAt(t), pi = tilt(b), s = stats(pi);
+            var label = "β = " + (b < 0.1 ? b.toFixed(3) : b.toFixed(2));
+            out.textContent = label;
+            syncSlider(input, label + ", true accuracy " + pct(s.acc));
+            tiltEls.forEach(function (el, i) { el.style.height = (pi[i] * 100) + "%"; });
+            document.getElementById("ro-proxy").textContent = s.proxy.toFixed(3);
+            document.getElementById("ro-true").textContent = pct(s.acc);
+            document.getElementById("ro-hack").textContent = pct(s.hack);
+            document.getElementById("ro-unseen").textContent = pct(s.unseen);
+            var x = (t * 100).toFixed(2);
+            now.setAttribute("x1", x); now.setAttribute("x2", x);
+          }
+          input.value = Math.round((Math.log(peak.beta) - L0) / (L1 - L0) * 1000);
+          input.addEventListener("input", render);
+          render();
+        })();
+        </script>
+
+        <h3 id="what-rl-changes">1.2 Law I · Resolving the Emergence Paradox: Function-Space Sharpening vs. Parameter-Space Compositional Transfer</h3>
+
+        <p>A central controversy in the 2025–2026 literature pits two observations against each other. On one hand, controlled pass@$k$ studies show that RL post-training raises $\text{pass@1}$ while leaving large-$k$ coverage $\text{pass@}k$ ($k \in [128, 1024]$) flat or lower than the base model (<a href="https://arxiv.org/abs/2504.13837">Yue et al., 2504.13837</a>; <a href="https://arxiv.org/abs/2507.14843">The Invisible Leash, 2507.14843</a>). On the other hand, long-horizon RL runs (such as DeepSeek-R1-Zero or ProRL; <a href="https://arxiv.org/abs/2505.24864">2505.24864</a>) clearly solve complex multi-step reasoning problems where the base model's empirical pass@128 was zero. How can both be true?</p>
+
+        <p>First-principles analysis resolves this immediately by distinguishing <strong>sequence-level tabular tilting</strong> from <strong>token-level parameter-coupled dynamics</strong>:</p>
+
+        <ol>
+          <li>
+            <strong>Why single-prompt tabular updates only sharpen:</strong> If $\pi(y \mid x)$ were parameterized as an independent lookup table for each full trajectory $y$ on prompt $x$, then any trajectory $y^*$ not sampled within the finite rollout budget $G$ receives zero positive gradient. Worse, because probability mass on the simplex sums to $1$, reinforcing the sampled correct trajectories drains mass from unsampled trajectories, causing $\text{pass@}k$ at large $k$ to contract toward the subset of modes hit early in training.
+          </li>
+          <li>
+            <strong>How shared parameters $\theta$ create exponential compositional lift across prompts:</strong> An LLM is not a trajectory lookup table; it is a parameter-shared Markov transition kernel $\pi_\theta(y_t \mid s_t)$ where $s_t = (x, y_{&lt;t})$. Under a gradient step $\Delta \theta = \eta \sum_{i, t} \hat{A}_{i,t} \nabla_\theta \log \pi_\theta(y_{i,t} \mid s_{i,t})$, the first-order change in log-probability for a trajectory $y'_{1:T'}$ on a <em>different, harder prompt</em> $x'$ is governed by the neural tangent (feature) kernel $\Theta_\theta(s, s') = \langle \nabla_\theta \log \pi_\theta(y_t \mid s), \nabla_\theta \log \pi_\theta(y'_{t'} \mid s') \rangle$:
+            <div class="formula-display">$$\Delta \log \pi_\theta(y'_{1:T'} \mid x') = \eta \sum_{t'=1}^{T'} \sum_{i \in \mathcal{B}} \sum_{t=1}^{|y_i|} \hat{A}_{i,t}\,\Theta_\theta\!\big((x', y'_{&lt;t'}),\; (x_i, y_{i,&lt;t})\big) + \mathcal{O}(\eta^2)$$</div>
+            Suppose solving a hard problem $x'$ requires chaining $m$ intermediate cognitive transitions (e.g., subgoal decomposition, self-verification, backtracking `"Wait, let me re-check..."`), each having a small prior transition probability $p_{\text{step}}$ under $\pi_{\text{ref}}$. Prior to RL, the joint probability of successfully chaining all $m$ verification steps is $P_{\text{ref}}(y^* \mid x') \propto p_{\text{step}}^m$—which for $p_{\text{step}} = 0.2$ and $m = 10$ is $10^{-7}$, completely invisible to $\text{pass@1024}$! However, if those same atomic verification transitions occur and succeed on <em>easier prompts</em> $x_i$ ($m = 1\text{ or }2$, where $p_{\text{step}} = 0.2$ is easily sampled within $G = 16$ rollouts), positive RL updates on $x_i$ increase the shared transition probability from $p_{\text{step}}$ to $p_{\text{step}} + \delta$. On the hard prompt $x'$, the trajectory probability is multiplied by:
+            <div class="formula-display">$$\frac{\pi_\theta(y^* \mid x')}{\pi_{\text{ref}}(y^* \mid x')} \;\approx\; \left(1 + \frac{\delta}{p_{\text{step}}}\right)^m \;\approx\; \exp\!\left(m\,\frac{\delta}{p_{\text{step}}}\right)$$</div>
+            Lifting an atomic verification transition from $p_{\text{step}} = 0.20$ to $0.50$ across $m = 10$ compositional steps raises the full trajectory's probability by $(2.5)^{10} \approx 9{,}500\times$, moving it from $10^{-7}$ (unreachable) into the $10^{-3}$ regime where on-policy rollouts on $x'$ can finally sample and reinforce it directly!
+          </li>
+        </ol>
+
+        <div class="technique-card">
+          <p><strong>Theorem 1 (Necessary &amp; Sufficient Conditions for Capability Expansion vs. Pure Sharpening).</strong> Outcome-reward RL expands effective reasoning coverage beyond empirical $\text{pass@}k(\pi_{\text{ref}})$ if and only if three conditions hold simultaneously:</p>
+          <ol>
+            <li><strong>Atomic motif support:</strong> The base model $\pi_{\text{ref}}$ already assigns non-trivial probability $p_{\text{step}} &gt; 0$ to atomic verification, decomposition, and backtracking transitions on solvable bridge prompts (<a href="https://arxiv.org/abs/2503.01307">Gandhi et al., 2503.01307</a>).</li>
+            <li><strong>Bridge curriculum density:</strong> The training set contains intermediate-difficulty prompts ($p_x \in (0.05, 0.80)$) where those atomic transitions correlate with higher binary reward $R(x, y)$.</li>
+            <li><strong>Entropy survival:</strong> Token-level policy entropy $\mathcal{H}(\pi_\theta(\cdot \mid s_t))$ is prevented from collapsing prematurely onto superficial formatting or majority-vote modes before cross-prompt kernel transfer $\Theta_\theta$ amplifies the multi-step compositions.</li>
+          </ol>
+          <p>When Condition 1 or 3 fails, RL degenerates into <strong>pure distribution sharpening</strong>, bounded above by the base model's majority-vote accuracy:</p>
+          <div class="formula-display">$$\text{pass@1}_{\text{pure-sharpening}}(\pi_\theta) \;\le\; \mathbb{E}_{x \sim \mathcal{D}}\!\Big[\mathbf{1}\big\{\arg\max_y \pi_{\text{ref}}(y \mid x) \in \mathcal{Y}^*(x)\big\}\Big] = \operatorname{maj@\infty}(\pi_{\text{ref}})$$</div>
+        </div>
+
+        <p id="base-model"><strong>How Theorem 1 denoises the "Sharpening vs. Expansion" and "Base Model Ceiling" literature:</strong></p>
+        <ul>
+          <li><strong>Why pass@$k$ shrinks on static single-difficulty runs:</strong> On Omni-MATH (<a href="https://arxiv.org/abs/2504.13837">Yue et al., 2504.13837</a>), standard GRPO raised pass@1 from $9.9\%$ to $42.5\%$ while pass@256 fell from $67.2\%$ to $64.3\%$, and on AIME-24 at $k=1{,}024$ the RL-solved set was a strict subset of the base model's. Similarly, tracking individual completions showed $163$ solutions leaving support versus $36$ entering (<a href="https://arxiv.org/abs/2507.14843">2507.14843</a>). In contrast, when ProRL trained for $2{,}000+$ steps with explicit KL/optimizer resets and curriculum progression, Reasoning Gym accuracy rose from $4.24\%$ to $59.06\%$, unlocking multi-step compositions that were empirically $0/128$ under $\pi_{\text{ref}}$ (<a href="https://arxiv.org/abs/2505.24864">2505.24864</a>; <a href="https://arxiv.org/abs/2610.04158">2610.04158</a>).</li>
+          <li id="base-transfer"><strong>Why priming atomic behaviors before RL dwarfs changing the RL loss:</strong> Llama-3.2-3B stalls under RL on Countdown because its pre-RL support lacks verification and backtracking motifs (Condition 1 fails). Fine-tuning Llama-3.2-3B on a small set of trajectories containing verification and backtracking motifs—<em>even when those priming trajectories end in incorrect final answers</em>—causes subsequent RL to match Qwen-2.5-3B's steep trajectory (<a href="https://arxiv.org/abs/2503.01307">Gandhi et al., 2503.01307</a>) <span class="grade grade-b">B</span>. Likewise, continuing pre-training on 220B math-rich tokens (OctoThinker, <a href="https://arxiv.org/abs/2506.20512">2506.20512</a>) closes the cross-family RL gap without touching the RL algorithm.</li>
+        </ul>
+
+        <div class="case-box" id="case-spurious">
+          <div class="case-kicker">Case Study 1 · The Pure-Sharpening Bound in Action</div>
+          <h4 id="base-qwen">Why random rewards add +21 points on Qwen2.5-Math and hurt Llama and OLMo</h4>
+          <p>Theorem 1's pure-sharpening bound ($\text{pass@1} \to \operatorname{maj@\infty}(\pi_{\text{ref}})$) immediately explains one of the most striking anomalies in the RLVR literature. Shao et al. (<a href="https://arxiv.org/abs/2506.10947">Spurious Rewards, 2506.10947</a>) trained Qwen2.5-Math-7B on MATH-500 using deliberately corrupted or uninformative rewards:</p>
+          <table class="verdict">
+            <thead>
+              <tr><th>Reward signal on Qwen2.5-Math-7B</th><th class="num">MATH-500 $\Delta$ (pts)</th><th>Transfer to Llama-3.1-8B / OLMo2-7B / OLMo 3</th><th>Grade</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Ground-truth verifier</td><td class="num">+29.1</td><td>Positive across all model families</td><td><span class="grade grade-a">A</span></td></tr>
+              <tr><td>Deliberately wrong labels</td><td class="num">+24.1</td><td>Degrades non-Qwen models</td><td><span class="grade grade-a">A</span> phenomenon</td></tr>
+              <tr><td>Random coin-flip reward ($R \sim \text{Ber}(0.5)$)</td><td class="num">+21.4</td><td><strong>Hurts</strong> Llama-3.1-8B ($-11.5$), OLMo2-7B ($-8.3$), OLMo 3 ($0.0$)</td><td><span class="grade grade-a">A</span> phenomenon</td></tr>
+              <tr><td>Format-only reward (boxed output)</td><td class="num">+13.8</td><td>Small or neutral on uncontaminated models</td><td><span class="grade grade-b">B</span></td></tr>
+            </tbody>
+          </table>
+          <p>Why does a zero-information reward produce a $+21.4$-point jump on Qwen2.5-Math-7B? Because Qwen2.5-Math-7B has an unusually large gap between its initial mean accuracy ($\text{pass@1}$) and its modal strategy accuracy ($\operatorname{maj@\infty}$), driven by two factors <span class="grade grade-a">A</span>:</p>
+          <ol>
+            <li><strong>Pre-existing high-accuracy modal strategy:</strong> Prior to RL, $65\%$ of Qwen2.5-Math-7B rollouts use Python code-reasoning ($60.9\%$ accuracy) while $35\%$ use prose ($28.0\%$ accuracy). Any update that sharpens the policy toward its dominant mode pushes Python usage to $95.6\%$ (<a href="https://arxiv.org/abs/2506.10947">2506.10947</a>), harvesting $+20+$ points without learning a single new mathematical fact. Even changing the prompt wrapper alone swings Qwen2.5-Math's pre-RL benchmark average from $0.0\%$ (R1 template) to $38.2\%$ (no template; <a href="https://arxiv.org/abs/2503.20783">Dr. GRPO, 2503.20783</a>).</li>
+            <li><strong>Pre-training benchmark contamination:</strong> Given the first $60\%$ of a MATH-500 problem, Qwen2.5-Math-7B completions reproduce the exact benchmark text $54.6\%$ of the time versus $3.8\%$ for Llama-3.1-8B (<a href="https://arxiv.org/abs/2507.10532">2507.10532</a>). On post-cutoff synthetic benchmarks—or on decontaminated models like OLMo 3 (<a href="https://arxiv.org/abs/2512.13961">2512.13961</a>) and Llama—random rewards yield $\le 0$ gain while ground-truth verifiers continue to work (<a href="https://arxiv.org/abs/2512.16912">2512.16912</a>).</li>
+          </ol>
+          <p><strong>First-principles takeaway:</strong> Any gain within the $\operatorname{maj@}k(\pi_{\text{ref}}) - \text{pass@1}(\pi_{\text{ref}})$ gap can be achieved by blind sharpening (including one-shot RLVR, <a href="https://arxiv.org/abs/2504.20571">2504.20571</a>, and label-free entropy minimization, <a href="https://arxiv.org/abs/2505.15134">2505.15134</a>). An RL algorithm only proves it extracts information from the reward to the extent that it <strong>beats a random-reward / format-only control on an uncontaminated base model</strong>.</p>
+        </div>
+
+        <h3 id="post-training-spectrum">1.3 Law II · The Unified Post-Training Spectrum (From SFT &amp; DPO to RLVR &amp; OPD)</h3>
+
+        <p id="layer-approximation">Why has the post-training field fractured into SFT, Rejection Sampling (RFT/ReST), Offline Preference Optimization (DPO/IPO/SimPO), Online Preference Optimization, Outcome-Reward RL (RLVR/GRPO), Process Reward Models (PRMs), and On-Policy Distillation (OPD)? From first principles, every paradigm is uniquely specified by **three mathematical coordinates** in how it approximates $\pi^*$:</p>
+
+        <ol>
+          <li><strong>Rollout Measure ($\mu$):</strong> Are training trajectories drawn from a static external distribution $\mu_{\text{off}}(y\mid x)$ (teacher or frozen dataset) or from the student's own live autoregressive distribution $\pi_\theta(y\mid x)$?</li>
+          <li><strong>Supervision Channel Capacity ($\mathcal{C}$, in bits per token):</strong> Does the supervision signal provide $\mathcal{O}(\log|\mathcal{V}|) \approx 10\text{ bits}$ at every token $t$, or a single binary scalar $R(x, y) \in \{0, 1\}$ with Shannon mutual information $I(R; Y\mid x) = H_{\text{Ber}}(p_x) \le 1\text{ bit}$ smeared across $T = 10^4$ tokens ($\le 10^{-4}\text{ bits/token}$)?</li>
+          <li><strong>Gradient Sign ($\text{sgn}(\hat{A})$):</strong> Does the update only push probability mass <em>up</em> on target tokens ($\hat{A} &gt; 0$, mode-covering forward KL), or does it also apply <em>negative</em> gradients ($\hat{A} &lt; 0$, mode-seeking reverse KL) to actively prune the student's false modes?</li>
+        </ol>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Post-Training Paradigm</th><th>Rollout Measure $\mu$</th><th>Supervision Bandwidth</th><th>Negative Gradient ($\hat{A} &lt; 0$)?</th><th>First-Principles Role &amp; Fundamental Bottleneck</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Supervised Fine-Tuning (SFT)</strong></td>
+              <td>Offline expert $\mu_{\text{expert}}$</td>
+              <td>$\mathcal{O}(\log|\mathcal{V}|)$ bits/token<br>($\sim 10^5$ bits/seq)</td>
+              <td>No ($\hat{A} \equiv +1$)</td>
+              <td><strong>Support injection:</strong> Expands $\operatorname{supp}(\pi_\theta)$ to cover expert demonstrations, but suffers <em>exposure bias</em> (never penalizes states $\pi_\theta$ visits at test time) and caps at the demonstrator's ceiling.</td>
+            </tr>
+            <tr>
+              <td><strong>Rejection Sampling SFT (RFT / ReST / RAFT)</strong></td>
+              <td>On-policy $\pi_\theta$ filtered to $R=1$</td>
+              <td>$\le 1$ bit/seq (selection only)</td>
+              <td>No ($\hat{A} \in \{0, +1\}$)</td>
+              <td><strong>Safe positive-only sharpening:</strong> Avoids negative-gradient collapse altogether, but wastes all $R=0$ rollouts and cannot actively suppress high-prior erroneous habits.</td>
+            </tr>
+            <tr>
+              <td><strong>Offline Preference (DPO, IPO, SimPO, KTO)</strong></td>
+              <td>Offline pair measure $\mu_{\text{off}}(y^+, y^-)$</td>
+              <td>$1$ bit per pair $(y^+, y^-)$</td>
+              <td>Yes (on offline $y^-$)</td>
+              <td><strong>Off-policy contrastive fitting:</strong> Substitutes $R = \beta\log(\pi_\theta/\pi_{\text{ref}})$ in closed form. Fails when $\pi_\theta$ drifts from $\mu_{\text{off}}$: pushing $\pi_\theta(y^-) \downarrow$ off-policy leaks probability mass into unobserved OOD completions (<a href="#preference">Chapter 8.1</a>).</td>
+            </tr>
+            <tr>
+              <td><strong>Online / Iterative DPO &amp; Outcome RLVR (PPO, GRPO, RLOO)</strong></td>
+              <td>On-policy student $\pi_\theta(y\mid x)$</td>
+              <td>$H_{\text{Ber}}(p_x) \le 1$ bit per $T$-token seq</td>
+              <td>Yes ($\hat{A}_i = R_i - \bar{R}_G \gtrless 0$)</td>
+              <td><strong>Specialist discovery without a teacher:</strong> Prunes errors on states $\pi_\theta$ actually visits and discovers solutions whenever verification is easier than generation. Bottlenecked by $\mathcal{O}(1/T)$ credit diffusion and $0$-bit dead zones at $p_x \in \{0, 1\}$.</td>
+            </tr>
+            <tr>
+              <td><strong>Process-Reward RL (PRM, VinePPO, PURE)</strong></td>
+              <td>On-policy student $\pi_\theta(y\mid x)$</td>
+              <td>$\mathcal{O}(T)$ bits/seq (per-step scores)</td>
+              <td>Yes (per step $t$)</td>
+              <td><strong>Dense credit assignment:</strong> Raises bandwidth to $\mathcal{O}(1)$ bit/step, but any non-telescoping learned step score $\phi_t \ne \Phi(s_{t+1}) - \Phi(s_t)$ changes $\pi^*$ and gets reward-hacked (<a href="#prm-credit">Chapter 8.2</a>).</td>
+            </tr>
+            <tr>
+              <td><strong>On-Policy Distillation (OPD, GKD, DeepSeek-V4)</strong></td>
+              <td>On-policy student $\pi_\theta(y\mid x)$</td>
+              <td>$\mathcal{O}(\log|\mathcal{V}|)$ bits/token<br>($\sim 10^5$ bits/seq)</td>
+              <td>Yes ($\hat{A}_{t} = \log\frac{\pi_{\text{teacher}}(y_t\mid s_t)}{\pi_\theta(y_t\mid s_t)}$)</td>
+              <td><strong>Optimal generalist consolidation:</strong> Combines on-policy state visitation ($y \sim \pi_\theta$) with dense token-level teacher log-ratios ($10^4\times$ higher bandwidth than RLVR, zero length bias). Requires a stronger specialist teacher to exist first (<a href="#beyond-opd">Chapter 8.4</a>).</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <aside class="note"><strong>Why this table explains the modern frontier pipeline.</strong> Look across the rows: no single paradigm dominates all three columns. SFT injects initial atomic motifs ($\operatorname{supp}(\pi_{\text{ref}})$); Outcome RLVR (GRPO/RLOO) is the <em>only</em> paradigm that can push beyond human/teacher demonstrations using a $1$-bit verifier, making it the engine for training domain specialists; and On-Policy Distillation (OPD) provides $10^4\times$ higher supervision bandwidth per token on the student's own rollouts, making it the mathematically optimal way to merge multiple RLVR specialists into a single generalist model (as in DeepSeek-V3.2, DeepSeek-V4, Qwen3, and GLM-4.5).</aside>
+      </section>

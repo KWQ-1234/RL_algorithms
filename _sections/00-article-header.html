@@ -1,14 +1,18 @@
-
       <header>
+        <div class="kicker">First-Principles Treatise · Target Fixed Points ($\pi^*$) vs. Approximation Paths</div>
         <h1>RL Algorithms for the Mathematically Inclined</h1>
-        <p class="subtitle">Which changes to LLM post-training actually matter, and how to tell</p>
-        <p class="abstract"><span class="runin">Abstract.</span> Since 2024, reinforcement learning for language models has produced a long list of named algorithms, each reporting gains. This survey reads them as settings of one policy-gradient estimator and judges each change along eight design axes, three algorithm families and five evidence case studies. Every verdict is stated for four quantities — the ceiling training reaches, the compute it takes, the stability of long runs, and side effects such as response length — and graded by the strength of its controlled evidence. It is a companion to <a href="https://chenggong-zhang.github.io/RL_infra/">RL Infrastructure for the Mathematically Inclined</a>, which asks the same question of the systems underneath.</p>
-        <p class="byline">About 130 minutes to read. Around 105 papers cited, with evidence current as of October 2026.</p>
-        <div class="grade-key" role="note" aria-label="Evidence grades used in this survey">
-          <span class="grade-key-title">Evidence grades used throughout</span>
-          <div><span class="grade grade-a">A</span><span>Several independent controlled studies agree</span></div>
-          <div><span class="grade grade-b">B</span><span>One controlled study, or a clear mathematical mechanism</span></div>
-          <div><span class="grade grade-c">C</span><span>Only the paper that proposed it</span></div>
-          <div><span class="grade grade-d">D</span><span>The evidence contradicts itself</span></div>
+        <p class="subtitle">A Two-Layer Coordinate System for Post-Training—Separating What Moves the Target $\pi^*$ (Layer A) from What Stabilizes the Off-Policy Path (Layers B–D), Audited Across 105 Primary Papers</p>
+        <p class="abstract">
+          <span class="runin">Abstract.</span> Flat five-axis taxonomies can index which line of code a post-training paper modified, but they miss the fundamental structural hierarchy of reinforcement learning: <strong>which choices determine <em>where</em> the policy converges (the target distribution or optimal solution set $\pi^*$), and which choices determine <em>how</em> it gets there (bias, variance, velocity $B$, and stability)?</strong> Starting from the regularized optimum $\pi^*(y\mid x) \propto \pi_{\text{ref}}(y\mid x)\exp(R(x,y)/\beta)$ and the canonical gradient $g = \sum_x w(p_x)\sum_{i,t} c_{i,t}\,\psi(r_{i,t}, \hat{A}_{i,t})\,\nabla_\theta\log\pi_\theta(y_{i,t})$, this treatise replaces flat indexing with a <strong>falsifiable Two-Layer Coordinate System</strong> conditioned on base-model support ($\pi_{\text{ref}}$) and compute: <strong>Layer A (Target Layer: Signal <code>A1</code>, Prompt Weighting <code>A2</code>, Length Weighting <code>A3</code>, Regularization <code>A4</code>)</strong> sets the target $\pi^*$ (or cross-prompt objective trade-off) and asymptotic ceiling $A$; <strong>Layer B (Operating Regime <code>B1</code>: off-policy reuse $\mu$, async lag $\tau$, engine/MoE drift)</strong> determines whether update control is active or algebraically empty ($r \equiv 1 \implies \texttt{C1} = \varnothing$); <strong>Layer C (Approximation Layer: 4-Quadrant Ratio Processing <code>C1</code>, Credit/Baseline <code>C2</code>, Effective KL Step <code>C3</code>)</strong> governs convergence velocity and off-policy stability (and selects among optimal modes on the $\beta=0$ simplex face); and <strong>Layer D (Derived Entropy &amp; Yield Dynamics)</strong> marks the phase boundary where approximation instabilities collapse reachable support. We test this coordinate system against controlled same-cell, cross-cell, and contradictory experiments across 105 papers, and conclude with the five frontier production battlegrounds that lie beyond single-benchmark RLVR.
+        </p>
+        <div class="byline">
+          Written by <a href="https://chenggong-zhang.github.io/">Chenggong Zhang</a> · October 2026 · Companion to <a href="https://chenggong-zhang.github.io/RL_infra/">RL Infrastructure for the Mathematically Inclined</a> &amp; <a href="core-logic/index.html">中文版：两层坐标体系与受控验证</a>
+        </div>
+        <div class="grade-key" aria-label="Evidence grade key">
+          <div class="grade-key-title">Evidence grades used throughout this treatise</div>
+          <div><span class="grade grade-a">A</span><span><strong>Established:</strong> Exact mathematical identity or multi-seed replication across independent model families.</span></div>
+          <div><span class="grade grade-b">B</span><span><strong>Supported:</strong> Controlled single-variable ablation or multi-seed study in one family with a verified mechanism.</span></div>
+          <div><span class="grade grade-c">C</span><span><strong>Suggestive:</strong> Single-seed run, bundled recipe claim, or small-benchmark observation without error bars.</span></div>
+          <div><span class="grade grade-d">D</span><span><strong>Fragile / Contested:</strong> Contradicted by controlled replication, confounded by a broken baseline, or inside the evaluation noise floor.</span></div>
         </div>
       </header>

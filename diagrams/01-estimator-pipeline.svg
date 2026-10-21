@@ -15,7 +15,7 @@
   <rect width="760" height="580" fill="#ffffff"/>
 
   <text x="380" y="34" text-anchor="middle" font-size="21" font-weight="600" fill="#18202e">One update, seven steps</text>
-  <text x="380" y="58" text-anchor="middle" font-size="14" fill="#5a6070">Each step is a design decision. Circled numbers are the axes of this survey.</text>
+  <text x="380" y="58" text-anchor="middle" font-size="14" fill="#5a6070">Each step maps to a coordinate in the Two-Layer Sufficiency System (Target A · Regime B · Approximation C).</text>
 
   <!-- Seven step boxes: row 1 left to right (1-4), row 2 right to left (5-7) -->
   <g text-anchor="middle" font-size="14" fill="#18202e">
@@ -23,37 +23,37 @@
     <text x="100" y="111" font-size="16" font-weight="600">1 · Sample</text>
     <text x="100" y="138">y ~ π<tspan font-size="10" dy="4">sampler</tspan><tspan dy="-4"></tspan></text>
     <text x="100" y="160" font-size="12.5" fill="#5a6070">G responses per prompt</text>
-    <text x="100" y="192" font-size="19" fill="#a35a12">⑥ ⑦</text>
+    <text x="100" y="192" font-size="14" font-weight="600" fill="#a35a12">Cond · B1 · D2</text>
     <rect x="202" y="84" width="160" height="124" rx="8" fill="#fff" stroke="#b08a1e" stroke-width="1.8"/>
     <text x="282" y="111" font-size="16" font-weight="600">2 · Score</text>
     <text x="282" y="138">r = R(x, y)</text>
     <text x="282" y="160" font-size="12.5" fill="#5a6070">verifier, RM, or judge</text>
-    <text x="282" y="192" font-size="19" fill="#a35a12">⑧</text>
+    <text x="282" y="192" font-size="14" font-weight="600" fill="#a35a12">A1 (Signal)</text>
     <rect x="384" y="84" width="160" height="124" rx="8" fill="#fff" stroke="#2a5da8" stroke-width="1.8"/>
     <text x="464" y="111" font-size="16" font-weight="600">3 · Baseline</text>
     <text x="464" y="138">Â = (r − b) / s</text>
-    <text x="464" y="160" font-size="12.5" fill="#5a6070">b, s per prompt or batch</text>
-    <text x="464" y="192" font-size="19" fill="#a35a12">① ②</text>
+    <text x="464" y="160" font-size="12.5" fill="#5a6070">b (credit), s (F(p) weight)</text>
+    <text x="464" y="192" font-size="14" font-weight="600" fill="#a35a12">C2 (b) · A2 (s)</text>
     <rect x="566" y="84" width="160" height="124" rx="8" fill="#fff" stroke="#4f4a9c" stroke-width="1.8"/>
     <text x="646" y="111" font-size="16" font-weight="600">4 · Weight, mask</text>
     <text x="646" y="138">w, m from π<tspan font-size="10" dy="4">θ</tspan><tspan dy="-4"> / π</tspan><tspan font-size="10" dy="4">old</tspan><tspan dy="-4"></tspan></text>
-    <text x="646" y="160" font-size="12.5" fill="#5a6070">per token</text>
-    <text x="646" y="192" font-size="19" fill="#a35a12">④ ⑥</text>
+    <text x="646" y="160" font-size="12.5" fill="#5a6070">4-quadrant ratio gate</text>
+    <text x="646" y="192" font-size="14" font-weight="600" fill="#a35a12">C1 (iff B1 ≠ on-pol)</text>
     <rect x="566" y="250" width="160" height="124" rx="8" fill="#fff" stroke="#2f6b4f" stroke-width="1.8"/>
     <text x="646" y="277" font-size="16" font-weight="600">5 · Aggregate</text>
     <text x="646" y="304">normalizer c</text>
-    <text x="646" y="326" font-size="12.5" fill="#5a6070">token, seq, or prompt</text>
-    <text x="646" y="358" font-size="19" fill="#a35a12">③</text>
+    <text x="646" y="326" font-size="12.5" fill="#5a6070">token, seq 1/|y|, or 1/M</text>
+    <text x="646" y="358" font-size="14" font-weight="600" fill="#a35a12">A3 (Length Weight)</text>
     <rect x="384" y="250" width="160" height="124" rx="8" fill="#fff" stroke="#8a8f9c" stroke-width="1.8"/>
     <text x="464" y="277" font-size="16" font-weight="600">6 · Regularize</text>
     <text x="464" y="304">KL, entropy</text>
     <text x="464" y="326" font-size="12.5" fill="#5a6070">anchor or proximal</text>
-    <text x="464" y="358" font-size="19" fill="#a35a12">⑤</text>
+    <text x="464" y="358" font-size="14" font-weight="600" fill="#a35a12">A4 (Regularizer)</text>
     <rect x="202" y="250" width="160" height="124" rx="8" fill="#fff" stroke="#8a8f9c" stroke-width="1.8"/>
     <text x="282" y="277" font-size="16" font-weight="600">7 · Step</text>
-    <text x="282" y="304">steps per batch</text>
-    <text x="282" y="326" font-size="12.5" fill="#5a6070">one step keeps r = 1</text>
-    <text x="282" y="358" font-size="19" fill="#a35a12">⑥</text>
+    <text x="282" y="304">μ steps · KL step</text>
+    <text x="282" y="326" font-size="12.5" fill="#5a6070">μ=1 keeps r≡1 (C1=∅)</text>
+    <text x="282" y="358" font-size="14" font-weight="600" fill="#a35a12">B1 (μ, τ) · C3</text>
   </g>
 
   <!-- Flow arrows -->

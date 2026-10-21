@@ -1,0 +1,248 @@
+
+      <section id="trust-region">
+        <div class="part-banner">
+          <div class="part-kicker">Part IV · Category II: Law III (Softmax Asymmetry), Trust Regions &amp; Staleness Budgets</div>
+          <p class="part-desc">Deriving the four-quadrant mechanics of off-policy clipping directly from the Softmax logit Jacobian, resolving token vs. sequence importance ratios, and establishing the $(\mu + \tau)\eta$ staleness conservation law.</p>
+        </div>
+        <h2>5. Category II · Law III (Softmax Logit-Jacobian Asymmetry), Trust Regions &amp; Off-Policy Corrections</h2>
+
+        <p>Coordinate <code>C1</code> (4-quadrant ratio clipping/gating) and Coordinate <code>B1</code> (off-policy batch reuse $\mu$, async lag $\tau$, and sampler–trainer mismatch) account for the majority of named RL algorithms proposed in 2025–2026: PPO-clip, dual-clip, clip-higher (DAPO), CISPO, GSPO, GMPO, SAPO, TOPR, TIS, IcePop, M2PO, and more. By <a href="#skel-identity">Theorem 2 (the $r \equiv 1$ identity)</a>, every one of these methods vanishes in the strictly on-policy regime (<code>B1 = On-Policy</code> $\implies$ <code>C1 = ∅</code>). They exist because <strong>hardware physics forces high-throughput RL runs off-policy</strong>—by reusing each rollout batch for $\mu = 4\text{–}16$ gradient steps, streaming asynchronous rollouts $\tau = 2\text{–}8$ policy versions stale, or running quantized inference on MoE models. To denoise all of these surrogates at once, we derive their behavior from a single equation: the <strong>Softmax Logit Jacobian</strong>.</p>
+
+        <h3 id="trust-quadrants">5.1 Law III · The Softmax Logit-Jacobian Asymmetry &amp; the Four $(r, \hat{A})$ Quadrants</h3>
+
+        <p>Consider a single token step $t$ with vocabulary $\mathcal{V}$, pre-softmax logits $z_t \in \mathbb{R}^{|\mathcal{V}|}$, and policy $\pi_\theta(v \mid s_t) = \operatorname{softmax}(z_t)_v$. Under any surrogate with effective weight $W_t = w(r_t)\,m(r_t, \hat{A}_t)$, a gradient ascent step $\Delta z_t = \eta \frac{\partial \hat{\mathcal{J}}}{\partial z_t}$ updates the sampled token $y_t$ and every unsampled token $v \ne y_t$ by:</p>
+
+        <div class="formula-display">$$\Delta z_{t, y_t} = +\eta\,\hat{A}_t\,W_t\,\big(1 - \pi_\theta(y_t \mid s_t)\big), \qquad \Delta z_{t, v} = -\eta\,\hat{A}_t\,W_t\,\pi_\theta(v \mid s_t) \quad (\forall\, v \ne y_t)$$</div>
+
+        <div class="technique-card" id="pattern-quadrant">
+          <p><strong>Theorem 3 (Law III · Three Fundamental Asymmetries of Autoregressive Policy Gradients).</strong> The Softmax logit update above is fundamentally asymmetric between positive advantage ($\hat{A}_t &gt; 0$) and negative advantage ($\hat{A}_t &lt; 0$):</p>
+          <ol>
+            <li><strong>Self-extinguishing positive push vs. non-extinguishing negative push:</strong> When $\hat{A}_t &gt; 0$, as $\pi_\theta(y_t \mid s_t) \to 1$, the Jacobian factor $(1 - \pi_\theta(y_t \mid s_t)) \to 0$—the gradient <em>automatically brakes</em> as the token is mastered ($\hat{A}_t \log \pi_\theta(y_t) \le 0$ is bounded above). When $\hat{A}_t &lt; 0$, pushing $y_t$ down drives $\pi_\theta(y_t \mid s_t) \to 0$, where $(1 - \pi_\theta(y_t \mid s_t)) \to 1$ <em>never self-extinguishes</em> ($-|\hat{A}_t|\log\pi_\theta(y_t) \to +\infty$), causing unbounded logit-norm drift $z_{t, y_t} \to -\infty$.</li>
+            <li><strong>Negative gradients directly cause entropy collapse (rich-get-richer mode amplification):</strong> Look at the unsampled tokens $v \ne y_t$ when $\hat{A}_t &lt; 0$:
+              $$\Delta z_{t, v} = +\eta\,|\hat{A}_t|\,W_t\,\pi_\theta(v \mid s_t) \quad (\forall\, v \ne y_t)$$
+              Pushing a bad token $y_t$ down does not redistribute probability mass uniformly; it increases the logits of unsampled tokens <em>in exact proportion to their current probability $\pi_\theta(v \mid s_t)$</em>, concentrating mass exponentially onto the current argmax mode $\arg\max_v \pi_\theta(v \mid s_t)$.</li>
+            <li><strong>Rare-token clipping starvation in Quadrant I ($\hat{A}_t &gt; 0,\; r_t &gt; 1 + \varepsilon_{\text{high}}$):</strong> Because PPO's upper clip bounds the multiplicative ratio $\pi_\theta(y_t) / \pi_{\text{old}}(y_t) \le 1 + \varepsilon_{\text{high}}$, the maximum probability gain across a batch of $\mu$ micro-steps is $\Delta \pi_{\max}(y_t) = \varepsilon_{\text{high}}\,\pi_{\text{old}}(y_t)$. A rare reasoning pivot token (e.g., `"Wait"`, `"However"`) with $\pi_{\text{old}} = 10^{-3}$ hits the clip wall after gaining just $2\times 10^{-4}$, whereas a dominant mode token with $\pi_{\text{old}} = 0.5$ can gain $0.10$.</li>
+          </ol>
+        </div>
+
+        <figure>
+          <img src="diagrams/05-ratio-quadrants.svg" alt="Map of the probability ratio against the sign of the advantage, showing the regions where PPO-clip zeroes a token's gradient, where clip-higher moves the edge, where CISPO keeps a capped weight, and where dual-clip applies.">
+          <figcaption><span class="fig-label">Figure 7a.</span> The four quadrants of the $(r, \hat{A})$ plane derived from Law III. Quadrant I ($\hat{A} &gt; 0,\, r &gt; 1+\varepsilon_{\text{high}}$) is where rare positive tokens get starved by symmetric clipping; Quadrant III ($\hat{A} &lt; 0$) splits into $r &lt; 1-\varepsilon_{\text{low}}$ (where unclipped negative updates drive $z_{y_t} \to -\infty$) and $r &gt; c$ (where surging negative tokens require dual-clip). All surrogates pass through $(r=1, w=1)$.</figcaption>
+        </figure>
+
+        <figure class="ifig" id="surrogate-fig" aria-label="Interactive comparison of surrogate gradient weights">
+          <div class="ifig-head">
+            <span class="ifig-title">Figure 7b (Interactive) · Effective Token Gradient Weight $w(r)\cdot m(r, \hat{A})$ Across Surrogates</span>
+            <span class="ifig-sub">Select a surrogate and adjust $\varepsilon_{\text{high}}$ to see how each method weights off-policy ratios</span>
+          </div>
+          <div class="ifig-pills" id="surr-pills" role="group" aria-label="Surrogate method selector">
+            <button type="button" class="ifig-pill" data-mode="ppo" aria-pressed="true">PPO-clip</button>
+            <button type="button" class="ifig-pill" data-mode="dapo" aria-pressed="false">DAPO (Clip-higher)</button>
+            <button type="button" class="ifig-pill" data-mode="dual" aria-pressed="false">Dual-clip (c=2.0)</button>
+            <button type="button" class="ifig-pill" data-mode="cispo" aria-pressed="false">CISPO (MiniMax-M1)</button>
+            <button type="button" class="ifig-pill" data-mode="sapo" aria-pressed="false">SAPO (Smooth Gate)</button>
+            <button type="button" class="ifig-pill" data-mode="icepop" aria-pressed="false">IcePop (Band Mask)</button>
+          </div>
+          <div class="ifig-ctrl">
+            <label for="eps-slider">Upper bound $\varepsilon_{\text{high}}$</label>
+            <input id="eps-slider" class="ifig-range" type="range" min="10" max="50" value="28" aria-describedby="eps-out">
+            <output id="eps-out" for="eps-slider">ε_high = 0.28</output>
+          </div>
+          <div class="ifig-svg-grid">
+            <div class="ifig-svg-box">
+              <h5>Positive Advantage ($\hat{A} = +1$): Upward Push</h5>
+              <svg id="svg-pos" viewBox="0 0 260 150" aria-hidden="true"></svg>
+            </div>
+            <div class="ifig-svg-box">
+              <h5>Negative Advantage ($\hat{A} = -1$): Downward Push</h5>
+              <svg id="svg-neg" viewBox="0 0 260 150" aria-hidden="true"></svg>
+            </div>
+          </div>
+          <div class="ifig-ro" id="surr-desc" style="border-top-color: var(--accent);">
+            <div class="k" id="surr-formula">Formula</div>
+            <div class="v" id="surr-note" style="font-size: 13.5px; font-family: var(--sans); font-weight: 400; margin-top: 4px;"></div>
+          </div>
+        </figure>
+
+        <script>
+        (function () {
+          var mode = "ppo";
+          var epsLow = 0.20;
+          var epsInput = document.getElementById("eps-slider");
+          var epsOut = document.getElementById("eps-out");
+          var svgPos = document.getElementById("svg-pos");
+          var svgNeg = document.getElementById("svg-neg");
+          var fEl = document.getElementById("surr-formula");
+          var nEl = document.getElementById("surr-note");
+
+          var INFO = {
+            ppo: {
+              f: "PPO-clip: w(r) = r, masked to 0 when (Â > 0, r > 1 + ε) or (Â < 0, r < 1 − ε)",
+              n: "Symmetric bounds (ε_low = ε_high = 0.20 by default). Closes the dangerous Â < 0, r < 0.8 corner, but leaves Â < 0, r > 1 unbounded and clips rare positive tokens early."
+            },
+            dapo: {
+              f: "DAPO (Clip-higher): asymmetric mask with ε_low = 0.20, ε_high = slider (default 0.28)",
+              n: "Gives positive-advantage tokens more headroom (r up to 1 + ε_high), reducing clipping's entropy-lowering bias on rare tokens while keeping the Â < 0, r < 0.8 safety mask intact."
+            },
+            dual: {
+              f: "Dual-clip: PPO-clip + upper cap m = 0 when Â < 0 and r > c (shown at c = 2.0; verl default 3.0)",
+              n: "Bounds both dangerous regions for negative advantages: zeroes gradients when r < 1 − ε_low AND when a bad token's probability spikes above r = c."
+            },
+            cispo: {
+              f: "CISPO (MiniMax-M1): stop-gradient weight w(r) = min(r, 1 + ε_high), m ≡ 1 (no lower mask)",
+              n: "Never drops a token: rare reflection tokens ('Wait', 'However') keep learning across 16 updates/batch. However, reopening the Â < 0, r < 0.8 region caused collapse in ARLArena unless sequence masking was added."
+            },
+            sapo: {
+              f: "SAPO: smooth gate w(r) = r · 4σ(τ(r − 1))(1 − σ(τ(r − 1))) with τ = 8",
+              n: "Replaces hard clipping edges with a smooth sech² bell around r = 1. Because small ratios still receive nonzero negative updates, SAPO exhibited the same negative-quadrant instability in agentic benchmarks."
+            },
+            icepop: {
+              f: "IcePop / Band Mask: w(r) = r inside [0.5, 1 + ε_high], masked to 0 outside regardless of sign(Â)",
+              n: "Symmetric trust-region filter designed for train–inference mismatch: discards any token that has drifted too far in either direction."
+            }
+          };
+
+          function weight(m, r, signA, eh) {
+            var el = (m === "ppo") ? eh : epsLow;
+            if (m === "ppo" || m === "dapo") {
+              if (signA > 0 && r > 1 + eh) return 0;
+              if (signA < 0 && r < 1 - el) return 0;
+              return r;
+            }
+            if (m === "dual") {
+              if (signA > 0 && r > 1 + eh) return 0;
+              if (signA < 0 && (r < 1 - el || r > 2.0)) return 0;
+              return r;
+            }
+            if (m === "cispo") {
+              return Math.min(r, 1 + eh);
+            }
+            if (m === "sapo") {
+              var tau = 8;
+              var p = 1 / (1 + Math.exp(-tau * (r - 1)));
+              return r * 4 * p * (1 - p);
+            }
+            if (m === "icepop") {
+              if (r < 0.5 || r > 1 + eh + 0.3) return 0;
+              return r;
+            }
+            return r;
+          }
+
+          function drawPlot(svg, signA, eh) {
+            var W = 260, H = 150, padL = 28, padR = 10, padT = 12, padB = 24;
+            var pw = W - padL - padR, ph = H - padT - padB;
+            var rMax = 2.4, wMax = 2.2;
+            function xOf(r) { return padL + (r / rMax) * pw; }
+            function yOf(w) { return padT + ph - (Math.min(w, wMax) / wMax) * ph; }
+
+            var html = "";
+            if (signA < 0) {
+              var xDanger = xOf(1 - epsLow);
+              html += '<rect x="' + padL + '" y="' + padT + '" width="' + (xDanger - padL) + '" height="' + ph + '" fill="#f9e9e6" opacity="0.7"/>';
+              html += '<text x="' + (padL + 4) + '" y="' + (padT + 12) + '" font-size="9.5" font-family="monospace" fill="#a23b2c">r &lt; 1−ε (danger)</text>';
+            }
+            [0, 1, 2].forEach(function (v) {
+              var y = yOf(v);
+              html += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eceef2" stroke-width="1"/>';
+              html += '<text x="' + (padL - 4) + '" y="' + (y + 3) + '" font-size="10" font-family="monospace" fill="#6a7080" text-anchor="end">' + v + '</text>';
+            });
+            [0, 0.8, 1.0, 1 + eh, 2.0].forEach(function (rv) {
+              var x = xOf(rv);
+              html += '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (padT + ph) + '" stroke="#e2e5ec" stroke-dasharray="2 2" stroke-width="1"/>';
+            });
+            html += '<line x1="' + padL + '" y1="' + yOf(0) + '" x2="' + (W - padR) + '" y2="' + yOf(0) + '" stroke="#18202e" stroke-width="1"/>';
+            html += '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (padT + ph) + '" stroke="#18202e" stroke-width="1"/>';
+
+            var pts = [];
+            var steps = 240;
+            for (var i = 0; i <= steps; i++) {
+              var r = (i / steps) * rMax;
+              var w = weight(mode, r, signA, eh);
+              pts.push(xOf(r).toFixed(1) + "," + yOf(w).toFixed(1));
+            }
+            var color = signA > 0 ? "#2f6b4f" : "#2a5da8";
+            html += '<polyline fill="none" stroke="' + color + '" stroke-width="2.4" points="' + pts.join(" ") + '"/>';
+            html += '<circle cx="' + xOf(1) + '" cy="' + yOf(1) + '" r="4" fill="#18202e"/>';
+            html += '<text x="' + (xOf(1) + 5) + '" y="' + (yOf(1) + 12) + '" font-size="9.5" font-family="monospace" fill="#18202e">r=1</text>';
+            html += '<text x="' + xOf(0) + '" y="' + (H - 5) + '" font-size="10" font-family="monospace" fill="#6a7080" text-anchor="middle">0</text>';
+            html += '<text x="' + xOf(1) + '" y="' + (H - 5) + '" font-size="10" font-family="monospace" fill="#6a7080" text-anchor="middle">1.0</text>';
+            html += '<text x="' + xOf(2) + '" y="' + (H - 5) + '" font-size="10" font-family="monospace" fill="#6a7080" text-anchor="middle">2.0</text>';
+            svg.innerHTML = html;
+          }
+
+          function render() {
+            var eh = parseInt(epsInput.value, 10) / 100;
+            var label = "ε_high = " + eh.toFixed(2);
+            epsOut.textContent = label;
+            epsInput.style.setProperty("--attr-min", epsInput.min);
+            epsInput.style.setProperty("--attr-max", epsInput.max);
+            epsInput.style.setProperty("--control-value", epsInput.value);
+            epsInput.setAttribute("aria-valuetext", label);
+            drawPlot(svgPos, 1, eh);
+            drawPlot(svgNeg, -1, eh);
+            fEl.textContent = INFO[mode].f;
+            nEl.textContent = INFO[mode].n;
+          }
+
+          document.querySelectorAll("#surr-pills .ifig-pill").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+              mode = btn.getAttribute("data-mode");
+              document.querySelectorAll("#surr-pills .ifig-pill").forEach(function (b) {
+                b.setAttribute("aria-pressed", String(b === btn));
+              });
+              render();
+            });
+          });
+          epsInput.addEventListener("input", render);
+          render();
+        })();
+        </script>
+
+        <h3 id="trust-entropy-bias">The relative-clip entropy bias — and what Clip-higher and CISPO actually measure</h3>
+
+        <p><strong>Why symmetric ratio clipping lowers entropy.</strong> Because PPO's upper bound $r_{i,t} \le 1 + \varepsilon$ is multiplicative, a token with old probability $p_{\text{old}}$ can increase in a single batch by at most $\Delta p = \varepsilon\, p_{\text{old}}$. For a rare reasoning token ($p_{\text{old}} = 10^{-4}$), that ceiling is tiny; for a dominant token ($p_{\text{old}} = 0.5$), it is huge. Positive updates on low-probability tokens are therefore cut off early while high-probability tokens absorb the probability mass, driving entropy down even under random rewards (<a href="https://arxiv.org/abs/2509.26114">2509.26114</a>).</p>
+
+        <ul>
+          <li><strong>Clip-higher ($\varepsilon_{\text{high}} &gt; \varepsilon_{\text{low}}$, DAPO) <span class="grade grade-b">B</span> mechanism · <span class="grade grade-d">D</span> score gain.</strong> Raising $\varepsilon_{\text{high}}$ from $0.20$ to $0.28$ relaxes the ceiling on positive-advantage tokens. Its entropy-preserving mechanism is reliable, but its score impact depends entirely on how often tokens hit the upper clip edge: on Qwen3-4B/8B base models, the upper clip fires on only $\sim 0.3\%$ of tokens and raising $\varepsilon_{\text{high}}$ does nothing or hurts, whereas on instruction-tuned models (which start sharper and lose entropy faster) raising $\varepsilon_{\text{high}}$ slows entropy collapse and improves scores (<a href="https://arxiv.org/abs/2508.08221">Tricks or Traps, 2508.08221</a>). Across other studies, the Entropy Mechanism paper reports $+0.2$ (7B) and $+1.4$ (32B) points with late instability (<a href="https://arxiv.org/abs/2505.22617">2505.22617</a>), ScaleRL finds $A$ rises and then falls as $\varepsilon_{\text{high}}$ increases (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>), and MiniMax-M1 found clip-higher insufficient at $N = 16$ updates per batch. Thus "which model clip-higher helps" is a proxy for <strong>how far off-policy the batch drifts</strong>.</li>
+          <li><strong>CISPO (<a href="https://arxiv.org/abs/2506.13585">MiniMax-M1, 2506.13585</a>) <span class="grade grade-b">B</span> large-batch efficiency · <span class="grade grade-d">D</span> general.</strong> At $N = 16$ updates per rollout batch, MiniMax-M1 observed that rare reflection tokens (<em>However</em>, <em>Wait</em>) crossed $1 + \varepsilon_{\text{high}}$ on the first minibatch and were zero-masked for the remaining fifteen. CISPO replaces the mask with a stop-gradient clipped weight $\operatorname{sg}(\min(r_{i,t}, 1+\varepsilon_{\text{high}}))$ and disables the lower clip bound. In ScaleRL's large-batch LOO runs, CISPO tied DAPO's asymptote $A$ while raising efficiency $B$ from $1.77$ to $2.01$. However, reopening the $\hat{A} &lt; 0,\, r \ll 1$ corner (Figure 7b, right) has a severe failure mode: in ARLArena's agentic tasks, both CISPO and SAPO collapsed around step $130$ ($34.0$ vs. GRPO's $46.2$), and adding sequence-level masking of negative low-ratio trajectories restored ALFWorld accuracy from $54.4 \to 78.9$ (<a href="https://arxiv.org/abs/2602.21534">2602.21534</a>; see also <a href="https://arxiv.org/abs/2509.20712">CE-GPPO, 2509.20712</a>). Note also an implementation trap: <code>verl</code>'s default <code>cispo</code> config clips weights symmetrically to $[0.8, 1.2]$ unless the lower bound is manually widened (<a href="#pitfalls">Chapter 9</a>).</li>
+          <li><strong>The 2025–2026 tail (GMPO, SAPO, DCPO, CE-GPPO, ASPO, DPPO, DGPO) <span class="grade grade-c">C</span>.</strong> All re-parameterize the same complaint — that a constant ratio band $[1-\varepsilon, 1+\varepsilon]$ is too tight for small $p_{\text{old}}$ and too loose for large $p_{\text{old}}$. Each reports $1\text{–}3$ point single-seed gains in its originating paper, usually on Qwen2.5-Math or 1.5B models under $1{,}000$ steps.</li>
+        </ul>
+
+        <h3 id="off-policy">Token vs. sequence granularity, importance sampling, and GSPO</h3>
+
+        <p>When correcting for off-policy drift (Gap 2) or sampler–trainer mismatch (Gap 1), should the ratio act per token or across the whole sequence? Both extremes face a fundamental mathematical obstacle at reasoning lengths ($T = 8\text{k–}32\text{k}$):</p>
+
+        <ol>
+          <li><strong>Token-level Truncated IS (TIS) leaves a prefix-distribution bias <span class="grade grade-d">D</span>.</strong> Multiplying token $t$'s gradient by $\min(\pi_{\text{old}}(y_t\mid y_{&lt;t})/\pi_{\text{sampler}}(y_t\mid y_{&lt;t}),\, C)$ bounds per-token variance by $C^2$. However, it corrects only the conditional distribution of action $y_t$ given prefix $y_{&lt;t}$, leaving uncorrected the fact that the prefix $y_{&lt;t}$ itself was sampled from $\pi_{\text{sampler}}$. The residual bias grows quadratically with horizon $T$ times the maximum per-token divergence (<a href="https://yingru.notion.site/When-Speed-Kills-Stability-Demystifying-RL-Collapse-from-the-Training-Inference-Mismatch-271211a558b7808d8b12d403fd15edda">Liu &amp; Li, 2025</a>), which explains why token-level TIS alone only delayed MoE collapse from step $60$ to $105$ in R3 (<a href="https://arxiv.org/abs/2510.11370">2510.11370</a>) and gave zero gain on short BF16 dense runs (<a href="https://fengyao.notion.site/off-policy-rl">Yao et al., 2025</a>).</li>
+          <li><strong>Exact sequence-level IS suffers exponential variance blowup.</strong> The unbiased sequence importance weight is $\rho(y) = \prod_{t=1}^T \frac{\pi_\theta(y_t\mid y_{&lt;t})}{\mu(y_t\mid y_{&lt;t})}$. If per-token log-ratios have variance $\sigma^2 \approx 2\,\mathrm{KL}_{\text{token}}$, then $\log \rho(y)$ has standard deviation $\sigma\sqrt{T}$. Using R3's measured MoE per-token mismatch $\mathrm{KL}_{\text{token}} \approx 1.5 \times 10^{-3}$ gives $\sigma \approx 0.055$. At $T = 16{,}000$ tokens:
+            <div class="formula-display">$$\operatorname{Std}\!\big(\log \rho(y)\big) = \sigma\sqrt{T} \;\approx\; 0.055 \times \sqrt{16{,}000} \;\approx\; 7.0 \quad\Longrightarrow\quad e^{\pm 7.0} \approx [9\times 10^{-4},\; 1{,}100]$$</div>
+            One standard deviation spans a factor of $1{,}100\times$ in either direction! Any capped sequence weight $\min(\rho(y), C)$ therefore degenerates into a binary rejection filter.</li>
+          <li><strong>Length-normalized geometric filters (GSPO, Geometric RS, DeepSeek-V3.2) are trust-region tests in disguise.</strong> To keep sequence-level statistics from scaling with $T$, <strong>GSPO</strong> (<a href="https://arxiv.org/abs/2507.18071">2507.18071</a>) replaces the product with the geometric mean $s_i = \exp\!\big(\frac{1}{|y_i|}\sum_{t=1}^{|y_i|} \log r_{i,t}\big)$ and clips $s_i$ inside a narrow band $[1 - 3\cdot 10^{-4},\, 1 + 4\cdot 10^{-4}]$. Exactly the same length-normalized log-ratio statistic appears in <strong>geometric rejection sampling</strong> (<a href="https://yingru.notion.site/When-Speed-Kills-Stability-Demystifying-RL-Collapse-from-the-Training-Inference-Mismatch-271211a558b7808d8b12d403fd15edda">Liu &amp; Li, 2025</a>) and <strong>DeepSeek-V3.2's off-policy sequence masking</strong> (<a href="https://arxiv.org/abs/2512.02556">2512.02556</a>). Note two caveats on GSPO: differentiating $s_i$ re-introduces the $\frac{1}{|y_i|}$ length bias (<a href="#aggregation">Chapter 6</a>), and while GSPO stabilized Qwen3-30B-A3B in its own paper (clipping $15\%$ of tokens vs. GRPO's $0.13\%$), Qwen's later controlled study on the exact same model needed neither GSPO nor sequence clipping once train–inference IS and routing replay (R2/R3) were enabled (<a href="https://arxiv.org/abs/2512.01374">2512.01374</a>). Elsewhere, GSPO ranked first in ARLArena, diverged repeatedly in ScaleRL, and tied the untrained base model on Qwen1.5-MoE across three seeds ($28.90 \pm 1.25$ vs. $28.93$; <a href="https://arxiv.org/abs/2609.32444">CIS, 2609.32444</a>) <span class="grade grade-b">B</span> un-replayed MoE · <span class="grade grade-d">D</span> general.</li>
+        </ol>
+
+        <p><strong>Truncating vs. masking, and protecting the negative quadrant.</strong> In the one multi-seed comparison of mismatch fixes across three MoE models (<a href="https://arxiv.org/abs/2609.32444">CIS, 2609.32444</a>), no correction, TIS, sequence IS, IcePop (<a href="https://arxiv.org/abs/2510.18855">2510.18855</a>), GSPO, FP16 and CIS all finished within $\sim 1.6$ average points on short GSM8K runs, but one manipulation was catastrophic: <em>lifting small importance weights upward</em> cut Qwen1.5-MoE accuracy from $34.8$ to $6.0$ (well below the $28.9$ base model). Across the literature, independent designs converge on protecting the $\hat{A} &lt; 0,\, r \ll 1$ corner: <strong>TOPR</strong> truncates IS weights only on negative samples (<a href="https://arxiv.org/abs/2503.14286">2503.14286</a>); <strong>DeepSeek-V3.2</strong> masks only negative-advantage sequences that fail its KL drift threshold (<a href="https://arxiv.org/abs/2512.02556">2512.02556</a>); and <strong>M2PO</strong> constrains second moments only on tokens clipping would act on (<a href="https://arxiv.org/abs/2510.01161">2510.01161</a>).</p>
+
+        <h3 id="staleness-budget">How much off-policy staleness is tolerable? The $S \cdot \eta$ law</h3>
+
+        <p>Asynchronous rollout frameworks (AReaL, PipelineRL, Magistral, OLMo 3) trade staleness $S$ (in policy versions) for hardware utilization. Controlled measurements establish three regimes:</p>
+        <ul>
+          <li><strong>Without off-policy correction: $S \le 1\text{–}2$ versions.</strong> Magistral degraded beyond $2$ minibatches per rollout (<a href="https://arxiv.org/abs/2506.10910">2506.10910</a>); AReaL's 1.5B ablation stayed within $2$ AIME points of on-policy ($42.0$) up to staleness $2$ before dropping (<a href="https://arxiv.org/abs/2505.24298">2505.24298</a>).</li>
+          <li><strong>With decoupled PPO or truncated IS: $S \approx 4\text{–}8$ versions <span class="grade grade-b">B</span>.</strong> AReaL's decoupled objective (which anchors the clip around a proximal policy while weighting by behavior-to-proximal IS) matches on-policy accuracy up to $S = 8$ at $2.77\times$ wall-clock speed (<a href="https://arxiv.org/abs/2505.24298">2505.24298</a>). ScaleRL found PipelineRL in-flight weight updates at lag $4$ and $8$ equally effective, cutting time-to-reward by $\sim 2\times$ (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>). (M2PO claims parity at $S = 256$ in a single best-checkpoint run <span class="grade grade-c">C</span>.)</li>
+          <li><strong>Staleness is a product budget $S \cdot \eta \approx \text{const}$.</strong> A 2026 study across Llama-3.2-1B/3B and Qwen3-8B shows that the maximum stable learning rate $\eta_{\max}$ scales inversely with staleness $S$, so the product $S \cdot \eta$ is approximately constant along the stability boundary (<a href="https://arxiv.org/abs/2607.01083">2607.01083</a>). Because first-order parameter drift over $S$ steps scales as $O(S\eta)$, quoting a "safe staleness $S$" without the learning rate $\eta$ is meaningless: a run at $\eta = 10^{-6}$ tolerates roughly three times the version lag of a run at $3\times 10^{-6}$.</li>
+        </ul>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Category II Change</th><th>When It Activates</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PPO ratio clipping</td><td>$N &gt; 1$ or async ($r \neq 1$)</td><td>Neutral</td><td>Enables batch reuse</td><td>Required once $N &gt; 1$</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Clip-higher ($\varepsilon_{\text{high}} &gt; \varepsilon_{\text{low}}$)</td><td>High clip rate / instruct starts</td><td>Non-monotone</td><td>Small</td><td>Slows entropy drop</td><td><span class="grade grade-b">B</span> entropy · <span class="grade grade-d">D</span> score</td></tr>
+            <tr><td>CISPO (stop-grad clipped IS)</td><td>Large $N$ (e.g. $16$ steps/batch)</td><td>Within noise (LOO)</td><td>Higher $B$ in ScaleRL</td><td>Collapses in agents without seq mask</td><td><span class="grade grade-b">B</span> efficiency · <span class="grade grade-d">D</span> general</td></tr>
+            <tr><td>GSPO (sequence geometric ratio)</td><td>High-staleness MoE without R3</td><td>Ties base on Qwen1.5-MoE</td><td>Helps Qwen3-30B in own paper</td><td>Unnecessary with R2/R3; diverges in ScaleRL</td><td><span class="grade grade-b">B</span> MoE w/o R3 · <span class="grade grade-d">D</span> general</td></tr>
+            <tr><td>IcePop / Negative-quadrant masks</td><td>Long-horizon mismatch</td><td>Ties in short runs</td><td>Neutral</td><td>Prevents $\hat{A}&lt;0, r\ll 1$ blowup</td><td><span class="grade grade-b">B</span></td></tr>
+            <tr><td>Decoupled PPO / PipelineRL ($S \le 8$)</td><td>Asynchronous rollout</td><td>Matches on-policy</td><td>$2\text{–}2.77\times$ wall-clock</td><td>Stable when $S\cdot\eta$ bounded</td><td><span class="grade grade-b">B</span></td></tr>
+          </tbody>
+        </table>
+      </section>

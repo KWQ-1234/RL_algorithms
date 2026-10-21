@@ -1,0 +1,223 @@
+      <section id="patterns">
+        <div class="part-banner">
+          <div class="part-kicker">Part VI · Synthesis, Diagnostic Atlas, Decision Guide &amp; Open Problems</div>
+          <p class="part-desc">Six algebraic laws that make new RL papers predictable before reading their experiments, a live WandB training-dynamics diagnostic atlas, the five-link compute scaling chain, and a practitioner's configuration decision tree.</p>
+        </div>
+        <h2>10. Synthesis: Six Laws, Training Dynamics Diagnostic Atlas &amp; Decision Guide</h2>
+
+        <p>Chapters 1 through 8 evaluated design choices across the five axes and four neighbouring families. Read together, nearly every result reduces to six compact algebraic laws. Knowing these six identities makes most new post-training RL papers predictable before reading their benchmark tables.</p>
+
+        <h3 id="pattern-reinforce">10.1 Six Algebraic Laws of LLM Post-Training</h3>
+
+        <ol>
+          <li>
+            <strong>Law 1 — The On-Policy Collapse ($r \equiv 1$ Identity, <a href="#skel-identity">Chapter 2.2</a>):</strong>
+            $$r_{i,t} \equiv 1 \implies w(r_{i,t}) \cdot m(r_{i,t}, \hat{A}_{i,t}) = 1 \implies \hat{g}(\theta) = \sum_{i,t} c_{i,t} \hat{A}_{i,t} \nabla_\theta \log \pi_\theta(y_{i,t} \mid x, y_{i,&lt;t})$$
+            PPO-clip, clip-higher, CISPO, GSPO, GMPO, and SAPO have the exact same gradient when each rollout batch receives one optimizer step ($\mu = 1$) and $\pi_{\text{old}}$ is recomputed on the trainer. Their differences live entirely in how they treat off-policy ratios $r \ne 1$. <em>Diagnostic rule:</em> before crediting a surrogate loss with a benchmark gain, check how many steps per batch ($\mu$) and how much asynchronous lag ($\tau$) the experiment used.
+          </li>
+          <li>
+            <strong>Law 2 — Prompt Weighting as an Implicit Objective (<a href="#pattern-weighting">Chapter 6.1</a>):</strong>
+            $$\mathbb{E}[\hat{g}(\theta)] = \sum_{x \in \mathcal{B}} w(p_x) \, \nabla_\theta p_x(\theta) = \nabla_\theta \sum_{x \in \mathcal{B}} F(p_x(\theta)), \qquad F'(p) = w(p) = \frac{1}{s(p)}$$
+            Dividing binary rewards by a prompt-dependent scale $s(p_x)$ does not improve an estimator of expected reward; it switches the objective to $F(p_x)$. Mean-only subtraction ($s = 1$) optimizes $\sum p_x$; GRPO's $\div\;\text{std}_G$ ($s = \sqrt{p(1-p)}$) optimizes $\sum 2\arcsin\sqrt{p_x}$ (symmetrically over-weighting $p \to 0$ and $p \to 1$); $\text{MaxRL}$ ($s = p$) optimizes $\sum \log p_x$; pass@$k$ optimizes $\sum (1 - (1-p_x)^k)$. <em>Diagnostic rule:</em> ask of any new advantage normalization rule which $F(p)$ it implies, and whether up-weighting $p \to 1$ prompts is desirable.
+          </li>
+          <li id="pattern-sharpening">
+            <strong>Law 3 — Sharpening Helps Whenever the Mode Beats the Mean (<a href="#what-rl-changes">Chapter 1.2</a> &amp; <a href="#case-spurious">Case Study 1</a>):</strong>
+            $$\text{pass@1 after pure sharpening} \;\longrightarrow\; \mathbb{E}_{x}\!\left[\mathbf{1}\{\arg\max_y \pi_{\text{ref}}(y \mid x) \in \mathcal{Y}^*(x)\}\right] = \text{maj@}\infty(\pi_{\text{ref}})$$
+            Any update that concentrates probability mass on the current mode—entropy minimization, majority-vote self-reward, format-only rewards, or asymmetric clipping—moves pass@1 from $\mathbb{E}[p_x]$ toward the base model's majority-vote accuracy without requiring any ground-truth correctness signal. <em>Diagnostic rule:</em> the gap between $\text{maj@}k(\pi_{\text{ref}})$ and $\text{pass@1}(\pi_{\text{ref}})$ is the upper bound on what a label-free or spurious-reward method can achieve. A gain inside that gap on a pretrained-contaminated model (like Qwen2.5-Math) is not evidence of reasoning acquisition.
+          </li>
+          <li>
+            <strong>Law 4 — Quadrant III ($\hat{A} &lt; 0$) Carries Unbounded Variance and Logit-Norm Drift (<a href="#pattern-quadrant">Chapter 5.1</a>):</strong>
+            $$\hat{A}_{i,t} \log \pi_\theta(y_{i,t}) \le 0 \;\text{is bounded above for } \hat{A} &gt; 0, \quad \text{but } -|\hat{A}_{i,t}| \log \pi_\theta(y_{i,t}) \to +\infty \;\text{as } \pi_\theta(y_{i,t}) \to 0$$
+            Pushing an improbable negative-advantage token toward zero probability has no upper bound in the objective and inflates unnormalized logit norms across the vocabulary. Off-policy data amplifies this instability in Quadrant III ($\hat{A} &lt; 0$, $r \ll 1$ or $r \gg 1$), which is why PPO's lower clip, dual-clip, TOPR, M2PO, and DeepSeek-V3.2's off-policy sequence mask all target negative-advantage drift specifically. <em>Diagnostic rule:</em> inspect every new surrogate's behavior in the $\hat{A} &lt; 0$ quadrants.
+          </li>
+          <li>
+            <strong>Law 5 — Learned Step-Level Proxies Must Telescope or Be Bounded (<a href="#pattern-proxy">Chapter 8.2</a>):</strong>
+            $$R'(y) = R(y) + \sum_{t=1}^{|y|} \phi_t \;\;\text{preserves } \pi^* \text{ if } \phi_t = \Phi(s_{t+1}) - \Phi(s_t) \;\text{(telescoping)}, \quad \text{and is hacked if } \phi_t \text{ is an unconstrained learned score}$$
+            Summing unconstrained learned per-step scores into the return invites the policy to inflate length, repeat confident-looking boilerplate, or exploit classifier blind spots. Only telescoping potential-based shaping (Ng et al., 1999), min-form aggregation, or filtering/reranking survive optimization pressure.
+          </li>
+          <li>
+            <strong>Law 6 — Data Provenance Outweighs Loss Shape (<a href="#pattern-onpolicy">Chapter 8.1</a>):</strong>
+            In preference optimization and distillation, all well-tuned loss shapes (DPO, IPO, SimPO, KTO, WPO) tie within noise once temperature $\beta$ is swept on fixed offline data (+1–5 points), whereas refreshing the preference pairs on-policy from the current iterate $\pi_\theta$ adds +15–20 points. <em>Diagnostic rule:</em> when two methods differ in both data provenance (offline vs. on-policy) and loss formula, attribute the gain to the data provenance until proven otherwise.
+          </li>
+        </ol>
+
+        <p id="pattern-synthesis"><strong>The overarching synthesis:</strong> Laws 1 and 4 show that the surrogate only acts off-policy, and primarily to prevent negative-advantage collapse. Law 2 shows that normalization chooses an implicit prompt-weighting objective rather than fixing an estimator. Laws 3 and 5 show that a large fraction of reported benchmark gains come from prior sharpening or hackable proxies rather than true exploration. And Law 6 shows that on-policy data provenance dominates loss algebra. Together, they move the central question of LLM RL from <em>"which named algorithm should I use?"</em> to <em>"is my gradient estimator unbiased on the distribution that actually generated the tokens?"</em>—the exact conclusion Engstrom et al. (<a href="https://arxiv.org/abs/2005.12729">arXiv:2005.12729</a>) reached for deep RL in 2020.</p>
+
+        <h3 id="diagnostics">10.2 The First-Principles Training Dynamics Diagnostic Atlas (WandB Telemetry $\to$ Math Root Cause $\to$ Control Knob)</h3>
+
+        <p>A first-principles theory is only as useful as what it lets you diagnose and fix during a live training run. Every failure mode in RL post-training leaves a distinct joint signature across six observable time series: (1) $\text{pass@1}$ vs. $\text{pass@}k$, (2) token-level policy entropy $\mathcal{H}(\pi_\theta)$, (3) mean response length $\bar{L}$ and truncation rate $f_{\text{trunc}}$, (4) Quadrant I/III clip fractions ($f_{\text{clip}}^+, f_{\text{clip}}^-$), (5) sampler–trainer mismatch $D_{\text{KL}}(\pi^{\text{roll}} \| \pi^{\text{train}})$, and (6) pre-softmax logit norm $\|z\|_\infty$. The table below maps each observable telemetry signature to its exact mathematical mechanism and control intervention:</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Live Telemetry Signature (Symptom)</th><th>First-Principles Mathematical Root Cause</th><th>Immediate Verification Check</th><th>Exact Control Intervention (Knob to Turn)</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Premature Mode Collapse</strong><br>$\text{pass@1} \uparrow$ briefly then plateaus; $\text{pass@16} \downarrow$ sharply; entropy $\mathcal{H}(\pi_\theta) \to 0$ within $100\text{–}200$ steps</td>
+              <td><strong>Law III (Softmax Negative-Gradient Mode Amplification):</strong> Repeated micro-steps ($\mu &gt; 1$) or tight upper clipping ($1+\varepsilon_{\text{high}}$) starve rare positive pivot tokens while negative updates push mass onto the current argmax via $\Delta z_v \propto +\pi_\theta(v)$.</td>
+              <td>Log Quadrant I clip fraction $f_{\text{clip}}^+$ on rare tokens ($p_{\text{old}} &lt; 0.05$) and check $\operatorname{Cov}(\log\pi_\theta, \pi_\theta\hat{A})$.</td>
+              <td>Reduce batch reuse $\mu \to 1\text{–}2$; raise $\varepsilon_{\text{high}} \in [0.26, 0.28]$ (Clip-Higher); disable $\div\;\text{std}_G$ (which over-weights $p \to 1$ prompts); keep rollout temperature $T = 1.0$.</td>
+            </tr>
+            <tr>
+              <td><strong>2. Runaway Length Inflation</strong><br>Mean length $\bar{L} \to L_{\max}$; truncation rate $f_{\text{trunc}} &gt; 15\%$; wrong answers grow much longer than right answers</td>
+              <td><strong>Chapter 6.2 (Length-Bias Covariance):</strong> Using $c_{i,t} = \frac{1}{G|y_i|}$ penalizes long failures less per token ($-\frac{|R-p_x|}{|y_i|}$), OR masking truncated rollouts at large $L_{\max}$ removes the negative penalty on rambling loops.</td>
+              <td>Plot $\bar{L}_{\text{correct}}(t)$ vs. $\bar{L}_{\text{wrong}}(t)$ separately; check `loss_agg_mode`.</td>
+              <td>Switch normalizer $c_{i,t}$ from $\frac{1}{G|y_i|}$ to a constant divisor $\frac{1}{GM}$ (Dr. GRPO) or batch `token-mean`; replace hard overlong masking with a smooth soft length penalty near $L_{\max}$.</td>
+            </tr>
+            <tr>
+              <td><strong>3. Length Collapse / Brevity Trap</strong><br>$\bar{L}$ drops abruptly in early steps; model emits short guesses without verification steps</td>
+              <td><strong>Chapter 4.1 ($\lambda &lt; 1$ GAE Attenuation) or Short-Cap Penalty:</strong> Either GAE $\lambda^{T-t} \to 0$ starves early reasoning tokens, or a tight context cap ($L_{\max} \le 4\text{k–}8\text{k}$) punishes unfinished valid chains.</td>
+              <td>Check if `adv_estimator=gae` has $\lambda &lt; 1.0$, or if $f_{\text{trunc}}$ spiked at step $0$.</td>
+              <td>Set $\lambda = 1.0$ (or switch to critic-free RLOO / Dr. GRPO); if $L_{\max}$ is tight ($\le 8\text{k}$), enable truncated-rollout masking or expand $L_{\max} \ge 16\text{k}$.</td>
+            </tr>
+            <tr>
+              <td><strong>4. Sudden Mid-Run Crash (Step 60–300)</strong><br>Training loss looks normal, then reward collapses to $0$ and gradient/logit norms spike</td>
+              <td><strong>Law IV (Gap 1 Engine Mismatch &amp; MoE Router Flips):</strong> Uncorrected $\pi_{\text{old}}^{\text{roll}} \ne \pi_{\text{old}}^{\text{train}}$ drift or MoE expert-routing flips ($94\%$ of sequences) push Quadrant III ($\hat{A} &lt; 0, r \ll 1$) tokens into $z_{y_t} \to -\infty$ explosion.</td>
+              <td>Log per-step $D_{\text{KL}}(\pi_{\text{old}}^{\text{roll}} \,\|\, \pi_{\text{old}}^{\text{train}})$ and max logit $\|z\|_\infty$ before micro-step 1.</td>
+              <td>On MoE: enable <strong>Routing Replay (R3 / Keep Routing)</strong>. On all models: cast LM head to FP32, enable two-sided sampler masking (IcePop $[0.5, 5.0]$) or Dual-clip ($c=3.0$), and ensure lower clip $1-\varepsilon_{\text{low}}$ is active for $\hat{A} &lt; 0$.</td>
+            </tr>
+            <tr>
+              <td><strong>5. Async / Multi-Epoch Oscillation</strong><br>High clip fraction ($&gt;15\%$); reward oscillates or diverges as throughput scaling ($\mu$ or $\tau$) increases</td>
+              <td><strong>Chapter 5.3 (Staleness Budget Violation):</strong> Product of effective policy lag and step size $(\mu + \tau)\cdot\eta$ exceeded the critical Hessian stability boundary $C_{\text{crit}}$.</td>
+              <td>Check $\mu = (\text{train\_batch}/\text{mini\_batch})\times\text{epochs}$ plus async version lag $\tau$.</td>
+              <td>Scale learning rate inversely with lag ($\eta \propto (\mu+\tau)^{-1}$), use decoupled proximal clipping (AReaL), or cap async lag at $\tau \le 8$ with in-flight weight sync (PipelineRL).</td>
+            </tr>
+            <tr>
+              <td><strong>6. Proxy / Verifier Hacking</strong><br>Training reward $\bar{R}(t) \uparrow$ monotonically toward $1.0$, while held-out benchmark accuracy peaks and then plunges</td>
+              <td><strong>Law I &amp; Law V (Goodhart Exponential Tilt / Non-Telescoping PRM):</strong> As $\beta_{\text{eff}} = (\eta K)^{-1} \to 0$, $\pi^*$ concentrates exponentially on a verifier false-positive mode (`y7`) or inflates non-telescoping step scores $\sum_t \phi_t$.</td>
+              <td>Inspect top-rewarded completions with low length or high step repetition; audit verifier on empty/symbolic strings.</td>
+              <td>Patch parser false positives; drop guessable/multiple-choice items; replace additive PRMs with telescoping potentials $\Phi(s_{t+1})-\Phi(s_t)$; or restore an anchor KL penalty ($\beta &gt; 0$ via $k_2$-loss or $k_1$-in-reward).</td>
+            </tr>
+            <tr>
+              <td><strong>7. Vanishing Gradient / Step-Rate Stall</strong><br>Effective gradient norm shrinks over training; $&gt;60\%$ of rollout groups have all-$0$ or all-$1$ rewards</td>
+              <td><strong>Law II (Zero-Bit Bernoulli Dead Zones):</strong> As prompts polarize to $p_x \in \{0, 1\}$, $I(R;Y\mid x) = H_{\text{Ber}}(p_x) = 0\text{ bits}$. Dead groups contribute $0$ numerator gradient while inflating the `token-mean` denominator.</td>
+              <td>Log the fraction of prompts per batch with $\sum_{i=1}^G R_i \in \{0, G\}$.</td>
+              <td>Filter zero-variance groups ($0 &lt; \sum R_i &lt; G$) or drop solved prompts ($p_x &gt; 0.9$); use a constant denominator $M$ so dead groups do not shrink active prompts' step sizes.</td>
+            </tr>
+            <tr>
+              <td><strong>8. Capability Ceiling Stall ($p_x \equiv 0$ on Hard Set)</strong><br>Easy prompts saturate at $p_x \to 1$, but hard reasoning benchmarks remain flat across thousands of steps</td>
+              <td><strong>Theorem 1 (Missing Atomic Motifs in $\operatorname{supp}(\pi_{\text{ref}})$):</strong> Base model lacks atomic verification/backtracking transitions ($p_{\text{step}} \approx 0$), so $G$ rollouts never sample a single positive bridge trajectory.</td>
+              <td>Measure base model $\text{pass@128}$ and count verification/backtracking tokens in initial rollouts.</td>
+              <td>Do <em>not</em> tune the RL loss: inject atomic motifs upstream via SFT priming on verification traces or On-Policy Distillation (OPD) from a stronger specialist teacher, then resume RLVR with larger $L_{\max}$ and batch size $B$.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 id="scaling">10.3 The Five-Link Compute Scaling Chain</h3>
+
+        <p>Using ScaleRL's sigmoid parameterization from <a href="#case-scalerl">Chapter 3.4 (Figure 5)</a>—separating the asymptotic ceiling $A$ from the compute efficiency slope $B$ and midpoint $C_{\text{mid}}$—we can rank the five links of the RL post-training chain by how they scale with compute:</p>
+
+        <ol id="scaling-links">
+          <li><strong>Base model &amp; mid-training (sets ceiling $A$, upstream of RL):</strong> Determines the support $\text{supp}(\pi_{\text{ref}})$ and initial pass@$k$ reach (<a href="#base-model">Chapter 1.3</a>). No downstream RL loss modification overcomes a missing reasoning primitive in the base checkpoint.</li>
+          <li><strong>Generation length budget $L_{\max}$ &amp; global batch size (moves ceiling $A$ inside RL):</strong> In ScaleRL, expanding $L_{\max}$ from 14k to 32k tokens raised $A$ by $+0.035$ and scaling batch size from 512 to 2,048 prompts raised $A$ by $+0.040$, at the cost of $4.4\times$ more compute to reach midpoint $C_{\text{mid}}$ (<a href="#data-sampling">Chapter 7.1</a>).</li>
+          <li><strong>Numerical consistency &amp; MoE routing replay (decides whether the run survives to $A$):</strong> Without Gap 1 corrections and routing replay (R3 / Keep Routing), multi-step and MoE runs suffer late-stage collapse after thousands of GPU-hours, fitting as an artificially depressed ceiling (<a href="#correctness-gaps">Chapter 4.2</a>).</li>
+          <li><strong>Surrogate loss, normalization, aggregation &amp; curriculum filtering (moves efficiency $B$, not ceiling $A$):</strong> In leave-one-out ablations, CISPO, batch std normalization, prompt-level averaging, and zero-variance filtering accelerate convergence along the same sigmoid curve without raising the asymptote $A$.</li>
+          <li><strong>Staleness $\tau$ &amp; step size $\eta$ (joint stability budget):</strong> Maximum stable learning rate scales inversely with pipeline lag ($\eta_{\max} \propto (\mu + \tau)^{-1}$), trading hardware utilization against per-sample gradient fidelity (<a href="#staleness-budget">Chapter 5.2</a>).</li>
+        </ol>
+
+        <ul id="scaling-practice">
+          <li><strong>Choose by efficiency $B$ at small scale, and by stability at large scale:</strong> Efficiency differences appear cheaply in the first few hundred steps; numerical and off-policy stability differences appear late and determine whether the run reaches its asymptote.</li>
+          <li><strong>Monitor the response truncation rate as an early-warning indicator:</strong> Truncation rates climbing into the 10–15% band reliably precede length collapse and gradient instability.</li>
+          <li><strong>Expect recipe rankings to cross over with compute:</strong> As shown in <a href="#case-scalerl">Figure 5</a>, a recipe that raises the ceiling $A$ (such as a 32k length budget or larger batch size) often trails a fast-sharpening baseline at small compute budgets before overtaking it late.</li>
+        </ul>
+
+        <h3 id="decision-guide">10.3 A Practitioner's Decision Guide: What to Set, in What Order</h3>
+
+        <p>Translating our Category I–III verdicts into a concrete configuration procedure yields a four-tier hierarchy ordered by strength of evidence:</p>
+
+        <figure>
+          <img src="diagrams/09-decision-chart.svg" alt="Decision chart: defaults that always apply, then five questions — rule-checkable reward, mixture of experts, off-policy updates, multi-turn tools, aligned starting point — with the settings that follow from each answer.">
+          <figcaption><span class="fig-label">Figure 10.</span> What to set, in what order. The Category I correctness defaults hold across all regimes; five architectural and task questions then determine which Category II and III knobs are required.</figcaption>
+        </figure>
+
+        <div class="verdict-cards">
+          <div class="verdict-card vc-cat1">
+            <div class="vc-tag">1 · Get Right First (Category I Correctness)</div>
+            <h4>Non-negotiable gradient &amp; baseline hygiene</h4>
+            <p>
+              • Keep the estimator honest: $\mu = 1$ step per batch where affordable <span class="grade grade-a">A</span>, or bounded staleness with sampler-aware IS/masking when $\mu &gt; 1$ <span class="grade grade-b">B</span>.<br>
+              • On MoE models with $\mu &gt; 1$, enable <strong>routing replay (R3 / Keep Routing)</strong> <span class="grade grade-a">A</span>.<br>
+              • Fix Gap 1 at the source (FP32 LM head, matched kernels) and log $D_{\text{KL}}(\pi^{\text{roll}} \| \pi^{\text{train}})$ from step 1 <span class="grade grade-b">B</span>.<br>
+              • If using a critic, set $\lambda = 1.0$ <span class="grade grade-a">A</span> and do not initialize from the reward model <span class="grade grade-b">B</span>.<br>
+              • For multi-turn agents, mask environment tokens and pass raw sampled token IDs <span class="grade grade-b">B</span>.<br>
+              • Audit verifier precision against empty/short/boilerplate completions <span class="grade grade-b">B</span>.
+            </p>
+          </div>
+          <div class="verdict-card vc-cat2">
+            <div class="vc-tag">2 · Cheap, Neutral Defaults</div>
+            <h4>Start every run here before adding complexity</h4>
+            <p>
+              • <strong>Baseline:</strong> Group-mean subtraction (RLOO / Dr. GRPO) <em>without</em> group standard-deviation division ($\div\;\text{std}_G$ off).<br>
+              • <strong>Aggregation:</strong> Prompt-level sum divided by a constant $M$ or batch-token mean—no $1/|y_i|$ length penalty.<br>
+              • <strong>KL &amp; Entropy:</strong> $\beta = 0$ (no static KL anchor) for verifiable rewards; keep detached $k_1$-in-reward or $k_3$ loss only for learned reward models. Entropy bonus $= 0$, rollout temperature $T = 1.0$.<br>
+              • <strong>Data filtering:</strong> Drop zero-variance prompt groups ($p_G \in \{0, 1\}$) and solved prompts.
+            </p>
+          </div>
+          <div class="verdict-card vc-cat3">
+            <div class="vc-tag">3 · Tune on Your Own Model &amp; Budget</div>
+            <h4>Context-dependent knobs that flip sign across setups</h4>
+            <p>
+              • <strong>Upper clip bound $\varepsilon_{\text{high}}$:</strong> Tune in $[0.20, 0.28]$ when $\mu &gt; 1$, especially on instruction-tuned checkpoints.<br>
+              • <strong>Truncated responses &amp; length budget $L_{\max}$:</strong> Tune soft overlong penalties and mask-truncated-rollout flags jointly with $L_{\max}$.<br>
+              • <strong>Batch size &amp; group size $G$:</strong> Scale batch size and $L_{\max}$ when targeting a higher asymptote $A$; increase $G \in \{16, 32, 64\}$ or apply $\text{MaxRL}$ weighting when targeting hard prompts.<br>
+              • <strong>Preference learning:</strong> Make preference pairs on-policy before tuning the loss shape; then sweep $\beta$ on DPO / SimPO + NLL.
+            </p>
+          </div>
+        </div>
+
+        <h4 id="decide-skip">4. What to skip unless you can ablate it at $\ge 3$ seeds</h4>
+        <ul id="decide-must">
+          <li id="decide-defaults"><strong>Swapping one clipped surrogate for another (CISPO, GSPO, GMPO, SAPO) in an on-policy ($\mu = 1$) run:</strong> by the $r \equiv 1$ identity they compute the exact same gradient.</li>
+          <li id="decide-tune"><strong>Training a learned critic for single-turn verifiable reasoning:</strong> doubles memory and compute without raising the asymptotic pass@1 ceiling.</li>
+          <li id="decide-pref"><strong>Summing a learned Process Reward Model (PRM) directly into the RL return:</strong> consistently reward-hacked unless constrained to telescoping potentials, min-aggregation, or best-of-$N$ reranking.</li>
+          <li><strong>Complex turn-level credit assignment in non-branching environments:</strong> episode-level outcome advantage with masked environment tokens matches turn-level schemes until the trajectory graph explicitly branches.</li>
+        </ul>
+
+        <h3 id="checklist">10.4 The 12-Question Verification Checklist</h3>
+
+        <p>Before trusting a published RL algorithm claim—or an internal ablation—verify these twelve questions, ordered by how frequently the answer reverses the conclusion in the 2025–2026 literature:</p>
+
+        <ol>
+          <li><strong>Which base models were tested?</strong> If only Qwen2.5 or Qwen2.5-Math, treat the result as a hypothesis about that model family (<a href="#case-spurious">Case Study 1</a>: random rewards add +21 points on Qwen2.5-Math-7B and hurt Llama/OLMo).</li>
+          <li><strong>How many training seeds and how many evaluation rollouts ($K$) per problem?</strong> Single-rollout AIME-24 ($N=30, K=1$) has a $\sim 26$-point minimum detectable difference; $K \ge 32$ across $\ge 3$ training seeds is required to resolve 2–3 point gains (<a href="#tension-noise">Chapter 3.1</a>).</li>
+          <li><strong>Was the baseline tuned with equal effort in the exact same codebase?</strong> Check for crippled baselines ($\lambda = 0.95$ without critic warmup, untuned $\beta$, or infrastructural offload bugs; <a href="#case-weak-baseline">Case Study 4</a>).</li>
+          <li><strong>What were $\mu$ (steps per batch), $\tau$ (async lag), and how was $\pi_{\text{old}}$ computed?</strong> If $\mu = 1$ and $\pi_{\text{old}}$ was recomputed on the trainer, $r \equiv 1$ and any claimed surrogate improvement is a measurement artifact (<a href="#skel-identity">Chapter 2.2</a>).</li>
+          <li><strong>Was a random-reward or format-only control included?</strong> Any pass@1 gain inside the base model's $\text{maj@}k - \text{pass@1}$ gap could come from blind distribution sharpening (<a href="#pattern-sharpening">Law 3</a>).</li>
+          <li><strong>Is the evaluation benchmark temporal-leakage clean?</strong> Check release dates and partial-prompt completion rates (<a href="#base-model">Chapter 1.3</a>).</li>
+          <li><strong>Is the x-axis wall-clock GPU-hours / total tokens or optimizer steps?</strong> Curriculum filtering, large group sizes $G$, and dense tree rollouts spend $2\text{–}6\times$ more generation compute per optimizer step (<a href="#tension-accounting">Chapter 3.3</a>).</li>
+          <li><strong>Are reported scores peak-in-window or final checkpoint?</strong> Reporting the best checkpoint along a noisy trajectory creates positive selection bias and hides late collapse (<a href="#case-dapo-table">Case Study 2</a>).</li>
+          <li><strong>Is the ablation cumulative (forward) or leave-one-out (backward)?</strong> Overlapping stabilizers look decisive when added first in a forward chain and redundant in a leave-one-out study (<a href="#case-scalerl">Case Study 3</a>).</li>
+          <li><strong>Are both pass@1 and pass@$k$ ($k \ge 16$) reported?</strong> Standard RL raises pass@1 by sharpening while often flatlining or reducing pass@$k$ coverage (<a href="#what-rl-changes">Chapter 1.2</a>).</li>
+          <li><strong>Was the starting checkpoint a raw pretrained base or an SFT/instruction-tuned model?</strong> Hyperparameter effects (such as $\varepsilon_{\text{high}}$ and length aggregation) frequently flip sign between base and instruct checkpoints.</li>
+          <li><strong>Does the code's resolved config match the paper's equation?</strong> Check the twelve silent pitfalls in <a href="#pitfalls">Chapter 9.3</a>.</li>
+        </ol>
+
+        <h3 id="frontier-battlegrounds">10.5 From Single-Benchmark RLVR to Frontier Post-Training Systems: Five Real-World Battlegrounds Beyond the Coordinate Table</h3>
+
+        <p>The Two-Layer Coordinate System ($\mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}$) resolves the three-year academic debate over single-domain math/code RLVR and preference loss functions—making it an effective filter for eliminating redundant loss-of-the-week ablations and debugging off-policy or MoE infrastructure bugs. However, from the vantage point of a post-training lead at a frontier laboratory (such as OpenAI or Anthropic), $95\%$ of the published literature operates inside a narrow bubble: <em>training a 7B–32B model for 200–500 steps on a single math benchmark and reporting Pass@1 on AIME</em>. Shipping a frontier generalist model requires simultaneously aligning math, competitive programming, repository-scale software engineering (SWE / bash / computer use), long-form writing, multi-hop research, and safety/honesty inside a <strong>single model</strong>. In that production regime, five system-level battlegrounds dominate day-to-day R&amp;D:</p>
+
+        <ol>
+          <li>
+            <strong>Multi-Domain Gradient Interference &amp; The Alignment Tax (Vector $\vec{R}$, Not Scalar $R$):</strong>
+            In single-domain papers, <code>A1</code> is a single reward channel and <code>A2</code> ($w(p_x)$) weights difficulty within one homogeneous dataset. In frontier production, a single training stage mixes <strong>heterogeneous environments</strong>: $32\text{k}$-token binary-verifier math and code unit tests alongside $1\text{k}$-token continuous neural RM/rubric judges for prose quality, tone, instruction following, and safety refusals. Because exact verifiers and soft RMs have vastly different gradient variance profiles, sequence lengths, and optimal KL step sizes, naive joint training causes cross-domain cannibalization (long-CoT RL degrades prose style, induces over-thinking on trivial queries, or hurts calibration; conversely, chat RM updates lobotomize deep reasoning). Here, the real <code>A2</code> design problem is <strong>cross-environment gradient norm balancing, per-domain KL budgets $\beta_{\text{domain}}$, explicit thinking-budget conditioning, or training domain-specialist RL teachers followed by unified On-Policy Distillation (OPD) into a single generalist student</strong>.
+          </li>
+          <li>
+            <strong>Grading &amp; Environment Engineering Against an Adversarial Optimizer (<code>A1</code> Is $80\%$ of R&amp;D, <code>C1</code> Is $5\%$):</strong>
+            While academic surveys devote most of their pages to surrogate clipping (<code>C1</code>) and baseline algebra (<code>C2</code>), over $80\%$ of frontier post-training headcount is spent on <strong>environments and grading signals (<code>A1</code>)</strong>. On open-ended professional tasks (writing a full pull request, synthesizing a multi-source research report, medical/legal analysis), binary ground-truth verifiers do not exist. Moreover, the static false-positive formula $\mathbb{E}[\hat{R}] = (1-\alpha_{\text{FP}}-\alpha_{\text{FN}})p + \alpha_{\text{FP}}$ understates Goodhart risk: an RL policy actively searches for adversarial completions where $\alpha_{\text{FP}}(y) \to 1$ as $D_{\text{KL}}(\pi_\theta\|\pi_{\text{ref}})$ grows. Frontier defenses rely not on cranking up $\beta$, but on <strong>decomposed structured rubrics, reference-anchored pairwise generative judges (Critique-then-Judge), pessimistic RM ensembles ($\min_k R_k$), explicit length/style neutralization inside the reward, and iterative online RM + policy co-evolution</strong>.
+          </li>
+          <li>
+            <strong>Long-Horizon Stateful Agents ($50\text{–}150$ Irreversible Tool Turns) vs. Single-Turn In-Context CoT (<code>C2</code> Cannot Be Extrapolated Blindly):</strong>
+            Controlled studies on single-turn math (<a href="https://arxiv.org/abs/2604.10701">GenAC</a> at $\sim 200$ steps; <a href="https://arxiv.org/abs/2505.23564">SPO</a> at $32\text{k}$ context) show critic-free group baselines tying learned critics and tree credit shrinking to $+0.8$ points at $32\text{k}$. That equivalence holds for <em>single-turn text CoT</em> because token generation is cheap and the model can backtrack in-context (<code>"Wait, let me re-evaluate"</code>). It <strong>cannot</strong> be extrapolated to $50\text{–}150$ turn stateful container agents (SWE-bench, Computer Use, deep web browsing): when a trajectory spans $80$ bash executions over $30$ minutes and $100\text{k}$ tokens, environment transitions are slow and irreversible, brute-force $G=64$ group rollouts per task are prohibitively expensive, and broadcasting a single $1\text{-bit}$ outcome across $80$ tool turns yields near-zero signal-to-noise ratio. In long-horizon stateful agents, <strong>turn-level value baselines, state-checkpoint branching (e.g., GiGPO state grouping), and dense step-level environment feedback</strong> remain essential.
+          </li>
+          <li>
+            <strong>The Multi-Stage Outer Loop: RL as Frontier Explorer (Producer) $\to$ OPD / Rejection SFT as Entropy-Resetting Compressor (Consumer):</strong>
+            Analyzing RL as a single continuous run from $\pi_{\text{ref}}$ to $\pi^*$ makes support bounds ($\operatorname{supp}(\pi_\theta) \subseteq \operatorname{supp}(\pi_{\text{ref}})$) and single-run entropy collapse (<code>D1</code>) look like terminal walls. Frontier labs never ship a single uninterrupted RL run; they operate a <strong>multi-generational outer flywheel</strong>:
+            $$\pi_{\text{ref}}^{(k)} \xrightarrow{\text{High-temp / Pass@}k\text{ RL Exploration}} \text{Verified Trajectories} \xrightarrow{\text{OPD / Rejection SFT + Context Reset}} \pi_{\text{ref}}^{(k+1)} \xrightarrow{\text{Generation } k+1\text{ RL}}$$
+            In this outer loop, aggressive low-$\beta$ or pass@$k$-weighted RL is used as a <strong>high-compute search probe (Producer)</strong> to uncover hard solutions even if the policy's entropy collapses or its formatting drifts; <strong>On-Policy Distillation (OPD) and Rejection-Sampled SFT</strong> then act as the <strong>compressor (Consumer)</strong> that distills those discovered trajectories back into a fresh, high-entropy checkpoint $\pi_{\text{ref}}^{(k+1)}$ (or mid-training mix) for the next generation.
+          </li>
+          <li>
+            <strong>Dynamic Compute Allocation Across the Pass-Rate Phase Transition (Turning Static <code>Cond</code> into a Dynamic Controller):</strong>
+            Treating <code>Cond</code> ($P(p_x)$, group size $G$, batch size $B$) as static background misses the central resource-allocation problem of large-scale RL. Early in training, most prompts sit in the high-variance zone $p_x \in [0.2, 0.8]$, so a small static group size ($G=8$) yields high active token yield (<code>D2</code>). Late in training, $P_k(p_x)$ bifurcates: $90\%$ of prompts saturate at $p_x \to 1$ while frontier problems sit at $p_x &lt; 0.01$. Keeping a fixed $G=8$ causes almost every group to return all-$1$ or all-$0$ rewards ($\hat{A} \equiv 0$, <code>D2</code> $\to 0$). Compute-optimal training requires <strong>dynamically evicting mastered prompts ($p_x \to 1$), scaling rollout budget $G(x) \propto 1/\hat{p}_x$ on frontier prompts, and recognizing when persistent $\hat{p}_x \equiv 0$ hits the base-model support wall (`y9`)—where marginal GPU hours must be shifted from RL back to mid-training data acquisition</strong>.
+          </li>
+        </ol>
+      </section>

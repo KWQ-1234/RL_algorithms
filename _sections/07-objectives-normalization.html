@@ -1,0 +1,193 @@
+
+      <section id="normalization">
+        <div class="part-banner">
+          <div class="part-kicker">Part V · Category III: Implicit Objectives, Information Bandwidth &amp; Post-Training Families</div>
+          <p class="part-desc">Deriving the prompt-weighting differential equation $F'(p) = 1/s(p)$, the length-covariance bias of $1/|y_i|$ aggregation, the Shannon information rate of rollouts, and the mathematical unification of DPO, PRMs, Agentic RL, and On-Policy Distillation.</p>
+        </div>
+        <h2>6. Category III · Implicit Objectives: Prompt Normalization $F(p)$ &amp; Length Aggregation</h2>
+
+        <p>Unlike the off-policy ratio gates of <a href="#trust-region">Chapter 5</a> (which sit in Approximation Layer <code>C1</code> and vanish when $r \equiv 1$), the normalizers in <a href="#skeleton">the canonical estimator</a> — the per-prompt advantage scale $s(x)$ (Target Coordinate <code>A2</code>) and the per-token length aggregation weight $c_{i,t}$ (Target Coordinate <code>A3</code>) — remain active even at $r \equiv 1$. The literature has debated them as estimator variance-reduction tricks and produced contradictory ablations. The contradictions resolve once we write out their expectations: <strong>neither knob merely improves gradient estimation; both are disguised Target-Layer modifications that alter the stationary fixed point $\pi^*$</strong>.</p>
+
+        <h3 id="pattern-weighting">Coordinate <code>A2</code> · Advantage normalization chooses a pass-rate transform $F(p)$</h3>
+
+        <p>Consider a binary outcome reward $r \in \{0, 1\}$, and let $p_x = \mathbb{E}_{y \sim \pi_\theta(\cdot \mid x)}[r(x, y)]$ be the current pass rate on prompt $x$. Because $\mathbb{E}[(r - p_x)\nabla_\theta \log \pi_\theta] = \nabla_\theta p_x$, dividing a prompt's centered rewards by a scale $s(p_x)$ produces the expected gradient (<a href="https://arxiv.org/abs/2607.00152">2607.00152</a>):</p>
+
+        <div class="formula-display">$$\mathbb{E}\big[g(\theta)\big] \;=\; \sum_{x} \frac{\nabla_\theta p_x}{s(p_x)} \;=\; \nabla_\theta \sum_{x} F(p_x), \qquad \text{where } F'(p) = \frac{1}{s(p)}$$</div>
+
+        <p>Every advantage scaling rule is therefore exact gradient ascent on a transformed objective $\sum_x F(p_x)$ in the large-group limit:</p>
+
+        <table>
+          <thead>
+            <tr><th>Scaling Rule</th><th>Divisor $s(p)$</th><th>Prompt Weight $w(p) = F'(p)$</th><th>Implicit Objective $\sum_x F(p_x)$</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>RLOO, Dr. GRPO, batch std</td><td>$1$ (or batch constant)</td><td>$1$</td><td>$\sum_x p_x$ (expected pass rate / pass@1)</td></tr>
+            <tr><td>GRPO (group std)</td><td>$\sqrt{p(1 - p)}$</td><td>$\frac{1}{\sqrt{p(1 - p)}}$</td><td>$\sum_x 2\arcsin\sqrt{p_x}$</td></tr>
+            <tr><td>MaxRL ($T$ rollouts; <a href="https://arxiv.org/abs/2602.02710">2602.02710</a>)</td><td>$\frac{p}{1 - (1 - p)^T} \xrightarrow{T\to\infty} p$</td><td>$\frac{1 - (1 - p)^T}{p} \to \frac{1}{p}$</td><td>$\approx \sum_x \log p_x$ (maximum likelihood)</td></tr>
+            <tr><td>Pass@$k$ training (<a href="https://arxiv.org/abs/2508.10751">2508.10751</a>)</td><td>$\big[k(1 - p)^{k-1}\big]^{-1}$</td><td>$k(1 - p)^{k-1}$</td><td>$\sum_x \big(1 - (1 - p_x)^k\big)$ (pass@$k$ coverage)</td></tr>
+          </tbody>
+        </table>
+
+        <p><strong>Resolving the GRPO vs. Dr. GRPO debate via $F''(p)$.</strong> Differentiating GRPO's implicit objective $F(p) = 2\arcsin\sqrt{p}$ twice reveals why dividing by the group standard deviation $\sqrt{p(1-p)}$ is really two opposing interventions bundled together:</p>
+
+        <div class="formula-display">$$F'(p) = \frac{1}{\sqrt{p(1 - p)}}, \qquad F''(p) = -\frac{1 - 2p}{2\big(p(1 - p)\big)^{3/2}}$$</div>
+
+        <ul>
+          <li><strong>For hard prompts ($p &lt; 1/2$), $F''(p) &lt; 0$ ($F$ is concave).</strong> GRPO up-weights rare successes on hard prompts — in a group of $G = 8$ with a single correct sample ($p = 1/8$), GRPO gives the winning response an advantage of $+2.50\text{ to }+2.65$ (depending on $G$ vs. $G-1$ in the std denominator) against $+0.875$ under Dr. GRPO. Up-weighting low-$p$ prompts is well-motivated: both MaxRL ($\log p$) and pass@$k$ training are strictly concave on $(0, 1)$ for the exact same reason, preventing the policy from abandoning hard problems (<a href="#what-rl-changes">Chapter 1</a>).</li>
+          <li><strong>For easy prompts ($p &gt; 1/2$), $F''(p) &gt; 0$ ($F$ is convex).</strong> Because $\sqrt{p(1-p)}$ is symmetric around $p = 1/2$, GRPO gives the exact same $\sim 3\times$ amplification to a prompt the model already solves $7/8$ of the time! No optimization principle argues for spending maximum gradient step size on nearly mastered prompts, and on easy-heavy datasets this convex tail amplifies noise and destabilizes updates.</li>
+          <li><strong>Batch-level standard deviation is a global scalar.</strong> Dividing by the standard deviation across the entire batch (REINFORCE++, ScaleRL, AReaL, Magistral) rescales all prompts equally, leaving $F(p) = p$ unchanged; under scale-invariant Adam, its only effect is stabilizing global gradient norms near the optimizer's $\varepsilon$ and clipping threshold.</li>
+        </ul>
+
+        <figure class="ifig" id="weight-fig" aria-label="Interactive explorer of prompt weights w(p) and implicit objectives F(p)">
+          <div class="ifig-head">
+            <span class="ifig-title">Figure 8 (Interactive) · Prompt Weight $w(p) = F'(p)$ and Induced Objective $F(p)$</span>
+            <span class="ifig-sub">Adjust budget parameter $k / T$ to compare how each normalization rule weights hard ($p \to 0$) vs. easy ($p \to 1$) prompts</span>
+          </div>
+          <div class="ifig-ctrl">
+            <label for="k-slider">Pass@$k$ / MaxRL budget $k = T$</label>
+            <input id="k-slider" class="ifig-range" type="range" min="2" max="32" value="8" aria-describedby="k-out">
+            <output id="k-out" for="k-slider">k = T = 8</output>
+          </div>
+          <div class="ifig-svg-grid">
+            <div class="ifig-svg-box">
+              <h5>Marginal Prompt Weight $w(p) = F'(p)$ (capped at 5)</h5>
+              <svg id="svg-wp" viewBox="0 0 260 155" aria-hidden="true"></svg>
+            </div>
+            <div class="ifig-svg-box">
+              <h5>Normalized Objective $F(p) \in [0, 1]$ vs. Pass Rate $p$</h5>
+              <svg id="svg-fp" viewBox="0 0 260 155" aria-hidden="true"></svg>
+            </div>
+          </div>
+          <div class="ifig-legend">
+            <span><i style="background: #6a7080"></i>Uniform ($\sum p$, Dr. GRPO / RLOO)</span>
+            <span><i style="background: #a23b2c"></i>GRPO Group Std ($\sum 2\arcsin\sqrt{p}$, U-shaped)</span>
+            <span><i style="background: #2a5da8"></i>MaxRL ($\frac{1-(1-p)^T}{p} \approx \sum \log p$)</span>
+            <span><i style="background: #2f6b4f"></i>Pass@$k$ ($\sum 1-(1-p)^k$)</span>
+          </div>
+          <figcaption><span class="fig-label">Figure 8.</span> Left: relative gradient weight $w(p)$ assigned to a prompt with pass rate $p$. Right: the corresponding cumulative objective $F(p)$ (normalized to $[0, 1]$). Notice how <strong style="color: #a23b2c">GRPO's U-shaped weight</strong> matches MaxRL and Pass@$k$ by up-weighting hard prompts ($p &lt; 0.5$), but bends upward into convexity for easy prompts ($p &gt; 0.5$). Static companion: <a href="diagrams/04-prompt-weights.svg" target="_blank"><code>04-prompt-weights.svg</code></a>.</figcaption>
+        </figure>
+
+        <script>
+        (function () {
+          var kInput = document.getElementById("k-slider");
+          var kOut = document.getElementById("k-out");
+          var svgW = document.getElementById("svg-wp");
+          var svgF = document.getElementById("svg-fp");
+
+          function render() {
+            var k = parseInt(kInput.value, 10);
+            var label = "k = T = " + k;
+            kOut.textContent = label;
+            kInput.style.setProperty("--attr-min", kInput.min);
+            kInput.style.setProperty("--attr-max", kInput.max);
+            kInput.style.setProperty("--control-value", kInput.value);
+            kInput.setAttribute("aria-valuetext", label);
+
+            var W = 260, H = 155, padL = 28, padR = 10, padT = 10, padB = 24;
+            var pw = W - padL - padR, ph = H - padT - padB;
+            function xOf(p) { return padL + p * pw; }
+            function yOfW(w) { return padT + ph - (Math.min(w, 5.0) / 5.0) * ph; }
+            function yOfF(f) { return padT + ph - Math.max(0, Math.min(f, 1.0)) * ph; }
+
+            var gridW = "", gridF = "";
+            [0, 1, 2, 3, 4, 5].forEach(function (v) {
+              var y = yOfW(v);
+              gridW += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eceef2" stroke-width="1"/>';
+              if (v % 2 === 0 || v === 1) gridW += '<text x="' + (padL - 4) + '" y="' + (y + 3) + '" font-size="9.5" font-family="monospace" fill="#6a7080" text-anchor="end">' + v + '</text>';
+            });
+            [0, 0.5, 1.0].forEach(function (v) {
+              var y = yOfF(v);
+              gridF += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eceef2" stroke-width="1"/>';
+              gridF += '<text x="' + (padL - 4) + '" y="' + (y + 3) + '" font-size="9.5" font-family="monospace" fill="#6a7080" text-anchor="end">' + v.toFixed(1) + '</text>';
+            });
+            [0, 0.5, 1.0].forEach(function (pv) {
+              var x = xOf(pv);
+              gridW += '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (padT + ph) + '" stroke="#e2e5ec" stroke-dasharray="2 2" stroke-width="1"/>';
+              gridF += '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (padT + ph) + '" stroke="#e2e5ec" stroke-dasharray="2 2" stroke-width="1"/>';
+              gridW += '<text x="' + x + '" y="' + (H - 5) + '" font-size="9.5" font-family="monospace" fill="#6a7080" text-anchor="middle">p=' + pv + '</text>';
+              gridF += '<text x="' + x + '" y="' + (H - 5) + '" font-size="9.5" font-family="monospace" fill="#6a7080" text-anchor="middle">p=' + pv + '</text>';
+            });
+
+            var N = 160;
+            var wUni = [], wGrpo = [], wMax = [], wPass = [];
+            var fUni = [], fGrpo = [], fMax = [], fPass = [];
+            var maxValF = 0;
+            var rawMaxF = [];
+            var accM = 0;
+            for (var i = 0; i <= N; i++) {
+              var p = Math.max(0.015, Math.min(0.985, i / N));
+              var wm = (1 - Math.pow(1 - p, k)) / p;
+              if (i > 0) accM += wm * (1 / N);
+              rawMaxF.push(accM);
+            }
+            maxValF = rawMaxF[N] || 1;
+
+            for (var j = 0; j <= N; j++) {
+              var pp = Math.max(0.015, Math.min(0.985, j / N));
+              var x = xOf(j / N).toFixed(1);
+              wUni.push(x + "," + yOfW(1).toFixed(1));
+              wGrpo.push(x + "," + yOfW(1 / Math.sqrt(pp * (1 - pp))).toFixed(1));
+              wMax.push(x + "," + yOfW((1 - Math.pow(1 - pp, k)) / pp).toFixed(1));
+              wPass.push(x + "," + yOfW(k * Math.pow(1 - pp, k - 1)).toFixed(1));
+
+              fUni.push(x + "," + yOfF(j / N).toFixed(1));
+              fGrpo.push(x + "," + yOfF((2 * Math.asin(Math.sqrt(j / N))) / Math.PI).toFixed(1));
+              fMax.push(x + "," + yOfF(rawMaxF[j] / maxValF).toFixed(1));
+              fPass.push(x + "," + yOfF(1 - Math.pow(1 - j / N, k)).toFixed(1));
+            }
+
+            svgW.innerHTML = gridW +
+              '<polyline fill="none" stroke="#6a7080" stroke-width="1.8" stroke-dasharray="4 3" points="' + wUni.join(" ") + '"/>' +
+              '<polyline fill="none" stroke="#2f6b4f" stroke-width="2.1" points="' + wPass.join(" ") + '"/>' +
+              '<polyline fill="none" stroke="#2a5da8" stroke-width="2.1" points="' + wMax.join(" ") + '"/>' +
+              '<polyline fill="none" stroke="#a23b2c" stroke-width="2.3" points="' + wGrpo.join(" ") + '"/>';
+
+            svgF.innerHTML = gridF +
+              '<polyline fill="none" stroke="#6a7080" stroke-width="1.8" stroke-dasharray="4 3" points="' + fUni.join(" ") + '"/>' +
+              '<polyline fill="none" stroke="#2f6b4f" stroke-width="2.1" points="' + fPass.join(" ") + '"/>' +
+              '<polyline fill="none" stroke="#2a5da8" stroke-width="2.1" points="' + fMax.join(" ") + '"/>' +
+              '<polyline fill="none" stroke="#a23b2c" stroke-width="2.3" points="' + fGrpo.join(" ") + '"/>';
+          }
+
+          kInput.addEventListener("input", render);
+          render();
+        })();
+        </script>
+
+        <p><strong>Controlled evidence on Coordinate <code>A2</code> matches the decomposition exactly:</strong></p>
+        <ul>
+          <li><strong>On the pass@1 asymptote, std division is neutral <span class="grade grade-a">A</span>.</strong> ScaleRL found prompt-level, batch-level and no std normalization "similar" (<a href="https://arxiv.org/abs/2510.13786">2510.13786</a>); Magistral observed no significant effect on accuracy or length growth (<a href="https://arxiv.org/abs/2506.10910">2506.10910</a>); and the minimalist comparison found little gain beyond discarding all-wrong groups (<a href="https://arxiv.org/abs/2504.11343">2504.11343</a>).</li>
+          <li><strong>On efficiency and stability, the sign tracks dataset difficulty <span class="grade grade-d">D</span>.</strong> Tricks or Traps (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>) found that removing GRPO's group std helps on easy datasets (where $p &gt; 1/2$ convexity hurts) and is neutral on hard datasets, recommending group-mean centering with batch-level std. In agentic RL, LOOP found group std division cost several points on AppWorld (<a href="https://arxiv.org/abs/2502.01600">2502.01600</a>). Meanwhile, asymmetric hard-prompt weighting wins on pass@$k$ (MaxRL improved pass@$k$ in $7$ of $8$ settings, <a href="https://arxiv.org/abs/2602.02710">2602.02710</a>; Pass@$k$ training raised Llama-3.1-8B pass@8 on AIME24 from $32.1 \to 40.0$, <a href="https://arxiv.org/abs/2508.10751">2508.10751</a>) <span class="grade grade-c">C</span>.</li>
+        </ul>
+
+        <h3 id="aggregation">Coordinate <code>A3</code> · Loss aggregation and the $\frac{1}{|y_i|}$ length bias</h3>
+
+        <p>Step 5 of the estimator chooses the normalizer $c_{i,t}$ that aggregates per-token terms across a group of $G$ responses:</p>
+
+        <table>
+          <thead>
+            <tr><th>Aggregation Mode</th><th>Per-Token Weight $c_{i,t}$</th><th>Mathematical Consequence</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Sequence mean of token means (original GRPO; forced by GSPO/SAPO)</td><td>$\frac{1}{G \cdot |y_i|}$</td><td>Every response has equal total weight; long responses get smaller per-token updates</td></tr>
+            <tr><td>Token mean over group or minibatch (DAPO; <code>verl</code>'s <code>token-mean</code>)</td><td>$\frac{1}{\sum_{j=1}^G |y_j|}$</td><td>Every token counts equally; long responses carry more total weight</td></tr>
+            <tr><td>Sequence mean of token sums</td><td>$\frac{1}{G}$</td><td>Exact sequence policy gradient; gradient variance scales with $|y_i|$</td></tr>
+            <tr><td>Constant normalizer (Dr. GRPO; <a href="https://arxiv.org/abs/2503.20783">2503.20783</a>)</td><td>$\frac{1}{G \cdot L_{\max}}$</td><td>Exact sequence policy gradient up to a fixed scalar folded into the learning rate</td></tr>
+          </tbody>
+        </table>
+
+        <p><strong>Why $\frac{1}{|y_i|}$ creates a length bias (exact covariance decomposition) <span class="grade grade-b">B</span>.</strong> Because $\log \pi_\theta(y \mid x) = \sum_{t=1}^{|y|} \log \pi_\theta(y_t \mid x, y_{&lt;t})$, the true policy gradient of sequence reward $\mathbb{E}[R(x,y)]$ sums over tokens with weight $1$, not $\frac{1}{|y_i|}$ (<a href="https://arxiv.org/abs/2512.01374">Qwen, 2512.01374</a>). Dividing each response by its own length $|y_i|$ introduces a covariance bias between inverse length and sequence score:</p>
+        <div class="formula-display">$$\mathbb{E}_{y \sim \pi_\theta}\!\left[\frac{R(x,y) - p_x}{|y|}\sum_{t=1}^{|y|} \nabla_\theta \log \pi_\theta(y_t \mid s_t)\right] = \mathbb{E}\!\left[\frac{1}{|y|}\right]\nabla_\theta p_x + \operatorname{Cov}_{y \sim \pi_\theta}\!\left(\frac{1}{|y|},\; \big(R(x,y) - p_x\big)\nabla_\theta \log \pi_\theta(y\mid x)\right)$$</div>
+        <p>For positive-advantage responses ($R - p_x &gt; 0$), the factor $\frac{1}{|y_i|}$ rewards short correct answers more per token (brevity bias); for negative-advantage responses ($R - p_x &lt; 0$), it penalizes long wrong answers <em>less</em> per token ($-\frac{|R - p_x|}{|y_i|}$), creating a direct gradient incentive to stretch failed trajectories longer to dilute the negative penalty (<a href="https://arxiv.org/abs/2503.20783">Dr. GRPO, 2503.20783</a>). Note also a silent implementation divergence: DAPO normalizes <code>token-mean</code> by the tokens in each prompt's group, whereas <code>verl</code>'s <code>token-mean</code> normalizes by all valid tokens across the global PPO minibatch (<a href="#code">Chapter 9</a>). Empirically, while removing $\frac{1}{|y_i|}$ stops wrong-answer length inflation, whether <code>token-mean</code> beats <code>seq-mean-token-mean</code> on benchmark scores flips between base models and instruction-tuned models (<a href="https://arxiv.org/abs/2508.08221">2508.08221</a>) and stays within noise in ScaleRL's LOO runs <span class="grade grade-d">D</span>.</p>
+
+        <table class="verdict">
+          <thead>
+            <tr><th>Normalization / Aggregation Choice</th><th>Ceiling</th><th>Efficiency</th><th>Stability</th><th>Side Effects</th><th>Grade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Group std division (GRPO) vs. mean-only / batch std</td><td>No effect</td><td>Hurts on easy data</td><td>Amplifies $p \to 1$ groups</td><td>Optimizes $\sum 2\arcsin\sqrt{p}$</td><td><span class="grade grade-a">A</span> ceiling · <span class="grade grade-d">D</span> direction</td></tr>
+            <tr><td>Hard-prompt up-weighting (MaxRL, Pass@$k$)</td><td>Raises pass@$k$</td><td>—</td><td>—</td><td>Preserves multi-sample diversity</td><td><span class="grade grade-c">C</span></td></tr>
+            <tr><td>Remove $\frac{1}{|y_i|}$ length factor (Dr. GRPO / token-mean)</td><td>Within noise (LOO)</td><td>Flips base vs. instruct</td><td>Steadier lengths</td><td>Stops wrong answers growing longer</td><td><span class="grade grade-b">B</span> mechanism · <span class="grade grade-d">D</span> score</td></tr>
+          </tbody>
+        </table>
+      </section>
